@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [casehub]
 tags: [quarkus, cdi, spi, lifecycle]
+excerpt: "The Worker Provisioner SPIs get their call sites wired in, and resume adds a single CONTEXT_CHANGED publish so bindings re-evaluate immediately when a suspended case returns to RUNNING."
 ---
 
 The Worker Provisioner SPIs — `WorkerStatusListener`, `WorkerContextProvider`, `CaseChannelProvider` — had been defined with contract tests and no-op defaults. Nothing called them.

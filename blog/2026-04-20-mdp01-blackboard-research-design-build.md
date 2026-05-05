@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [casehub]
 tags: [blackboard, architecture, reactive, quarkus]
+excerpt: "Academic research into LLM-based blackboard architectures shapes one critical design decision — changing LoopControl.select() to return Uni — before the blackboard module ships its first implementation."
 ---
 
 PR3 landed upstream as #85 on Thursday. By Friday the upstream had also merged

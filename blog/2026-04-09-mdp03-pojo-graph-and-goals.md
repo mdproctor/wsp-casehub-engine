@@ -2,6 +2,10 @@
 layout: post
 title: "Session 3: Getting the Architecture Right"
 date: 2026-04-09
+type: phase-update
+entry_type: note
+subtype: diary
+projects: [engine]
 tags: [architecture, design]
 excerpt: "Collapsing the lineage graph, redesigning the persistence layer, and researching goal models across BDI, GOAP, CMMN, and HTN."
 ---

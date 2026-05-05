@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [casehub]
 tags: [casehub-engine, channels, quarkus]
+excerpt: "The CaseChannelProvider.postToChannel path existed but was never connected — WorkerContext.channels was always empty, and the buildContext() result was silently discarded before workers were scheduled."
 ---
 
 The `CaseChannelProvider` SPI had `postToChannel` for a while. What it didn't

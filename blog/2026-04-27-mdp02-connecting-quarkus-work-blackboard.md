@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [casehub]
 tags: [quarkus, cdi, quarkus-work, blackboard, testing]
+excerpt: "CaseLifecycleEvent gets its missing worker execution call sites, and the casehub-work-adapter uses CDI choreography to route quarkus-work terminal states into PlanItem transitions via the callerRef routing key."
 ---
 
 The two upstream pieces Claudony needs from casehub-engine are now shipped: `CaseLifecycleEvent` for worker execution transitions, and `casehub-testing` to let downstream `@QuarkusTest` classes run the engine in memory without Docker or PostgreSQL.

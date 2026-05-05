@@ -2,6 +2,10 @@
 layout: post
 title: "Two CaseHubs, One Design"
 date: 2026-04-09
+type: phase-update
+entry_type: note
+subtype: diary
+projects: [engine]
 tags: [architecture, merge]
 excerpt: "Discovering a parallel casehub-engine implementation and charting a 9-phase plan to unify both systems into one coherent design."
 ---

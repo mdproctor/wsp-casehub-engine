@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [casehub]
 tags: [quarkus, hibernate, testing, podman, persistence]
+excerpt: "PR 1 of the persistence decoupling plan exposes a Podman misconfiguration and a Quarkus Vert.x context requirement that blocks standard JUnit methods from calling reactive Panache."
 ---
 
 The persistence decoupling plan was written last session — three PRs to strip JPA from the engine core. Today was PR 1.

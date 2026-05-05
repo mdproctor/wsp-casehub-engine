@@ -3,8 +3,9 @@ layout: post
 title: "Four Things a Synchronous Blackboard Strategy Can't Do"
 date: 2026-04-18
 entry_type: article
-projects: [casehub]
+projects: [engine]
 tags: [architecture, blackboard, reactive, vertx, multi-agent]
+excerpt: "Changing the LoopControl interface from a blocking contract to a reactive Uni unlocks four capabilities the classical synchronous blackboard control shell cannot support."
 ---
 
 The blackboard architecture is 40 years old. Hayes-Roth described it in 1985

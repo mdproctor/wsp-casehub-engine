@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [casehub-engine]
 tags: [spi, protocol, qhorus, dependency-management]
+excerpt: "Adding MessageType to CaseChannelProvider.postToChannel forces a dependency graph decision: the engine takes a narrow compile dependency on casehub-qhorus-api rather than inventing a parallel vocabulary."
 ---
 
 The `CaseChannelProvider` SPI had a blind spot. Every call to `postToChannel` sent a message — but said nothing about what *kind* of message it was. When `WorkerScheduleEventHandler` dispatched a directive to a worker's channel, it serialised the intent into a JSON payload field: `"type": "COMMAND"`. The intent existed in the body, invisible to the protocol boundary.

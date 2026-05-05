@@ -7,6 +7,7 @@ entry_type: note
 subtype: diary
 projects: [casehub-engine]
 tags: [persistence, jpa, spi, maven]
+excerpt: "PR3 strips JPA from the engine module entirely — three domain objects become plain Java, twelve handlers route through three SPI interfaces, and no framework annotation remains in casehub-core."
 ---
 
 Three domain objects. Twelve handlers. One pom.xml. PR3 is done.
