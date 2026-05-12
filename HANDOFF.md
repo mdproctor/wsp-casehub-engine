@@ -2,29 +2,27 @@
 
 ## What's done
 
-All six casehub repos now have clean, squash-compacted histories live on casehubio:
+- **#239 closed** — `MapCaseFile` implemented and merged to `casehubio/engine` main (`cb78922`).
+  Three poc-compatible aliases (`put/get/keys`) on `CaseContextImpl`. `snapshot()` overridden
+  to preserve subclass type. 14 unit tests, 505 passing overall.
 
-| Repo | casehubio main tip | Notes |
-|------|-------------------|-------|
-| engine | `262e2a4` | Reconstructed (115+2 commits); treblereel PRs reworded |
-| claudony | `4c7a0aa` | Compacted; was already identical |
-| ledger | `41e6189` | Compacted + local feature code restored |
-| work | `28b1be7` | Compacted + local feature code restored |
-| qhorus | `53a8b13` | Compacted + local feature code restored |
-| parent | `3b50a3e` | Compacted |
+- **Platform protocol PP-20260512-5f055d** written and committed to `casehub/parent`
+  (`777d2f2`) — Java Optional usage rules. In `docs/protocols/java-optional-usage.md`
+  and indexed.
 
-Every repo has `backup/pre-reconstruction-main-20260511` on casehubio. Ledger/work/qhorus also have `backup/pre-squash-main-20260507` and `backup/pre-squash-v1-main-20260508` pushed there. All reversible.
+- **CLAUDE.md** — Writing Style Guide section added to engine project CLAUDE.md (`7304354`).
 
-Engine `main_proposal` (on `mdproctor/engine`) is the source of truth for the reconstruction — casehubio/engine main now matches it.
+- **3 garden entries** submitted: `CaseContextImpl.set(null)` no-op gotcha, snapshot
+  subclass type loss gotcha, type-preserving snapshot technique (all in `jvm/`).
 
 ## What's next
 
-- Notify treblereel that casehubio/engine main has been replaced with the reconstructed history. Point him to `backup/pre-reconstruction-main-20260511` for reference.
-- The full-stack aggregator build (`mvn install -f aggregator.xml`) passed with the two engine compilation fixes (`262e2a4`, `382dd52`). No known outstanding build issues.
-- Engine `main_proposal` branch on `mdproctor/engine` can be cleaned up once treblereel acknowledges.
+- **#238** `JavaBeanCaseFile<T>` — typed POJO-backed CaseContext. Half-day minimum;
+  module home TBD (needs design decision upfront). Start with brainstorming.
 
 ## Key references
 
-- Squash plan (in main_proposal git): `docs/superpowers/specs/squash-plan-2026-05-10.md`
-- Blog: `blog/2026-05-12-mdp01-going-live-two-backup-mystery.md`
-- Garden: 6 entries submitted under `tools/GE-20260511-*`
+- Blog: `blog/2026-05-12-mdp02-optional-short-leash.md`
+- Protocol: `casehub/parent/docs/protocols/java-optional-usage.md`
+- Spec: `specs/2026-05-12-map-case-file-design.md`
+- Plan: `plans/2026-05-12-map-case-file.md`
