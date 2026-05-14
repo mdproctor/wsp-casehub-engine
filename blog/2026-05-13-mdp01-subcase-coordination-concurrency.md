@@ -50,6 +50,6 @@ The caller returns immediately if it gets false. No double-resume. PostgreSQL ha
 
 We hit something else worth naming: `@ObservesAsync` CDI events don't fire in `@QuarkusTest`. Not intermittently — never. The event publishes, the CompletionStage returns successfully, and the observer is never called. No error. The test just silently skips the listener logic you thought you were exercising.
 
-The workaround is injecting the listener bean and calling the method directly. Ugly but correct — and now documented in the garden for the next person who wastes an hour on it.
+The current workaround is injecting the listener bean and calling the method directly. It works, but it's pointing at a real design issue: the listener mixes CDI delivery plumbing with all the coordination logic. The right fix is extracting the logic into a constructor-injected service — the listener becomes a five-line delegator, the service is testable as a plain Java object, and the workaround disappears. That's the next thing to clean up.
 
 Clinical's multi-site orchestration is unblocked.
