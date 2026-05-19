@@ -1,0 +1,7 @@
+branch: issue-293-wire-work-adapter-hitl
+project-sha: 280292db48fd9dc558bc5d44f43af0e93526fd3f
+date: 2026-05-19
+issue: 293
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
