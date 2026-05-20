@@ -1,46 +1,50 @@
-# Handoff — Sub-case M-of-N and Concurrency
-2026-05-13
+# Handoff — HITL YAML Binding + devtown Wiring
+2026-05-20
 
 ## What changed this session
 
-**engine#112 closed — sub-case M-of-N coordination complete.**
+**engine#293 closed.** Added `humanTask` as a first-class YAML binding target type in the schema (`CaseDefinition.yaml` + jsonschema2pojo codegen) and `CaseDefinitionYamlMapper`. Wired `casehub-engine-work-adapter` in devtown — `pr-review.yaml` now uses `humanTask:` binding instead of `capability: "human-decision:pr-approval"`. devtown#30 (e2e HITL test) is unblocked.
 
-12 commits to `casehub-engine` main. 157 blackboard tests green.
+ADR-0001 written (humanTask as first-class type — type safety over convention). Two protocols captured in casehub/parent: `PP-20260520-b2a932` (yaml-humantask-binding-type) and `PP-20260520-5d0b91` (hitl-runtime-assembly).
 
-Key additions:
-- `SubCase` gains `groupId`, `totalInGroup`, `requiredCount`, `onThresholdReached`
-- `CaseInstance.parentCaseId` — child knows its parent
-- `PropagationContext.createChild()` propagated via new 4-arg `CaseHubRuntime.startCase` overload
-- `SubCaseGroup` POJO + `SubCaseGroupRepository` SPI (memory + JPA implementations)
-- `SubCaseGroupPolicy` — pure static M-of-N threshold arithmetic
-- `SubCaseExecutionHandler` — grouped path; writes `groupId` into SUBCASE_STARTED EventLog metadata
-- `SubCaseCompletionListener` — splits grouped/ungrouped; atomic `markPolicyTriggered` returns `Uni<Boolean>` (whether THIS call won the CAS); REJECTED cancels parent
+CLAUDE.md updated with `## Document Locations` table using `proj/wksp` relative paths — no absolute paths. casehubio/parent#34 filed to adopt this convention platform-wide.
 
-**Race condition fixed in code review** — two concurrent child completions could both see COMPLETED before either set `policyTriggered`. Fix: `markPolicyTriggered` returns `Uni<Boolean>`; JPA uses conditional `UPDATE WHERE policyTriggered = false`; memory uses `synchronized` CAS.
+## Immediate Next Step
 
-**Three follow-up issues opened:**
-- engine#248 — JPA pessimistic locking (conditional UPDATE correct but not bulletproof under extreme concurrency)
-- engine#249 — Fire `SubCaseGroupLifecycleEvent` via CDI for monitoring consumers
-- engine#252 — `SubCaseCompletionListener` refactor (see below)
+Wait for treblereel to review and merge `casehubio/engine#296`. Once merged, casehubio/engine publishes to GitHub Packages and devtown#30 can add the e2e test.
 
-**engine#252 — `SubCaseCompletionService` extraction:**
-`@ObservesAsync` events never fire in `@QuarkusTest` — current tests call listener directly as a workaround. Real fix: extract coordination logic into `SubCaseCompletionService` with constructor injection (works as CDI bean OR plain Java). Listener becomes a 5-line delegator. No scope annotation = `@Dependent`; add `@ApplicationScoped` only if state is needed.
+## Cross-Module
 
-**Protocol added:** `subcase-coordination-strategy.md` (parent/docs/protocols/) — native M-of-N for counting, quarkus-flow for conditional/sequential orchestration, always behind SPI.
+**We're unblocking:**
+- `devtown` — devtown#30 (e2e HITL test) needs engine#296 merged and published · M · Low
 
-**CLAUDE.md updated** — `SubCaseGroup`/`SubCaseGroupRepository` in Persistence Architecture; `@ObservesAsync` test limitation in casehub-blackboard section.
+## What's Left
 
-## Immediate next actions
+- `engine#297` — CaseDefinitionYamlMapper: improve error handling for malformed humanTask bindings · S · Low
+- `casehubio/parent#33` — Update PLATFORM.md: add casehub-engine-work-adapter + blackboard to devtown dependency table · XS · Low
+- `casehubio/parent#34` — Adopt proj/wksp relative-path convention platform-wide · L · Med
+- Two modified blog files (2026-05-12-mdp02, 2026-05-13-mdp01) — pre-existing uncommitted edits · XS · Low
 
-1. **engine#252** — `SubCaseCompletionService` extraction (constructor injection, thin listener, clean tests)
-2. **clinical#3** — now unblocked; multi-site sub-case orchestration can proceed
-3. **Devtown Epic 3** — PR review CasePlanModel (queued before this session)
-4. **parent#13** — Claude config restructuring (still open)
+## What's Next
+
+| # | Description | Scale | Complexity | Notes |
+|---|-------------|-------|------------|-------|
+| #278 | SelectionContext arity mismatch — 2-line fix | XS | Low | Quick win |
+| #281 | FailingWorkItemStore test isolation leak | S | Low | |
+| #280 | Missing JpaReactivePlanItemStore contract test | S | Low | |
+| #279 | JpaReactivePlanItemStore.updateStatus flush fix | S | Low | |
+| devtown#30 | E2e HITL integration test | M | Low | Blocked on engine#296 merge |
+| #254 | Java 21 platform migration | L | Med | |
+| parent#34 | proj/wksp relative-path convention in skills | L | Med | |
 
 ## Key references
 
-- Spec: `specs/2026-05-12-subcase-mofn-coordination-design.md`
-- Plan: `plans/2026-05-12-subcase-mofn-implementation.md`
-- Blog: `blog/2026-05-13-mdp01-subcase-coordination-concurrency.md`
-- Protocol: `~/claude/casehub/parent/docs/protocols/subcase-coordination-strategy.md`
-- Garden: `GE-20260513-b15933` — `@ObservesAsync` not delivered in `@QuarkusTest`
+- PR: `casehubio/engine#296`
+- Blog: `blog/2026-05-20-mdp01-giving-yaml-a-human-concept.md`
+- ADR: `proj/docs/adr/0001-humantask-yaml-binding-target.md`
+- Protocols: `PP-20260520-b2a932`, `PP-20260520-5d0b91` (casehub/parent)
+- devtown branch merged to `mdproctor/devtown` main
+
+## Unchanged
+
+*Background, project context — retrieve with: `git show 280292d:HANDOFF.md`*
