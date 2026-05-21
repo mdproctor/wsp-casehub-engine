@@ -1,48 +1,34 @@
-# Handoff — engine#300 + Upstream Rebase
+# Handoff — PR Decomposition + Upstream Stabilisation
 2026-05-21
 
 ## What changed this session
 
-**engine#300 closed.** Added `deadline` (ISO-8601 Instant from `PropagationContext`) to
-COMMAND content in `WorkerScheduleEventHandler.dispatchCommand()` so claudony can bound
-Qhorus Commitment `expiresAt`. Two integration tests, Javadoc on `WorkflowExecutor` /
-`WorkerExecutionManager` documenting the `Map<String,Object>` convention, protocol
-PP-20260520-981c85, blog entry written and published.
+*Previous handover (engine#300 + upstream rebase): `git show HEAD~1:HANDOFF.md`*
 
-**Upstream rebase.** Pulled 4 treblereel commits (PRs #283, #288) into local main:
-`$secret`/`$config` JQ scope variables, schema validation fixes, `WorkItemTemplateService
-.findById(UUID)` API change. Three conflicts resolved — all additive. `origin/main` is
-now current. Backup at `origin/backup/pre-rebase-upstream-20260521`.
+**Additional work this session:**
 
-**engine#304 closed.** Test cleanup after rebase: deleted duplicate `templateMode_byName`
-test, renamed `templateMode_ambiguousName` → `templateMode_invalidUuidRef`.
+**6 focused PRs opened against casehubio/engine** (#305–#310) — all on hold, do not push/merge yet:
+- #305: SubCase extraction (engine#252)
+- #306: Work adapter fixes (engine#278–280)
+- #307: Test quality (engine#282, #290–292)
+- #308: humanTask YAML binding (engine#293)
+- #309: Deadline propagation (engine#300 + parent#6)
+- #310: Test name cleanup (engine#304)
 
-**Tracked for later:** engine#301 (typed `CommandContent` record), engine#302
-(`CaseHub.startCase(Object)` alignment with `Flow.instance(Object)`), engine#303
-(provisioner test timing flakiness).
+Old batch PR #296 closed (superseded). `mdproctor/engine` PR #1 closed + branch deleted (content already in main as `da3c41a`).
 
-**All 15 previously-unpushed commits** from prior session are now on `origin/main`.
+**Decision: do NOT push to casehubio upstream yet.** Cross-repo dependency on work/ledger not resolved. Plan: stabilise all fork mains first, then push upstream together.
+
+**Garden:** GE-20260521-c89fd1 — cherry-pick conflict resolution via `git checkout <branch> -- <file>`.
 
 ## Immediate Next Step
 
-Pick up #274: BlackboardRegistry hydration from PlanItemStore on restart.
+Stabilise commits across remaining repos (work, ledger, qhorus, etc.) before any casehubio upstream pushes.
 
 ## What's Next
 
-| # | Description | Scale | Complexity | Notes |
-|---|-------------|-------|------------|-------|
-| #274 | BlackboardRegistry hydration from PlanItemStore on restart | M | Med | — |
-| #302 | Align `CaseHub.startCase` to `Object` (quarkus-flow parity) | M | Med | Design needed first |
-| #301 | Typed `CommandContent` record replacing raw Map | S | Low | After #302 |
-| #253 | Assess quarkus-hibernate-reactive-panache compile-scope dep | S | Med | — |
-| #254 | Java 21 platform migration | L | Med | — |
-| #277 | json-schema-validator version conflict in work-adapter | XS | Low | — |
-| work#174 | DB-level UNIQUE on WorkItemTemplate.name | S | Low | — |
-| work#175 | JSON merge semantics defaultPayload + inputData | S | Med | — |
-| Devtown | Epic 3: CasePlanModel PR review | M | Med | Queued multiple sessions |
+*Unchanged — `git show HEAD~1:HANDOFF.md`*
 
-## Key references
+## Cross-Module
 
-- Blog: `blog/2026-05-20-mdp02-the-deadline-gets-through.md`
-- Garden: GE-20260520-c0e5b4 (Podman DOCKER_HOST gotcha)
-- Protocol: PP-20260520-981c85 (inputData Map convention)
+**PRs against casehubio/engine (#305–#310)** depend on casehubio/work and casehubio/ledger having compatible APIs. Do not request review until those repos are also pushed to upstream. Recommended merge order when ready: #305 → #306 → #307 → #308 → #309 → #310.
