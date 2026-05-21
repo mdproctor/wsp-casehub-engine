@@ -7,3 +7,4 @@
 | [2026-05-13-mdp01-subcase-coordination-concurrency.md](2026-05-13-mdp01-subcase-coordination-concurrency.md) | 2026-05-13 | Sub-case M-of-N coordination; race condition that sequential tests miss; @ObservesAsync silent failure |
 | [2026-05-20-mdp01-giving-yaml-a-human-concept.md](2026-05-20-mdp01-giving-yaml-a-human-concept.md) | 2026-05-20 | humanTask as first-class YAML binding type; capability routing was the wrong path for HITL |
 | [2026-05-20-mdp02-the-deadline-gets-through.md](2026-05-20-mdp02-the-deadline-gets-through.md) | 2026-05-20 | deadline field in COMMAND content; Map vs Object API gap; Podman DOCKER_HOST gotcha |
+| [2026-05-21-mdp01-pin-was-two-lines-cdi-was-not.md](2026-05-21-mdp01-pin-was-two-lines-cdi-was-not.md) | 2026-05-21 | Moving a json-schema-validator pin uncovered three pre-existing CDI test failures in Quarkus 3.32.2. |
