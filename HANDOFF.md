@@ -1,18 +1,16 @@
-# Handoff — CDI Test Fixes + Pin Move
-2026-05-21
+# Handoff — 2026-05-21
 
-## What changed this session
+**Head commit (engine):** 52018db — docs: add blog entry 2026-05-21 — The List That Emptied Itself
 
-**1 issue closed: #277.**
+## What Changed This Session
 
-Moved json-schema-validator 1.5.4 pin from `work-adapter/pom.xml` to root `pom.xml` `<dependencyManagement>`. Verification uncovered three pre-existing test failures fixed in the same commit:
-- `getEnabledAlternatives()` replacing (not appending) `selected-alternatives` → atomicity test had 32 CDI deployment failures
-- `@Alternative @Priority(1)` from external JARs not overriding non-alternative beans in Quarkus ARC 3.x → `JpaWorkItemStore` was silently winning over `InMemoryWorkItemStore`; fixed with `quarkus.arc.exclude-types`
-- CDI proxy instanceof check failing → store clear was a no-op
+Housekeeping only — no code changes to engine.
 
-CLAUDE.md updated with the JpaWorkItemStore exclude-types and `getEnabledAlternatives()` replacement semantics. Two garden entries filed (GE-20260521-3ce7ca, GE-20260521-4de4f1).
+- Verified all items from previous `What's Next` table: all closed in prior sessions. Entire table was stale.
+- Closed orphaned `issue-6-sla-propagation` branch in parent workspace (workspace + project repos). Zero project commits — engine SLA code had landed directly on engine main in an earlier session, bypassing the parent tracking branch.
+- 2 garden entries filed: `work-end` cross-workspace path-resolution gotcha (GE-20260521-fe44c0) and batch gh issue audit technique (GE-20260521-d8d53f).
 
-**PR #313 open:** https://github.com/casehubio/engine/pull/313 — 30 commits ahead of upstream/main.
+**PR #313 still open:** https://github.com/casehubio/engine/pull/313 — from previous session, not touched this session.
 
 ## Immediate Next Step
 
@@ -26,10 +24,10 @@ Review and merge PR #313: `gh pr view 313 --repo casehubio/engine`
 | #253 | Assess quarkus-hibernate-reactive-panache compile-scope dep | S | Med | — |
 | work#174 | DB-level UNIQUE on WorkItemTemplate.name | S | Low | — |
 | work#175 | JSON merge semantics defaultPayload + inputData | S | Med | — |
-| Devtown | Epic 3: CasePlanModel PR review | M | Med | Queued multiple sessions |
+| claudony#122 | Extract correlationId + deadline from COMMAND content | S | Med | Claudony session |
 
-## Key references
+## Key References
 
-- Blog: `blog/2026-05-21-mdp01-pin-was-two-lines-cdi-was-not.md`
-- Garden: GE-20260521-3ce7ca (`@Alternative @Priority` external jar), GE-20260521-4de4f1 (`getEnabledAlternatives()` replaces)
+- Blog: `blog/2026-05-21-mdp02-the-list-that-emptied-itself.md`
+- Garden: GE-20260521-fe44c0 (work-end cross-workspace path resolution), GE-20260521-d8d53f (gh issue audit loop)
 - PR: https://github.com/casehubio/engine/pull/313
