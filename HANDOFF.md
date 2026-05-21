@@ -1,50 +1,48 @@
-# Handoff — HITL YAML Binding + devtown Wiring
-2026-05-20
+# Handoff — engine#300 + Upstream Rebase
+2026-05-21
 
 ## What changed this session
 
-**engine#293 closed.** Added `humanTask` as a first-class YAML binding target type in the schema (`CaseDefinition.yaml` + jsonschema2pojo codegen) and `CaseDefinitionYamlMapper`. Wired `casehub-engine-work-adapter` in devtown — `pr-review.yaml` now uses `humanTask:` binding instead of `capability: "human-decision:pr-approval"`. devtown#30 (e2e HITL test) is unblocked.
+**engine#300 closed.** Added `deadline` (ISO-8601 Instant from `PropagationContext`) to
+COMMAND content in `WorkerScheduleEventHandler.dispatchCommand()` so claudony can bound
+Qhorus Commitment `expiresAt`. Two integration tests, Javadoc on `WorkflowExecutor` /
+`WorkerExecutionManager` documenting the `Map<String,Object>` convention, protocol
+PP-20260520-981c85, blog entry written and published.
 
-ADR-0001 written (humanTask as first-class type — type safety over convention). Two protocols captured in casehub/parent: `PP-20260520-b2a932` (yaml-humantask-binding-type) and `PP-20260520-5d0b91` (hitl-runtime-assembly).
+**Upstream rebase.** Pulled 4 treblereel commits (PRs #283, #288) into local main:
+`$secret`/`$config` JQ scope variables, schema validation fixes, `WorkItemTemplateService
+.findById(UUID)` API change. Three conflicts resolved — all additive. `origin/main` is
+now current. Backup at `origin/backup/pre-rebase-upstream-20260521`.
 
-CLAUDE.md updated with `## Document Locations` table using `proj/wksp` relative paths — no absolute paths. casehubio/parent#34 filed to adopt this convention platform-wide.
+**engine#304 closed.** Test cleanup after rebase: deleted duplicate `templateMode_byName`
+test, renamed `templateMode_ambiguousName` → `templateMode_invalidUuidRef`.
+
+**Tracked for later:** engine#301 (typed `CommandContent` record), engine#302
+(`CaseHub.startCase(Object)` alignment with `Flow.instance(Object)`), engine#303
+(provisioner test timing flakiness).
+
+**All 15 previously-unpushed commits** from prior session are now on `origin/main`.
 
 ## Immediate Next Step
 
-Wait for treblereel to review and merge `casehubio/engine#296`. Once merged, casehubio/engine publishes to GitHub Packages and devtown#30 can add the e2e test.
-
-## Cross-Module
-
-**We're unblocking:**
-- `devtown` — devtown#30 (e2e HITL test) needs engine#296 merged and published · M · Low
-
-## What's Left
-
-- `engine#297` — CaseDefinitionYamlMapper: improve error handling for malformed humanTask bindings · S · Low
-- `casehubio/parent#33` — Update PLATFORM.md: add casehub-engine-work-adapter + blackboard to devtown dependency table · XS · Low
-- `casehubio/parent#34` — Adopt proj/wksp relative-path convention platform-wide · L · Med
-- Two modified blog files (2026-05-12-mdp02, 2026-05-13-mdp01) — pre-existing uncommitted edits · XS · Low
+Pick up #274: BlackboardRegistry hydration from PlanItemStore on restart.
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #278 | SelectionContext arity mismatch — 2-line fix | XS | Low | Quick win |
-| #281 | FailingWorkItemStore test isolation leak | S | Low | |
-| #280 | Missing JpaReactivePlanItemStore contract test | S | Low | |
-| #279 | JpaReactivePlanItemStore.updateStatus flush fix | S | Low | |
-| devtown#30 | E2e HITL integration test | M | Low | Blocked on engine#296 merge |
-| #254 | Java 21 platform migration | L | Med | |
-| parent#34 | proj/wksp relative-path convention in skills | L | Med | |
+| #274 | BlackboardRegistry hydration from PlanItemStore on restart | M | Med | — |
+| #302 | Align `CaseHub.startCase` to `Object` (quarkus-flow parity) | M | Med | Design needed first |
+| #301 | Typed `CommandContent` record replacing raw Map | S | Low | After #302 |
+| #253 | Assess quarkus-hibernate-reactive-panache compile-scope dep | S | Med | — |
+| #254 | Java 21 platform migration | L | Med | — |
+| #277 | json-schema-validator version conflict in work-adapter | XS | Low | — |
+| work#174 | DB-level UNIQUE on WorkItemTemplate.name | S | Low | — |
+| work#175 | JSON merge semantics defaultPayload + inputData | S | Med | — |
+| Devtown | Epic 3: CasePlanModel PR review | M | Med | Queued multiple sessions |
 
 ## Key references
 
-- PR: `casehubio/engine#296`
-- Blog: `blog/2026-05-20-mdp01-giving-yaml-a-human-concept.md`
-- ADR: `proj/docs/adr/0001-humantask-yaml-binding-target.md`
-- Protocols: `PP-20260520-b2a932`, `PP-20260520-5d0b91` (casehub/parent)
-- devtown branch merged to `mdproctor/devtown` main
-
-## Unchanged
-
-*Background, project context — retrieve with: `git show 280292d:HANDOFF.md`*
+- Blog: `blog/2026-05-20-mdp02-the-deadline-gets-through.md`
+- Garden: GE-20260520-c0e5b4 (Podman DOCKER_HOST gotcha)
+- Protocol: PP-20260520-981c85 (inputData Map convention)
