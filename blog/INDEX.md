@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-05-22-mdp04-waiting-is-not-running.md](2026-05-22-mdp04-waiting-is-not-running.md) | 2026-05-22 | Introducing DELEGATED PlanItem state and wiring the full SubCase lifecycle |
 | [2026-05-22-mdp03-clearing-interim-address.md](2026-05-22-mdp03-clearing-interim-address.md) | 2026-05-22 | JQEvaluator moved from engine-common interim home to casehub-platform Foundation tier; same-package import gotcha; ValidationResult stricter null contract |
 | [2026-05-22-mdp02-wrapper-earns-its-keep.md](2026-05-22-mdp02-wrapper-earns-its-keep.md) | 2026-05-22 | Agent keeps jq transformation layer as the bridge between case context and LLM; AgentBuilder accepts UnaryOperator<JsonNode>; CommandContent record replaces raw HashMap in COMMAND dispatch |
 | [2026-05-22-mdp01-hand-rolled-parser.md](2026-05-22-mdp01-hand-rolled-parser.md) | 2026-05-22 | Three independent jq evaluators deleted; evalObjectTemplate removed from CaseContext interface; JQEvaluator moved to casehub-engine-common; platform extraction filed |
