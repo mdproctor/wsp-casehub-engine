@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-05-22-mdp03-clearing-interim-address.md](2026-05-22-mdp03-clearing-interim-address.md) | 2026-05-22 | JQEvaluator moved from engine-common interim home to casehub-platform Foundation tier; same-package import gotcha; ValidationResult stricter null contract |
 | [2026-05-22-mdp02-wrapper-earns-its-keep.md](2026-05-22-mdp02-wrapper-earns-its-keep.md) | 2026-05-22 | Agent keeps jq transformation layer as the bridge between case context and LLM; AgentBuilder accepts UnaryOperator<JsonNode>; CommandContent record replaces raw HashMap in COMMAND dispatch |
 | [2026-05-22-mdp01-hand-rolled-parser.md](2026-05-22-mdp01-hand-rolled-parser.md) | 2026-05-22 | Three independent jq evaluators deleted; evalObjectTemplate removed from CaseContext interface; JQEvaluator moved to casehub-engine-common; platform extraction filed |
 | [2026-05-12-mdp01-going-live-two-backup-mystery.md](2026-05-12-mdp01-going-live-two-backup-mystery.md) | 2026-05-12 | Reconstruction review + going live across 6 repos; stale fork mystery resolved |
