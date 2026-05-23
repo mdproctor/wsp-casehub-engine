@@ -1,0 +1,8 @@
+branch: issue-341-capability-health
+project-sha: 752913c6301b84c3f9d9ba53fa385e7339e5b0d1
+date: 2026-05-23
+issue: 341
+issue-repo: casehubio/engine
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
