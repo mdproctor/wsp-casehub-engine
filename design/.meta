@@ -1,0 +1,8 @@
+branch: issue-330-humantask-scope
+project-sha: a6dba3decdb0231b0804067bc304b3a431534314
+date: 2026-05-23
+issue: 330
+issue-repo: casehubio/engine
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
