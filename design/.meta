@@ -1,0 +1,8 @@
+branch: issue-343-postchannel-params
+project-sha: e4d4215dff70e5c7959430d02f503b2bab948c23
+date: 2026-05-23
+issue: 343
+issue-repo: casehubio/engine
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
