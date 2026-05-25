@@ -4,7 +4,7 @@ title: "The Wrapper That Earns Its Keep"
 date: 2026-05-22
 type: phase-update
 entry_type: note
-subtype: log
+subtype: diary
 projects: [casehub-engine]
 tags: [langchain4j, jq, api-design, refactoring]
 ---

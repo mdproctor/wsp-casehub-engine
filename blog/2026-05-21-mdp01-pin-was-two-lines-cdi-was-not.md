@@ -4,7 +4,7 @@ title: "The Pin Was Two Lines. The CDI Was Not."
 date: 2026-05-21
 type: phase-update
 entry_type: note
-subtype: log
+subtype: diary
 projects: [casehub-engine]
 tags: [quarkus, cdi, arc, testing, alternative, priority]
 ---

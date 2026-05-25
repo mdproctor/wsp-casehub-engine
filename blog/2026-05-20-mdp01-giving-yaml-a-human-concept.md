@@ -4,7 +4,7 @@ title: "Giving the YAML a Human Concept"
 date: 2026-05-20
 type: phase-update
 entry_type: note
-subtype: log
+subtype: diary
 projects: [casehub-engine]
 tags: [hitl, yaml-dsl, quarkus]
 ---
