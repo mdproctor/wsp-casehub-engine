@@ -4,7 +4,7 @@ title: "The Deadline Gets Through"
 date: 2026-05-20
 type: phase-update
 entry_type: note
-subtype: log
+subtype: diary
 projects: [casehub-engine]
 tags: [qhorus, commitments, propagation-context, podman, testcontainers]
 ---

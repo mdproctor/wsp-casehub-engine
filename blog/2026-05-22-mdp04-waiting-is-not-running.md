@@ -4,7 +4,7 @@ title: "Waiting Is Not Running"
 date: 2026-05-22
 type: phase-update
 entry_type: note
-subtype: log
+subtype: diary
 projects: [casehub-engine]
 tags: [blackboard, state-machine, planitem, quarkus, cdi]
 ---
