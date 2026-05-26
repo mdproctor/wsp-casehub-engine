@@ -1,0 +1,8 @@
+branch: issue-369-engine-correctness-batch
+project-sha: 3dea73467a0fda90691db29c19ce19a9d13b8211
+date: 2026-05-26
+issue: 369
+issue-repo: casehubio/engine
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
