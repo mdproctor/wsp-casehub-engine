@@ -13,15 +13,20 @@
 
 `CaseLedgerEventCapture.onCaseLifecycleEvent()` is `@ObservesAsync` — it runs on a managed
 executor thread. OTel context is `ThreadLocal` and is not propagated across the async CDI event
-boundary. The JPA `@PrePersist` listener (`LedgerTraceListener`) calls
-`LedgerTraceIdProvider.currentTraceId()` at persist time; since no span is active on the async
-thread, it writes `null` into every `CaseLedgerEntry.traceId`.
+boundary. At persist time, the `LedgerTraceListener` (@EntityListeners on `LedgerEntry`, in
+casehub-ledger) delegates to `LedgerEnricherPipeline`, which runs `TraceIdEnricher.enrich()`.
+That enricher calls `LedgerTraceIdProvider.currentTraceId()` — returning empty because no span
+is active on the async thread — and writes nothing. `CaseLedgerEntry.traceId` stays null on
+every row.
+
+`TraceIdEnricher.enrich()` is idempotent: it guards with `if (entry.traceId != null) return;`.
+Pre-setting `entry.traceId` before `save()` is therefore sufficient — the enricher will not
+overwrite a non-null value.
 
 ### Design
 
 Capture the trace ID **synchronously** on the originating thread (where the HTTP span is live),
 carry it inside `CaseLifecycleEvent`, and set it explicitly on the entry before `save()`.
-`LedgerTraceListener` respects a pre-set `traceId` value — it only writes when the field is null.
 
 **`CaseLifecycleEvent` record** (`common/`) — add `traceId` component:
 ```java
@@ -36,8 +41,9 @@ public record CaseLifecycleEvent(
 {}
 ```
 
-**All `CaseLifecycleEvent` fire-sites** — inject `LedgerTraceIdProvider`, capture before
-`fireAsync()`:
+**All `CaseLifecycleEvent` instantiation sites** — inject `LedgerTraceIdProvider`, capture
+before `fireAsync()`. Grep for `new CaseLifecycleEvent(` (covers both `fire()` and `fireAsync()`
+call sites — all must be updated for compilation regardless):
 ```java
 String traceId = traceIdProvider.currentTraceId().orElse(null);
 lifecycleEvents.fireAsync(new CaseLifecycleEvent(caseId, cmd, evt, status, actor, role, traceId));
@@ -45,19 +51,20 @@ lifecycleEvents.fireAsync(new CaseLifecycleEvent(caseId, cmd, evt, status, actor
 
 **`CaseLedgerEventCapture`** — set on entry before `ledgerRepo.save()`:
 ```java
-entry.traceId = event.traceId();  // null-safe — LedgerTraceListener skips if null
+entry.traceId = event.traceId();  // null-safe — TraceIdEnricher skips if non-null already set
 ```
+
+### Test
+
+New `@QuarkusTest` in `ledger/src/test/`: fire a `CaseLifecycleEvent` via **`fireAsync()`** (not
+`fire()`) and call `.toCompletableFuture().get()` to wait for the `@ObservesAsync` observer to
+complete. Assert `CaseLedgerEntry.traceId` equals the expected trace ID. Existing test
+`CaseLedgerEventCaptureTest` verifies the null path (no traceId on event → null in entry).
 
 ### Files Changed
 - `common/src/main/java/io/casehub/engine/internal/event/CaseLifecycleEvent.java`
-- All `CaseLifecycleEvent` fire-sites (grep for `fireAsync(new CaseLifecycleEvent`)
+- All `CaseLifecycleEvent` instantiation sites (grep: `new CaseLifecycleEvent(`)
 - `ledger/src/main/java/io/casehub/ledger/service/CaseLedgerEventCapture.java`
-
-### Test
-New `@QuarkusTest` in `ledger/src/test/`: activate an OTel span, fire a `CaseLifecycleEvent`
-synchronously via the CDI event bus, assert `CaseLedgerEntry.traceId` equals the span's trace ID.
-Existing test `CaseLedgerEventCaptureTest` verifies the null path still works (no span → null
-traceId).
 
 ---
 
@@ -74,10 +81,26 @@ traceId).
 In both cases `hasActivePlanItem()` returns true forever, re-triggering is blocked, and stage
 autocomplete never fires.
 
+### Key Invariant
+
+`WorkerRetriesExhaustedEvent.workerId()` equals `worker.getName()`, which equals the tracking
+key stored by `BlackboardRegistry.indexForCompletion()`. Traced:
+- `QuartzWorkerExecutionManager.scheduleQuartzJob()` stores `worker.getName()` as `"workerId"`
+  in the Quartz job data map
+- `QuartzWorkerExecutionJobListener` reads `"workerId"` from the job data map and publishes
+  `WorkerRetriesExhaustedEvent(caseId, workerId=worker.getName(), ...)`
+- `WorkerScheduleEventHandler` guard path publishes `WorkerRetriesExhaustedEvent(uuid,
+  worker.getName(), ...)`
+- `BlackboardRegistry.indexForCompletion(caseId, worker.getName(), planItemId)` uses the same key
+
+The lookup `registry.getPlanItemId(event.caseId(), event.workerId())` will find the PlanItem.
+
 ### Design
 
-New handler **`WorkerRetryExhaustionHandler`** in `blackboard/handler/`, following the exact
-pattern of `PlanItemCompletionHandler`:
+New handler **`WorkerRetryExhaustionHandler`** in `blackboard/handler/`, following the pattern
+of `PlanItemCompletionHandler`. Delegates stage autocomplete to `StageAutocompleteEvaluator`
+(see below). Does **not** fire `PlanItemCompletedEvent` — the fault is already signalled via
+`CASE_STATUS_CHANGED`; firing a "completed" event after `markFaulted()` would mislead consumers.
 
 ```java
 @ApplicationScoped
@@ -94,9 +117,7 @@ public class WorkerRetryExhaustionHandler {
         plan.getPlanItem(planItemId).ifPresent(item -> {
             if (item.getStatus() != PlanItemStatus.RUNNING) return;
             item.markFaulted();
-            evaluateStageAutocomplete(event.caseId(), plan, planItemId);
-            planItemCompletedEvents.fireAsync(
-                new PlanItemCompletedEvent(event.caseId(), planItemId, event.workerId()));
+            stageAutocompleteEvaluator.evaluate(event.caseId(), plan, planItemId);
         });
 
         return Uni.createFrom().voidItem();
@@ -104,21 +125,19 @@ public class WorkerRetryExhaustionHandler {
 }
 ```
 
-`event.workerId()` equals the worker name, which is the tracking key registered in
-`BlackboardRegistry.indexForCompletion()`. No changes to `WorkerRetriesExhaustedEventHandler` in
-`runtime/` — the tier boundary between runtime and blackboard is preserved.
+**`StageAutocompleteEvaluator`** — new `@ApplicationScoped` bean in `io.casehub.blackboard.handler`.
+Extracted from `PlanItemCompletionHandler` so both handlers share the logic. The `evaluate()`
+method is **public** (not package-private) to avoid fragility with CDI proxy subclassing.
+Uses the updated terminal-state gate (see Fix 4f).
 
-`evaluateStageAutocomplete()` is extracted from `PlanItemCompletionHandler` into a shared
-package-private helper method on a new `StageAutocompleteEvaluator` `@ApplicationScoped` bean
-in `io.casehub.blackboard.handler`. Both `PlanItemCompletionHandler` and
-`WorkerRetryExhaustionHandler` inject and delegate to it. This avoids duplicating the terminal-
-state logic and ensures both handlers stay in sync on future changes.
+`PlanItemCompletionHandler` refactored to inject and delegate to `StageAutocompleteEvaluator`.
 
 ### Files Changed
 - `blackboard/src/main/java/io/casehub/blackboard/handler/StageAutocompleteEvaluator.java` (new)
 - `blackboard/src/main/java/io/casehub/blackboard/handler/WorkerRetryExhaustionHandler.java` (new)
 - `blackboard/src/main/java/io/casehub/blackboard/handler/PlanItemCompletionHandler.java` (delegates to `StageAutocompleteEvaluator`)
 - `blackboard/src/test/java/io/casehub/blackboard/handler/WorkerRetryExhaustionHandlerTest.java` (new)
+- `blackboard/src/test/java/io/casehub/blackboard/handler/StageAutocompleteEvaluatorTest.java` (new)
 
 ---
 
@@ -126,17 +145,17 @@ state logic and ensures both handlers stay in sync on future changes.
 
 ### Root Cause
 
-`incrementCompleted()` and `incrementRejected()` use read-modify-write:
-```java
-e.completedCount++;   // read entity → mutate → Hibernate dirty write
-```
+`incrementCompleted()` and `incrementRejected()` use read-modify-write (`e.completedCount++`).
 Under PostgreSQL READ COMMITTED, two concurrent transactions can both read `completedCount = N`,
 both write `N+1`, and one increment is silently lost. The `markPolicyTriggered()` conditional
 UPDATE is already correct — the race is in the counter increments.
 
+`MemorySubCaseGroupRepository` already uses `synchronized(g)` on both increment methods —
+no changes needed there.
+
 ### Design
 
-Replace read-modify-write with **atomic JPQL increments** + re-read:
+Replace read-modify-write with **atomic JPQL increments** + null-safe re-read:
 
 ```java
 @Override
@@ -152,21 +171,24 @@ public Uni<SubCaseGroup> incrementCompleted(UUID parentCaseId, String groupId) {
             return SubCaseGroupEntity
                 .<SubCaseGroupEntity>find("parentCaseId = ?1 and groupId = ?2", parentCaseId, groupId)
                 .firstResult()
-                .map(this::toDomain);
+                .onItem().ifNotNull().transform(this::toDomain)
+                .onItem().ifNull().failWith(() ->
+                    new IllegalStateException("Group vanished after increment: " + parentCaseId));
         }));
 }
 ```
 
-Same pattern for `incrementRejected()`. The JPQL UPDATE is a single atomic SQL statement,
-serialized at the database level — no retry logic, no lock acquisition overhead.
+Same pattern for `incrementRejected()`.
 
-Also add `synchronized` to `incrementCompleted()` and `incrementRejected()` in
-`MemorySubCaseGroupRepository` — in-memory tests run on Vert.x IO threads and the current
-unsynchronized `HashMap` mutation is a data race.
+**Re-read semantics note for callers:** The returned `SubCaseGroup` reflects the database state
+at the moment of the SELECT, which may include increments from other concurrent transactions.
+Callers must not assume the returned count equals "their" increment plus the previous value —
+they may see a higher count if concurrent increments committed between the UPDATE and SELECT.
+`SubCaseGroupPolicy.evaluate()` already handles this correctly: it reads `completedCount` and
+`requiredCount` and compares them, so a higher-than-expected count is safe.
 
 ### Files Changed
 - `persistence-hibernate/src/main/java/io/casehub/persistence/jpa/JpaSubCaseGroupRepository.java`
-- `persistence-memory/src/main/java/io/casehub/persistence/memory/MemorySubCaseGroupRepository.java`
 - `persistence-hibernate/src/test/java/io/casehub/persistence/jpa/JpaSubCaseGroupRepositoryTest.java`
 
 ---
@@ -175,13 +197,18 @@ unsynchronized `HashMap` mutation is a data race.
 
 ### Root Cause
 
-`applyStatus()` maps three semantically distinct `WorkItemStatus` values to a single
-`PlanItem.markFaulted()`:
+`applyStatus()` maps two semantically distinct `WorkItemStatus` values to `markFaulted()`:
 ```java
 case REJECTED, EXPIRED -> item.markFaulted();
 ```
-ESCALATED is already correctly excluded. REJECTED (intentional human refusal) and EXPIRED
-(deadline missed) are not the same — case definitions cannot distinguish them.
+REJECTED (intentional human refusal) and EXPIRED (deadline missed) are not the same — case
+definitions cannot distinguish them.
+
+ESCALATED is correctly excluded at the filter before `applyStatus()` is ever called (lines 76–80
+of `WorkItemLifecycleAdapter`). The WorkItem re-enters PENDING with new candidate groups; the
+PlanItem stays in its current state until the WorkItem reaches a true terminal status. No state
+transition occurs, and no PlanItem-level audit entry is written — this is intentional. ESCALATED
+is not a terminal state; the engine does not close the plan item.
 
 ### Design
 
@@ -193,13 +220,20 @@ public enum PlanItemStatus {
 }
 ```
 
-REJECTED is semantically: an external actor (human or group policy) explicitly refused the work.
-It is terminal. Distinct from FAULTED (computation failure or timeout).
+Stored as `@Enumerated(EnumType.STRING)` in `PlanItemEntity` — confirmed. No ordinal migration
+required.
+
+REJECTED is semantically distinct from FAULTED: an external actor (human or group policy)
+explicitly refused the work. FAULTED means computation failure or timeout.
 
 #### 4b — Add `PlanItem.markRejected()`
 
-Transitions from `DELEGATED` only — REJECTED arrives via human task refusal (WorkItemStatus.REJECTED)
-or M-of-N group policy failure. Capability targets do not reject; they fault or complete.
+Transitions from `DELEGATED` only. REJECTED arrives via human task refusal
+(`WorkItemStatus.REJECTED`) or M-of-N group policy failure (`GroupStatus.REJECTED`). Both of
+these dispatch through `HumanTaskScheduleHandler` which calls `item.markDelegated()` before
+the WorkItem is created — so the PlanItem is always in DELEGATED state when a rejection arrives.
+CapabilityTarget PlanItems (RUNNING state) do not participate in SpawnGroups and have no
+REJECTED path; they fault via retries exhaustion.
 
 ```java
 public void markRejected() {
@@ -229,7 +263,7 @@ case REJECTED  -> item.markRejected();   // group threshold unreachable — was 
 
 #### 4e — Update `SubCaseCompletionService.cancelPlanItemOnRejected()` terminal guard
 
-Add `PlanItemStatus.REJECTED` to the existing terminal-state exclusion:
+Add `PlanItemStatus.REJECTED` to the terminal-state exclusion:
 ```java
 .filter(pi ->
     pi.getStatus() != PlanItemStatus.COMPLETED &&
@@ -238,46 +272,61 @@ Add `PlanItemStatus.REJECTED` to the existing terminal-state exclusion:
     pi.getStatus() != PlanItemStatus.CANCELLED)
 ```
 
-#### 4f — Update `evaluateStageAutocomplete()` — terminal-state gate
+#### 4f — Update `StageAutocompleteEvaluator` — terminal-state gate
 
 Currently autocomplete fires only when all required items are `COMPLETED`. Updated to fire when
-all required items have reached **any terminal state** (COMPLETED, REJECTED, FAULTED, CANCELLED) —
-the stage has concluded regardless of outcome:
+all required items have reached **any terminal state** (COMPLETED, REJECTED, FAULTED, CANCELLED).
+This is a deliberate architectural change: a stage has concluded when all its work is settled,
+regardless of outcome. Case logic downstream inspects context to determine what happened.
 
 ```java
-private static boolean isTerminal(PlanItemStatus s) {
+public static boolean isTerminal(PlanItemStatus s) {
     return s == COMPLETED || s == REJECTED || s == FAULTED || s == CANCELLED;
 }
-
-// In allDone check:
-.map(pi -> isTerminal(pi.getStatus()))
 ```
 
-This change applies to `PlanItemCompletionHandler.evaluateStageAutocomplete()` and to the
-same logic in the new `WorkerRetryExhaustionHandler` (Fix 2).
+#### 4g — Audit all switches on PlanItemStatus
 
-#### Audit: all switch/match on PlanItemStatus
+Before implementation, grep `getStatus\(\)\|PlanItemStatus\.` across all source files. Known
+sites that must handle REJECTED:
+- `PlanItemCompletionHandler.COMPLETABLE` — REJECTED must NOT be added (it's terminal, not
+  completable-from)
+- `SubCaseCompletionService.cancelPlanItemOnRejected()` — covered by 4e
+- Any persistence or serialization code switching on status — covered by STRING enum
 
-Before implementation: grep for all switches on `PlanItemStatus` and `item.getStatus()` across
-the codebase. Any exhaustive switch must be updated to handle `REJECTED`.
+### Test Coverage
+
+- `PlanItem.markRejected()` unit test: assert DELEGATED→REJECTED succeeds; assert PENDING,
+  RUNNING, COMPLETED, FAULTED, CANCELLED all throw `IllegalStateException`
+- `StageAutocompleteEvaluator` test: all-REJECTED, all-FAULTED, all-CANCELLED, and mixed
+  terminal states all trigger autocomplete; any non-terminal item blocks it
+- `SubCaseCompletionService.cancelPlanItemOnRejected()` test: REJECTED item is excluded
+  from the cancel sweep
+- `WorkItemLifecycleAdapterTest`: REJECTED→markRejected, EXPIRED→markFaulted, CANCELLED→markCancelled
 
 ### Files Changed
 - `common/src/main/java/io/casehub/engine/internal/model/PlanItemStatus.java`
 - `blackboard/src/main/java/io/casehub/blackboard/plan/PlanItem.java`
-- `blackboard/src/main/java/io/casehub/blackboard/handler/PlanItemCompletionHandler.java`
+- `blackboard/src/main/java/io/casehub/blackboard/handler/StageAutocompleteEvaluator.java` (created in Fix 2)
 - `blackboard/src/main/java/io/casehub/blackboard/subcase/SubCaseCompletionService.java`
 - `work-adapter/src/main/java/io/casehub/workadapter/WorkItemLifecycleAdapter.java`
 - `work-adapter/src/test/java/io/casehub/workadapter/WorkItemLifecycleAdapterTest.java`
+- `blackboard/src/test/java/io/casehub/blackboard/plan/PlanItemTest.java` (markRejected tests)
+- `blackboard/src/test/java/io/casehub/blackboard/subcase/SubCaseCompletionServiceTest.java`
 
 ---
 
 ## Implementation Order
 
-Fix these in dependency order — each builds on the previous:
+Fix in dependency order — each builds on the previous:
 
-1. **#338** — `PlanItemStatus.REJECTED` + `markRejected()` first; everything else references it
-2. **#331** — `WorkerRetryExhaustionHandler` uses updated `evaluateStageAutocomplete()` from #338
-3. **#342** — independent; `CaseLifecycleEvent` change and ledger fix
+1. **#338** — `PlanItemStatus.REJECTED` + `markRejected()` + `StageAutocompleteEvaluator` (with
+   updated `isTerminal()` logic) + update `applyStatus()`, `applyGroupStatus()`,
+   `cancelPlanItemOnRejected()`, and `PlanItemCompletionHandler` (delegates to evaluator)
+2. **#331** — `WorkerRetryExhaustionHandler` injects the `StageAutocompleteEvaluator` from step 1.
+   Both handlers share the same evaluator — Fix 2 adds the handler; Fix 4 already updated the
+   evaluator logic. The extraction and logic update happen together in step 1.
+3. **#342** — independent; `CaseLifecycleEvent` record change and ledger capture fix
 4. **#248** — independent; pure persistence layer
 
 Commits: one per issue, each `Closes #N`.
