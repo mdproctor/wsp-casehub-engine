@@ -2,6 +2,8 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-05-26-mdp01-guard-that-did-too-much.md](2026-05-26-mdp01-guard-that-did-too-much.md) | 2026-05-26 | RUNNING guard conflated dedup and blocking; LoopControl now owns dispatch dedup; WAITING cases receive signals; Qhorus bridge, ESCALATED fix, group observer |
+| [2026-05-23-mdp01-scope-and-the-silent-guard.md](2026-05-23-mdp01-scope-and-the-silent-guard.md) | 2026-05-23 | HumanTaskTarget scope field for SLA preference routing; binding when-field evaluated for contextChange triggers |
 | [2026-05-22-mdp04-waiting-is-not-running.md](2026-05-22-mdp04-waiting-is-not-running.md) | 2026-05-22 | Introducing DELEGATED PlanItem state and wiring the full SubCase lifecycle |
 | [2026-05-22-mdp03-clearing-interim-address.md](2026-05-22-mdp03-clearing-interim-address.md) | 2026-05-22 | JQEvaluator moved from engine-common interim home to casehub-platform Foundation tier; same-package import gotcha; ValidationResult stricter null contract |
 | [2026-05-22-mdp02-wrapper-earns-its-keep.md](2026-05-22-mdp02-wrapper-earns-its-keep.md) | 2026-05-22 | Agent keeps jq transformation layer as the bridge between case context and LLM; AgentBuilder accepts UnaryOperator<JsonNode>; CommandContent record replaces raw HashMap in COMMAND dispatch |
