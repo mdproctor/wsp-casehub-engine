@@ -236,6 +236,15 @@ CapabilityTarget PlanItems (RUNNING state) do not participate in SpawnGroups and
 REJECTED path; they fault via retries exhaustion.
 
 ```java
+/**
+ * Transitions DELEGATED → REJECTED.
+ *
+ * DELEGATED-only guard rationale: only human task refusals (WorkItemStatus.REJECTED) and
+ * M-of-N group threshold failures (GroupStatus.REJECTED on human task SpawnGroups) reach
+ * this path. CapabilityTarget PlanItems are always in RUNNING — they fault via retries
+ * exhaustion, never via rejection. If a group-of-capability-targets path is ever added,
+ * this guard must be revisited to allow RUNNING → REJECTED.
+ */
 public void markRejected() {
     if (status != PlanItemStatus.DELEGATED) {
         throw new IllegalStateException(
