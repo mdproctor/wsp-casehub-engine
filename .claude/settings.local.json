@@ -153,7 +153,13 @@
       "Skill(write-content)",
       "mcp__intellij__search_file",
       "Bash(/usr/libexec/java_home -v 26)",
-      "Skill(work-end)"
+      "Skill(work-end)",
+      "Bash(mvn --batch-mode test -pl api -Dtest=\"AgentAssignmentTest,AgentRoutingStrategyContractTest\")",
+      "Bash(mvn --batch-mode install -DskipTests -q -pl api)",
+      "Bash(mvn --batch-mode test -pl ledger -Dtest=\"TrustRoutingPolicyTest,TrustCandidateClassifierTest,TrustWeightedAgentStrategyTest\")",
+      "Bash(mvn --batch-mode install -DskipTests -q -pl api,common,ledger)",
+      "Bash(mvn --batch-mode compile -pl runtime)",
+      "Bash(mvn --batch-mode install -DskipTests)"
     ]
   }
 }
