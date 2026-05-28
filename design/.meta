@@ -1,0 +1,8 @@
+branch: issue-376-377-semantic-routing-escalation
+project-sha: 618e2333f27a8ec384e1fdc55a0e6d7610a1430b
+date: 2026-05-28
+issue: 376
+issue-repo: casehubio/engine
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
