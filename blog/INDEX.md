@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-05-29-mdp01-routing-the-uncertain.md](2026-05-29-mdp01-routing-the-uncertain.md) | 2026-05-29 | Sealed AgentAssignment, reactive SPI, TrustCandidateClassifier shared CDI kernel, SemanticAgentRoutingStrategy — and why the blocking IO catch changed everything |
 | [2026-05-26-mdp01-guard-that-did-too-much.md](2026-05-26-mdp01-guard-that-did-too-much.md) | 2026-05-26 | RUNNING guard conflated dedup and blocking; LoopControl now owns dispatch dedup; WAITING cases receive signals; Qhorus bridge, ESCALATED fix, group observer |
 | [2026-05-23-mdp01-scope-and-the-silent-guard.md](2026-05-23-mdp01-scope-and-the-silent-guard.md) | 2026-05-23 | HumanTaskTarget scope field for SLA preference routing; binding when-field evaluated for contextChange triggers |
 | [2026-05-22-mdp04-waiting-is-not-running.md](2026-05-22-mdp04-waiting-is-not-running.md) | 2026-05-22 | Introducing DELEGATED PlanItem state and wiring the full SubCase lifecycle |
