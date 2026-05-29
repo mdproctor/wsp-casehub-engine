@@ -1,0 +1,8 @@
+branch: issue-382-sxs-batch
+project-sha: d563818c3765d6173a5331fe2671b38e5f8fdaa0
+date: 2026-05-29
+issue: 382
+issue-repo: casehubio/engine
+flyway-next-v: unknown
+design-repo: workspace
+design-section-hashes:
