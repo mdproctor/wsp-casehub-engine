@@ -1,61 +1,54 @@
 # Handoff — 2026-05-29
 
-**Head commit (engine):** cdbf6f0 — adr: 0003 AgentRoutingStrategy returns Uni<AgentAssignment>
-**Head commit (workspace):** 00b860d — docs: add blog entry 2026-05-29-mdp01-routing-the-uncertain
+**Head commit (engine):** e12491b — feat: LangChain4jAgentEmbeddingProvider
+**Head commit (workspace):** 9779a39 — feat: promote blog from issue-382-sxs-batch
+**Both repos on:** main
 
 ## What Changed This Session
 
-**engine#376 + engine#377 complete — PR#391 open on casehubio/engine.**
+**`issue-382-sxs-batch` closed — PR#394 open on casehubio/engine.**
 
-`AgentAssignment` record → sealed interface (`Assigned` / `Unresolvable` / `EscalateToOversight`).
-`AgentRoutingStrategy.select()` → `Uni<AgentAssignment>` (reactive — blocking embedding calls safe from IO thread).
-`TrustWeightedAgentStrategy` returns `EscalateToOversight` when all trust-eligible candidates are borderline (Phase 2, trust-maturity-model.md).
-`TrustCandidateClassifier` — new `@ApplicationScoped` CDI bean shared by both trust strategies; `Phase` enum with `EXCLUDED_PHASE2B`/`EXCLUDED_PHASE3`; `OptionalDouble trustScore` (no NaN).
-`AgentCandidateFactory` — shared static utility, eliminates duplication between two handlers.
-`AgentRoutingEscalationHandler` — posts QUERY to oversight channel on escalation.
-`casehub-engine-ai` — new optional module: `AgentEmbeddingProvider` SPI + `SemanticAgentRoutingStrategy` @Priority(2).
+All S/XS issues resolved (8 commits):
+- #388 (XS) — TrustCandidateClassifier quality fixes
+- #382 (S) — TrustRoutingPolicy + TrustRoutingPolicyProvider moved to casehub-engine-api (**AML unblocked**)
+- #390 (S) — WorkerDecisionEntry JOINED ledger subclass + WorkerDecisionEvent CDI event + V2001 migration (**AML unblocked**)
+- #381 (S) — CaseMemoryObserver auto-captures terminal case events
+- #385 (S) — EmbeddingCache LRU wired into SemanticAgentRoutingStrategy
+- #386 (S) — LangChain4jAgentEmbeddingProvider via Quarkus EmbeddingModel
+- #379, #380, #281, #298 — closed as already fixed/implemented
 
-**Four issues filed this session:**
-- engine#383 — oversight response loop (COMMAND → re-trigger routing)
-- engine#384 — PlanItem state during escalation
-- engine#385 — embedding vector cache
-- engine#386 — LangChain4j AgentEmbeddingProvider implementation
+Garden: 3 entries (podman restart socket variant, @Transactional pool exhaustion, LinkedHashMap LRU).
+Protocol: PP-20260529-4783b2 — ledger-sequence-cross-subtype-query.
+Blog: `blog/2026-05-29-mdp02-unblocking-aml.md` published.
 
-ADR-0003 recorded. PP-20260529-9f9627 (spi-reactive-blocking-io) captured in garden.
-Blog: `blog/2026-05-29-mdp01-routing-the-uncertain.md`
+Infra: Podman bumped to 4GB RAM. `~/.testcontainers.properties` may need updating after future restarts. Permanent fix: `! sudo /opt/homebrew/Cellar/podman/5.8.2/bin/podman-mac-helper install`.
 
 ## Immediate Next Step
 
-Start **engine#382** — move `TrustRoutingPolicy` + `TrustRoutingPolicyProvider` to `casehub-engine-api` (AML blocked, S·Low, can be done now without waiting for PR#391).
+Wait for PR#394 review/merge. Next work: **engine#274** — BlackboardRegistry hydration from PlanItemStore on restart (M·Med).
 
 ## What's Left
 
-- engine#382 — Move TrustRoutingPolicy + TrustRoutingPolicyProvider to casehub-engine-api · S · Low (**AML blocked**)
-- engine#390 — WorkOrchestrator writes WorkerDecisionEntry after worker execution · S · Med (**AML blocked**, depends on #382)
 - engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med
 - engine#383 — Oversight response loop: COMMAND → re-trigger routing · M · Med
 - engine#384 — PlanItem state during escalation (ESCALATING state?) · M · Med
-- engine#385 — Embedding vector cache · S · Low
-- engine#386 — LangChain4j AgentEmbeddingProvider implementation · S · Low
-- parent#87 — PLATFORM.md capability table stale (WorkBroker references) · S · Low
+- engine#392 — test: no disabled-path test for WorkerDecisionEventCapture · XS · Low
+- parent#87 — PLATFORM.md capability table stale · S · Low
 - parent#88 — PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider · S · Low
-- engine#388 — Minor code quality items (classifier decide() instance, eidos-api dep, etc.) · XS · Low
+- ledger#100 — sequence race under READ COMMITTED (pre-existing, tracked in casehub-ledger) · M · Med
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#382 | Move TrustRoutingPolicy + TrustRoutingPolicyProvider to casehub-engine-api | S | Low | **AML blocked** — do first |
-| engine#390 | WorkOrchestrator writes WorkerDecisionEntry after worker execution | S | Med | **AML blocked** — depends on #382 |
-| engine#274 | BlackboardRegistry hydration from PlanItemStore on restart | M | Med | — |
-| engine#383 | Oversight response loop: COMMAND from human re-triggers routing | M | Med | Depends on PR#391 merge |
-| engine#385 | Embedding cache for SemanticAgentRoutingStrategy | S | Low | After PR#391 merge |
-| engine#386 | LangChain4j AgentEmbeddingProvider implementation | S | Low | After PR#391 merge |
+| engine#274 | BlackboardRegistry hydration from PlanItemStore on restart | M | Med | After PR#394 merge |
+| engine#383 | Oversight response loop: COMMAND re-triggers routing | M | Med | After PR#394 merge |
+| parent#87 | PLATFORM.md capability table stale | S | Low | — |
+| parent#88 | PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider | S | Low | — |
 
 ## Key References
 
-- PR: casehubio/engine#391
-- Blog: `blog/2026-05-29-mdp01-routing-the-uncertain.md`
-- Spec: `proj/docs/specs/2026-05-28-semantic-routing-escalation-design.md`
-- ADR: `proj/docs/adr/0003-agent-routing-strategy-reactive-spi.md`
-- Protocol: PP-20260529-9f9627 — garden casehub/spi-reactive-blocking-io.md
+- PR: casehubio/engine#394
+- Blog: `blog/2026-05-29-mdp02-unblocking-aml.md`
+- Protocol: PP-20260529-4783b2 — garden casehub/ledger-sequence-cross-subtype-query.md
+- Filed: engine#392, ledger#100
