@@ -1,47 +1,57 @@
-# Handoff — 2026-05-28
+# Handoff — 2026-05-29
 
-**Head commit (engine):** 618e233 — feat: promote design spec from issue-371-337-336-spi-trust
-**Head commit (workspace):** 83de390 — docs: mark closed, deletion due 2026-06-11
+**Head commit (engine):** cdbf6f0 — adr: 0003 AgentRoutingStrategy returns Uni<AgentAssignment>
+**Head commit (workspace):** 00b860d — docs: add blog entry 2026-05-29-mdp01-routing-the-uncertain
 
 ## What Changed This Session
 
-**engine#371, #337, #336 complete — PR#378 merged.**
-`CaseLifecycleEvent` promoted to `io.casehub.engine.common.spi.event` (#371).
-Engine-owned `AgentRoutingStrategy` SPI replaced borrowed `WorkerSelectionStrategy`/`WorkBroker` from casehub-work; `casehub-work-api` and `casehub-work-core` removed from runtime/pom (#337).
-`TrustScoreCache` + `TrustWeightedAgentStrategy` (four-phase trust maturity model, CAPABILITY + CAPABILITY_DIMENSION scores) in `casehub-engine-ledger` (#336).
-Rebase conflict resolved with Dmitrii's `engine.common.*` package reorganization (PR#375).
+**engine#376 + engine#377 complete — PR#391 open on casehubio/engine.**
+
+`AgentAssignment` record → sealed interface (`Assigned` / `Unresolvable` / `EscalateToOversight`).
+`AgentRoutingStrategy.select()` → `Uni<AgentAssignment>` (reactive — blocking embedding calls safe from IO thread).
+`TrustWeightedAgentStrategy` returns `EscalateToOversight` when all trust-eligible candidates are borderline (Phase 2, trust-maturity-model.md).
+`TrustCandidateClassifier` — new `@ApplicationScoped` CDI bean shared by both trust strategies; `Phase` enum with `EXCLUDED_PHASE2B`/`EXCLUDED_PHASE3`; `OptionalDouble trustScore` (no NaN).
+`AgentCandidateFactory` — shared static utility, eliminates duplication between two handlers.
+`AgentRoutingEscalationHandler` — posts QUERY to oversight channel on escalation.
+`casehub-engine-ai` — new optional module: `AgentEmbeddingProvider` SPI + `SemanticAgentRoutingStrategy` @Priority(2).
 
 **Four issues filed this session:**
-- `casehub-work#231` — ClaimFirstStrategy → @Alternative @Priority(0)
-- `engine#376` — SemanticAgentRoutingStrategy
-- `engine#377` — borderline agent escalation
-- `parent#80` — engine deep-dive doc sync
+- engine#383 — oversight response loop (COMMAND → re-trigger routing)
+- engine#384 — PlanItem state during escalation
+- engine#385 — embedding vector cache
+- engine#386 — LangChain4j AgentEmbeddingProvider implementation
 
-**PR#366 (engine#349 signal bridge) confirmed merged.**
+ADR-0003 recorded. PP-20260529-9f9627 (spi-reactive-blocking-io) captured in garden.
+Blog: `blog/2026-05-29-mdp01-routing-the-uncertain.md`
 
 ## Immediate Next Step
 
-`engine#274` — BlackboardRegistry hydration from PlanItemStore on restart. Next actionable piece of engine work.
+Wait for PR#391 review and merge. Next work item: **engine#274** — BlackboardRegistry hydration from PlanItemStore on restart.
 
 ## What's Left
 
 - engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med
-- casehub-work#231 — ClaimFirstStrategy → @Alternative @Priority(0) (filed this session) · XS · Low
-- parent#80 — engine deep-dive doc sync (casehub-engine.md) · S · Low
+- engine#383 — Oversight response loop: COMMAND → re-trigger routing · M · Med
+- engine#384 — PlanItem state during escalation (ESCALATING state?) · M · Med
+- engine#385 — Embedding vector cache · S · Low
+- engine#386 — LangChain4j AgentEmbeddingProvider implementation · S · Low
+- parent#87 — PLATFORM.md capability table stale (WorkBroker references) · S · Low
+- parent#88 — PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider · S · Low
+- engine#388 — Minor code quality items (classifier decide() instance, eidos-api dep, etc.) · XS · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
 | engine#274 | BlackboardRegistry hydration from PlanItemStore on restart | M | Med | — |
-| engine#376 | SemanticAgentRoutingStrategy — embedding-based agent selection | M | Med | Unblocked by #337 |
-| engine#377 | Borderline agent escalation — human oversight path | S | Med | Unblocked by #336 |
-| casehub-work#231 | ClaimFirstStrategy → @Alternative @Priority(0) | XS | Low | Separate session |
-| parent#80 | engine deep-dive doc sync (casehub-engine.md) | S | Low | Separate session |
+| engine#383 | Oversight response loop: COMMAND from human re-triggers routing | M | Med | Depends on PR#391 merge |
+| engine#385 | Embedding cache for SemanticAgentRoutingStrategy | S | Low | After PR#391 merge |
+| engine#386 | LangChain4j AgentEmbeddingProvider implementation | S | Low | After PR#391 merge |
 
 ## Key References
 
-- Spec: `specs/issue-371-337-336-spi-trust/2026-05-27-agent-routing-strategy-design.md`
-- Blog: `blog/2026-05-28-mdp01-the-wrong-abstraction.md`
-- Garden: REVISE GE-20260423-daef97 — resolveObserverMethods() double-silence amplifier
-- Branch closed: `issue-371-337-336-spi-trust` (deletion due 2026-06-11)
+- PR: casehubio/engine#391
+- Blog: `blog/2026-05-29-mdp01-routing-the-uncertain.md`
+- Spec: `proj/docs/specs/2026-05-28-semantic-routing-escalation-design.md`
+- ADR: `proj/docs/adr/0003-agent-routing-strategy-reactive-spi.md`
+- Protocol: PP-20260529-9f9627 — garden casehub/spi-reactive-blocking-io.md
