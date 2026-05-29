@@ -1,51 +1,66 @@
 # Handoff — 2026-05-29
 
-**Head commit (engine):** b13f5da — docs(claude-md): add ProvisionResult SPI return type + WorkerStarted wiring row
-**Head commit (workspace):** (branch issue-392-sxs-batch, workspace main via stash/commit)
-**Project on:** issue-392-sxs-batch
-**Workspace on:** issue-392-sxs-batch
+**Head commit (engine):** b13f5da — docs(claude-md): add ProvisionResult SPI return type
+**Head commit (workspace):** 4b704fa — docs: session handover 2026-05-29
+**Branch:** `issue-392-sxs-batch` (engine) / `issue-392-sxs-batch` (workspace)
 
 ## What Changed This Session
 
-**`issue-392-sxs-batch` in progress — all three S/XS issues committed, branch open for PR.**
+PR#394 merged. Branch `issue-392-sxs-batch` started — 5 commits so far:
+- #392 ✓ — disabled-path guard test for CaseLedger + WorkerDecision captures
+- #389 ✓ — WorkerStarted CaseLifecycleEvent with causedByEntryId after provisioning
+- #393 ✓ — await CaseCompleted CDI delivery in CaseStatusChangedHandler
 
-All three issues resolved (5 commits on engine):
-- #392 (XS) — disabled-path guard tests for `CaseLedgerEventCapture` and `WorkerDecisionEventCapture`
-- #389 (S) — `ProvisionResult` SPI return type; `WorkerProvisioner.provision()` now returns `ProvisionResult` not `Worker`; `tryProvision()` fires `WorkerStarted` lifecycle event; claudony#140 filed
-- #393 (S) — `CaseStatusChangedHandler` restructured to await CDI delivery via `.chain(completionStage())`; engine#397 filed for 5 remaining handlers
-
-Garden: GE-20260513-b15933 REVISED (inner-class @ObservesAsync build-time non-registration); GE-20260529-e43076 (`.invoke()` → `.chain(completionStage())` technique).
-Protocols: PP-20260529-3237bd (CDI event await chain rule), PP-20260529-bcbbb5 (ProvisionResult SPI rule).
-Blog: `blog/2026-05-29-mdp03-worker-carries-a-definition.md`.
+Cross-module scan: all previous internal blockers resolved (#273, #377, platform#17 all closed).
 
 ## Immediate Next Step
 
-Push `issue-392-sxs-batch` to engine remote and open PR. Then start **engine#274** — BlackboardRegistry hydration from PlanItemStore on restart (M·Med).
+Continue `issue-392-sxs-batch` — pick engine#395 first (Flyway path fix, XS·Low, unblocks AML).
 
-## What's Left
+## Cross-Module
 
-- engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med
-- engine#383 — Oversight response loop: COMMAND → re-trigger routing · M · Med
-- engine#384 — PlanItem state during escalation (ESCALATING state?) · M · Med
-- engine#397 — await fireAsync in remaining 5 lifecycle event handlers · S · Low
-- parent#87 — PLATFORM.md capability table stale · S · Low
-- parent#88 — PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider · S · Low
-- ledger#100 — sequence race under READ COMMITTED · M · Med
-- claudony#140 — wire causedByEntryId through provisioner (depends on engine#231)
+**We're blocking:**
+- `casehub-aml` — engine#395 (Flyway migrations at wrong classpath path) · XS · Low ← fix first, AML can't wire engine-ledger without it
+- `casehub-aml` — engine#396 (CDI ambiguity when engine-ledger on classpath breaks AML tests) · S · Med
+
+**Blocked by:** none — all cross-module deps resolved (engine#273, engine#377, platform#17 all closed).
+
+## What's Left — S/XS batch (issue-392-sxs-batch)
+
+In progress (this branch):
+- engine#395 — fix: Flyway migrations path → `db/engine-ledger/migration/` · XS · Low [BLOCKS AML]
+- engine#399 — bug: callerRef passed as assigneeIdOverride in handleTemplateMode · XS · Low
+- engine#397 — fix: await fireAsync in 5 remaining lifecycle event handlers · S · Low
+- engine#396 — bug: CDI ambiguity when adding engine-ledger to AML tests · S · Med [BLOCKS AML]
+- engine#400 — feat: route WorkItem escalation events as case context signals · S · Med
+
+## What's Left — larger work
+
+- engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med ← NOW UNBLOCKED (#273 closed)
+- engine#398 — bug: HumanTask completion silently dropped after JVM restart · M · Med
+- engine#383 — oversight response loop: COMMAND re-triggers agent routing · M · Med ← NOW UNBLOCKED (#377 closed)
+- engine#384 — PlanItem state during escalation (ESCALATING?) · M · Med ← NOW UNBLOCKED (#377 closed)
+- engine#387 — humanTask: dynamic candidateGroups from case context · M · Med
+- engine#299 — multi-tenancy foundation: tenancyId enforcement · L · High ← NOW UNBLOCKED (platform#17 closed)
+- engine#389 — fire WorkerStarted after provisioning ✓ done this session
+- ledger#100 — sequence race under READ COMMITTED (pre-existing) · M · Med
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#274 | BlackboardRegistry hydration from PlanItemStore on restart | M | Med | After PR#394 merge |
-| engine#397 | await fireAsync in 5 remaining lifecycle handlers | S | Low | Pattern established — apply to GoalReached, Milestone, Signal, CaseStarted, WorkflowCompleted |
-| engine#383 | Oversight response loop: COMMAND re-triggers routing | M | Med | — |
+| engine#395 | Flyway path scoping fix | XS | Low | Blocks AML — do first |
+| engine#399 | callerRef as assigneeIdOverride bug | XS | Low | — |
+| engine#397 | await fireAsync in 5 remaining handlers | S | Low | Copy pattern from #393 |
+| engine#396 | CDI ambiguity: engine-ledger + AML tests | S | Med | Blocks AML |
+| engine#400 | WorkItem escalation as case context signal | S | Med | — |
+| engine#274 | BlackboardRegistry hydration on restart | M | Med | Unblocked |
+| engine#383 | Oversight response loop | M | Med | Unblocked |
 | parent#87 | PLATFORM.md capability table stale | S | Low | — |
+| parent#88 | PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider | S | Low | — |
 
 ## Key References
 
-- Branch: `issue-392-sxs-batch` (engine + workspace, not yet pushed to remote)
-- PR: open PR#394 still awaiting merge (from previous session)
-- Blog: `blog/2026-05-29-mdp03-worker-carries-a-definition.md`
-- Protocols: PP-20260529-3237bd, PP-20260529-bcbbb5
-- Filed: claudony#140, engine#397
+- Blog: `blog/2026-05-29-mdp02-unblocking-aml.md`
+- Protocol: PP-20260529-4783b2 — garden casehub/ledger-sequence-cross-subtype-query.md
+- AML tracker: casehubio/aml#14, casehubio/aml#9 (Layer 6 now unblocked by #382+#390 merge)
