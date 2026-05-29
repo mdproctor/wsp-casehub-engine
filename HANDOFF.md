@@ -1,61 +1,48 @@
 # Handoff — 2026-05-29
 
-**Head commit (engine):** cdbf6f0 — adr: 0003 AgentRoutingStrategy returns Uni<AgentAssignment>
-**Head commit (workspace):** 00b860d — docs: add blog entry 2026-05-29-mdp01-routing-the-uncertain
+**Head commit (engine):** 4498185 — feat: WorkerDecisionEntry — tamper-evident ledger entry per worker execution
+**Head commit (workspace):** ff29364 — docs: session handover 2026-05-29 — add engine#382 + #390 (AML blocked)
+**Branch:** issue-382-sxs-batch (both repos)
 
 ## What Changed This Session
 
-**engine#376 + engine#377 complete — PR#391 open on casehubio/engine.**
+**S/XS batch in progress on branch `issue-382-sxs-batch`.**
 
-`AgentAssignment` record → sealed interface (`Assigned` / `Unresolvable` / `EscalateToOversight`).
-`AgentRoutingStrategy.select()` → `Uni<AgentAssignment>` (reactive — blocking embedding calls safe from IO thread).
-`TrustWeightedAgentStrategy` returns `EscalateToOversight` when all trust-eligible candidates are borderline (Phase 2, trust-maturity-model.md).
-`TrustCandidateClassifier` — new `@ApplicationScoped` CDI bean shared by both trust strategies; `Phase` enum with `EXCLUDED_PHASE2B`/`EXCLUDED_PHASE3`; `OptionalDouble trustScore` (no NaN).
-`AgentCandidateFactory` — shared static utility, eliminates duplication between two handlers.
-`AgentRoutingEscalationHandler` — posts QUERY to oversight channel on escalation.
-`casehub-engine-ai` — new optional module: `AgentEmbeddingProvider` SPI + `SemanticAgentRoutingStrategy` @Priority(2).
+Completed so far (5 of 9):
+- #379, #380 — closed as already fixed in source (SNAPSHOT jar stale, current source correct)
+- #388 — TrustCandidateClassifier.decide() → instance method; NaN sentinel removed from test helper; eidos-api dep comment corrected; cosineSimilarity Javadoc fixed
+- #382 — TrustRoutingPolicy + TrustRoutingPolicyProvider moved to casehub-engine-api (AML unblocked); TrustRoutingPolicyTest moved to api/src/test; FQN cleanup in TrustWeightedAgentStrategy
+- #390 — WorkerDecisionEntry JOINED ledger subclass + WorkerDecisionEvent + WorkerDecisionEventCapture; CaseLedgerEventCapture.findLatestByCaseId → findLatestBySubjectId (cross-subtype sequence fix); CaseLifecycleEvent actorId for worker completion changed to "system"; extractCapabilityTag + resolveConflictStrategy unified via findMatchingCapabilityBinding; V2001 migration; 3 new integration tests
 
-**Four issues filed this session:**
-- engine#383 — oversight response loop (COMMAND → re-trigger routing)
-- engine#384 — PlanItem state during escalation
-- engine#385 — embedding vector cache
-- engine#386 — LangChain4j AgentEmbeddingProvider implementation
-
-ADR-0003 recorded. PP-20260529-9f9627 (spi-reactive-blocking-io) captured in garden.
-Blog: `blog/2026-05-29-mdp01-routing-the-uncertain.md`
+Filed during review:
+- engine#392 — test: no disabled-path test for WorkerDecisionEventCapture
+- ledger#100 — fix: ledger_entry sequence race under READ COMMITTED isolation (pre-existing, tracked in casehub-ledger)
 
 ## Immediate Next Step
 
-Start **engine#382** — move `TrustRoutingPolicy` + `TrustRoutingPolicyProvider` to `casehub-engine-api` (AML blocked, S·Low, can be done now without waiting for PR#391).
+Continue on `issue-382-sxs-batch`: **engine#281** — add `JpaReactivePlanItemStoreContractTest` + abstract `ReactivePlanItemStoreContractTest` base in engine-common.
 
-## What's Left
+## What's Left (this branch)
 
-- engine#382 — Move TrustRoutingPolicy + TrustRoutingPolicyProvider to casehub-engine-api · S · Low (**AML blocked**)
-- engine#390 — WorkOrchestrator writes WorkerDecisionEntry after worker execution · S · Med (**AML blocked**, depends on #382)
-- engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med
-- engine#383 — Oversight response loop: COMMAND → re-trigger routing · M · Med
-- engine#384 — PlanItem state during escalation (ESCALATING state?) · M · Med
-- engine#385 — Embedding vector cache · S · Low
+- engine#281 — JpaReactivePlanItemStoreContractTest + abstract base · S · Low
+- engine#298 — Fix HumanTaskScheduleHandlerTest isolation failures (7 pre-existing) · S · Low
+- engine#381 — CDI observer: auto-capture memories from case lifecycle events into CaseMemoryStore · S · Low
+- engine#385 — Embedding cache for SemanticAgentRoutingStrategy · S · Low
 - engine#386 — LangChain4j AgentEmbeddingProvider implementation · S · Low
-- parent#87 — PLATFORM.md capability table stale (WorkBroker references) · S · Low
-- parent#88 — PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider · S · Low
-- engine#388 — Minor code quality items (classifier decide() instance, eidos-api dep, etc.) · XS · Low
 
-## What's Next
+## What's Next (post-branch)
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#382 | Move TrustRoutingPolicy + TrustRoutingPolicyProvider to casehub-engine-api | S | Low | **AML blocked** — do first |
-| engine#390 | WorkOrchestrator writes WorkerDecisionEntry after worker execution | S | Med | **AML blocked** — depends on #382 |
 | engine#274 | BlackboardRegistry hydration from PlanItemStore on restart | M | Med | — |
-| engine#383 | Oversight response loop: COMMAND from human re-triggers routing | M | Med | Depends on PR#391 merge |
-| engine#385 | Embedding cache for SemanticAgentRoutingStrategy | S | Low | After PR#391 merge |
-| engine#386 | LangChain4j AgentEmbeddingProvider implementation | S | Low | After PR#391 merge |
+| engine#383 | Oversight response loop: COMMAND from human re-triggers routing | M | Med | — |
+| engine#384 | PlanItem state during escalation (ESCALATING state?) | M | Med | — |
+| parent#87 | PLATFORM.md capability table stale | S | Low | — |
+| parent#88 | PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider | S | Low | — |
 
 ## Key References
 
-- PR: casehubio/engine#391
-- Blog: `blog/2026-05-29-mdp01-routing-the-uncertain.md`
-- Spec: `proj/docs/specs/2026-05-28-semantic-routing-escalation-design.md`
-- ADR: `proj/docs/adr/0003-agent-routing-strategy-reactive-spi.md`
-- Protocol: PP-20260529-9f9627 — garden casehub/spi-reactive-blocking-io.md
+- Branch: `issue-382-sxs-batch` (engine + workspace)
+- Specs: `proj/docs/specs/2026-05-29-trust-routing-policy-api-move-design.md`, `proj/docs/specs/2026-05-29-worker-decision-entry-design.md`
+- Filed: engine#392, ledger#100
+- Prior PR: casehubio/engine#391 (merged — AgentRoutingStrategy reactive SPI)
