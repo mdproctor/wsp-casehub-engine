@@ -153,7 +153,29 @@
       "Skill(write-content)",
       "mcp__intellij__search_file",
       "Bash(/usr/libexec/java_home -v 26)",
-      "Skill(work-end)"
+      "Skill(work-end)",
+      "Bash(mvn --batch-mode install -DskipTests -q -pl ledger,engine-ai -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -q -pl api,ledger,engine-ai -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode test-compile -pl ledger -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -q -pl common,runtime,ledger -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -q -pl common,ledger -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "mcp__intellij__search_symbol",
+      "Bash(mvn --batch-mode install -DskipTests -q -pl work-adapter -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode dependency:tree -pl runtime -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode test-compile -pl runtime -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode test -pl runtime -f /Users/mdproctor/claude/casehub/engine/pom.xml -Dtest=CaseMemoryObserverTest)",
+      "Bash(podman machine *)",
+      "Bash(mvn --batch-mode spotless:apply -pl runtime -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(podman system *)",
+      "Bash(DOCKER_HOST=\"unix:///var/folders/8m/0v940n7x1m5gy95zvnl3ms700000gn/T/podman/podman-machine-default-api.sock\" TESTCONTAINERS_RYUK_DISABLED=true mvn --batch-mode test -pl runtime -f /Users/mdproctor/claude/casehub/engine/pom.xml -Dtest=CaseLifecycleStateTest)",
+      "Bash(curl --unix-socket /var/folders/8m/0v940n7x1m5gy95zvnl3ms700000gn/T/podman/podman-machine-default.sock http://localhost/v1.41/info)",
+      "Bash(curl --unix-socket /var/folders/8m/0v940n7x1m5gy95zvnl3ms700000gn/T/podman/podman-machine-default.sock http://localhost/v1.41/version)",
+      "Bash(curl --unix-socket /var/folders/8m/0v940n7x1m5gy95zvnl3ms700000gn/T/podman/podman-machine-default-api.sock http://localhost/v1.41/version)",
+      "Bash(mvn --batch-mode test-compile -pl engine-ai -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode test -pl engine-ai -f /Users/mdproctor/claude/casehub/engine/pom.xml -Dtest=EmbeddingCacheTest)",
+      "Bash(mvn --batch-mode test -pl engine-ai -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode dependency:tree -pl engine-ai -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(xargs -I{} git -C /Users/mdproctor/claude/casehub/engine rev-parse {}^)"
     ]
   }
 }
