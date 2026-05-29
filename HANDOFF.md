@@ -26,10 +26,12 @@ Blog: `blog/2026-05-29-mdp01-routing-the-uncertain.md`
 
 ## Immediate Next Step
 
-Wait for PR#391 review and merge. Next work item: **engine#274** — BlackboardRegistry hydration from PlanItemStore on restart.
+Start **engine#382** — move `TrustRoutingPolicy` + `TrustRoutingPolicyProvider` to `casehub-engine-api` (AML blocked, S·Low, can be done now without waiting for PR#391).
 
 ## What's Left
 
+- engine#382 — Move TrustRoutingPolicy + TrustRoutingPolicyProvider to casehub-engine-api · S · Low (**AML blocked**)
+- engine#390 — WorkOrchestrator writes WorkerDecisionEntry after worker execution · S · Med (**AML blocked**, depends on #382)
 - engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med
 - engine#383 — Oversight response loop: COMMAND → re-trigger routing · M · Med
 - engine#384 — PlanItem state during escalation (ESCALATING state?) · M · Med
@@ -43,6 +45,8 @@ Wait for PR#391 review and merge. Next work item: **engine#274** — BlackboardR
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
+| engine#382 | Move TrustRoutingPolicy + TrustRoutingPolicyProvider to casehub-engine-api | S | Low | **AML blocked** — do first |
+| engine#390 | WorkOrchestrator writes WorkerDecisionEntry after worker execution | S | Med | **AML blocked** — depends on #382 |
 | engine#274 | BlackboardRegistry hydration from PlanItemStore on restart | M | Med | — |
 | engine#383 | Oversight response loop: COMMAND from human re-triggers routing | M | Med | Depends on PR#391 merge |
 | engine#385 | Embedding cache for SemanticAgentRoutingStrategy | S | Low | After PR#391 merge |
