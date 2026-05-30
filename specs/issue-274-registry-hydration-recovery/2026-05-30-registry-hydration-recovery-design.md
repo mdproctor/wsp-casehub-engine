@@ -111,7 +111,7 @@ Contrast with `addPlanItem()` which writes all three data structures. Restored i
 
 ```java
 public static PlanItem restore(String planItemId, String bindingName,
-                               Binding target, PlanItemStatus status) {
+                               BindingTarget target, PlanItemStatus status) {
     if (status != PlanItemStatus.RUNNING && status != PlanItemStatus.DELEGATED) {
         throw new IllegalArgumentException(
             "restore() only valid for RUNNING or DELEGATED status, got: " + status);
@@ -197,7 +197,7 @@ These handlers are in `blackboard`. This change is a consequence of lazy hydrati
 // package-private — io.casehub.blackboard.recovery.PlanItemRestorer
 class PlanItemRestorer {
     PlanItem restore(PlanItemRecord r) {
-        Binding target = r.targetType() == TargetType.HUMAN_TASK
+        BindingTarget target = r.targetType() == TargetType.HUMAN_TASK
             ? buildHumanTaskTarget(r.outputMappingExpression())
             : null;
         return PlanItem.restore(r.planItemId(), r.bindingName(), target, r.status());
