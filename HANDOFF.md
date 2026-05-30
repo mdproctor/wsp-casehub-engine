@@ -1,66 +1,62 @@
-# Handoff — 2026-05-29
+# Handoff — 2026-05-30
 
-**Head commit (engine):** b13f5da — docs(claude-md): add ProvisionResult SPI return type
-**Head commit (workspace):** 4b704fa — docs: session handover 2026-05-29
-**Branch:** `issue-392-sxs-batch` (engine) / `issue-392-sxs-batch` (workspace)
+**Head commit (engine):** 6e987d0 — fix: await WorkerStarted fireAsync; trim candidateGroups; comment last-wins
+**Head commit (workspace):** b7047ee — feat: promote blog + settings from issue-392-sxs-batch
+**Both repos on:** main
 
 ## What Changed This Session
 
-PR#394 merged. Branch `issue-392-sxs-batch` started — 5 commits so far:
-- #392 ✓ — disabled-path guard test for CaseLedger + WorkerDecision captures
-- #389 ✓ — WorkerStarted CaseLifecycleEvent with causedByEntryId after provisioning
-- #393 ✓ — await CaseCompleted CDI delivery in CaseStatusChangedHandler
+**`issue-392-sxs-batch` closed — PR#401 merged to casehubio/engine.**
 
-Cross-module scan: all previous internal blockers resolved (#273, #377, platform#17 all closed).
+S/XS batch (9 commits, 8 issues closed):
+- #392 (XS) — disabled-path guard tests for CaseLedger + WorkerDecision captures
+- #389 (S) — ProvisionResult return type + WorkerStarted lifecycle event
+- #393 (S) — await CaseLifecycleEvent CDI delivery (fireAsync in .invoke() fix, pattern established)
+- #395 (XS) — Flyway migrations path: `db/migration/` → `db/engine-ledger/migration/` (**AML unblocked**)
+- #399 (XS) — callerRef passed as assigneeIdOverride bug in HumanTaskScheduleHandler
+- #397 (S) — await fireAsync in 5 remaining lifecycle event handlers + workerDecisionEvents
+- #396 (S) — CaseLedgerEntryRepository @DefaultBean yields to selected alternatives (**AML unblocked**)
+- #400 (S) — WorkItem escalation → `workItemEscalated` context signal
+
+Code review caught one critical miss: WorkerStarted fireAsync in tryProvision() also used .invoke() — fixed before merge.
+
+Garden: GE-20260530-9a5474 (gh auth token lacks read:packages). Protocol: PP-20260530-8725fa (engine library @Alternative subclass → @DefaultBean); PP-20260529-3237bd revised (broadened to all CDI fireAsync).
 
 ## Immediate Next Step
 
-Continue `issue-392-sxs-batch` — pick engine#395 first (Flyway path fix, XS·Low, unblocks AML).
+Start **engine#274** — BlackboardRegistry hydration from PlanItemStore on restart (M·Med, unblocked since engine#273 closed). Run `/work` to begin.
 
 ## Cross-Module
 
-**We're blocking:**
-- `casehub-aml` — engine#395 (Flyway migrations at wrong classpath path) · XS · Low ← fix first, AML can't wire engine-ledger without it
-- `casehub-aml` — engine#396 (CDI ambiguity when engine-ledger on classpath breaks AML tests) · S · Med
+**We're blocking:** none — #395 and #396 merged; AML can now add casehub-engine-ledger.
 
-**Blocked by:** none — all cross-module deps resolved (engine#273, engine#377, platform#17 all closed).
+**AML tracker:** casehubio/aml#14, casehubio/aml#9 — Layer 6 unblocked; AML can wire casehub-engine-ledger now that CDI ambiguity and Flyway path are fixed.
 
-## What's Left — S/XS batch (issue-392-sxs-batch)
+## What's Left
 
-In progress (this branch):
-- engine#395 — fix: Flyway migrations path → `db/engine-ledger/migration/` · XS · Low [BLOCKS AML]
-- engine#399 — bug: callerRef passed as assigneeIdOverride in handleTemplateMode · XS · Low
-- engine#397 — fix: await fireAsync in 5 remaining lifecycle event handlers · S · Low
-- engine#396 — bug: CDI ambiguity when adding engine-ledger to AML tests · S · Med [BLOCKS AML]
-- engine#400 — feat: route WorkItem escalation events as case context signals · S · Med
-
-## What's Left — larger work
-
-- engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med ← NOW UNBLOCKED (#273 closed)
-- engine#398 — bug: HumanTask completion silently dropped after JVM restart · M · Med
-- engine#383 — oversight response loop: COMMAND re-triggers agent routing · M · Med ← NOW UNBLOCKED (#377 closed)
-- engine#384 — PlanItem state during escalation (ESCALATING?) · M · Med ← NOW UNBLOCKED (#377 closed)
+- engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med ← NEXT
+- engine#398 — HumanTask completion silently dropped after JVM restart · M · Med
+- engine#383 — oversight response loop: COMMAND re-triggers routing · M · Med ← UNBLOCKED
+- engine#384 — PlanItem state during escalation (ESCALATING?) · M · Med ← UNBLOCKED
 - engine#387 — humanTask: dynamic candidateGroups from case context · M · Med
-- engine#299 — multi-tenancy foundation: tenancyId enforcement · L · High ← NOW UNBLOCKED (platform#17 closed)
-- engine#389 — fire WorkerStarted after provisioning ✓ done this session
+- engine#299 — multi-tenancy foundation · L · High ← UNBLOCKED (platform#17 closed)
+- parent#87 — PLATFORM.md capability table stale · S · Low
+- parent#88 — PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider · S · Low
 - ledger#100 — sequence race under READ COMMITTED (pre-existing) · M · Med
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#395 | Flyway path scoping fix | XS | Low | Blocks AML — do first |
-| engine#399 | callerRef as assigneeIdOverride bug | XS | Low | — |
-| engine#397 | await fireAsync in 5 remaining handlers | S | Low | Copy pattern from #393 |
-| engine#396 | CDI ambiguity: engine-ledger + AML tests | S | Med | Blocks AML |
-| engine#400 | WorkItem escalation as case context signal | S | Med | — |
-| engine#274 | BlackboardRegistry hydration on restart | M | Med | Unblocked |
+| engine#274 | BlackboardRegistry hydration on restart | M | Med | Unblocked, do next |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
+| engine#398 | HumanTask completion lost after JVM restart | M | Med | Related to #274 |
+| engine#384 | PlanItem escalation state | M | Med | Unblocked |
 | parent#87 | PLATFORM.md capability table stale | S | Low | — |
-| parent#88 | PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider | S | Low | — |
+| parent#88 | PLATFORM.md casehub-engine-ai | S | Low | — |
 
 ## Key References
 
-- Blog: `blog/2026-05-29-mdp02-unblocking-aml.md`
-- Protocol: PP-20260529-4783b2 — garden casehub/ledger-sequence-cross-subtype-query.md
-- AML tracker: casehubio/aml#14, casehubio/aml#9 (Layer 6 now unblocked by #382+#390 merge)
+- Blog: `blog/2026-05-30-mdp01-six-handlers-one-miss.md`
+- Protocol: PP-20260530-8725fa — engine library @Alternative subclass → @DefaultBean
+- Garden: GE-20260530-9a5474 — gh auth token lacks read:packages (tools)
