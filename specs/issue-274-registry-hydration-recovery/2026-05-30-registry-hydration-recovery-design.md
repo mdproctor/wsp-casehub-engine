@@ -166,29 +166,51 @@ public Optional<CasePlanModel> get(UUID caseId) {
 - `BlackboardRegistryHydrationService` and its `@Priority` contract disappear
 - `HumanTaskRecoveryService` still uses an explicit startup scan — lazy loading cannot help when the completion event is already gone (#398)
 
-**Concurrency:** `computeIfAbsent` on `ConcurrentHashMap` serializes concurrent misses for the same `caseId`. The second concurrent caller blocks during the DB query and then finds the already-populated entry. This is correct behavior.
+**Concurrency:** Two concurrent misses for the same case each call `findDelegated()` independently (the DB query is not inside `computeIfAbsent`). Both then race on `computeIfAbsent`; the loser finds the entry already created and iterates `restorePlanItem()` on the pre-populated model. Since `restorePlanItem()` is idempotent (same `planItemId`, same data), the double-write is harmless. The cost is at most one duplicate DB call per concurrent miss, acceptable in the post-restart recovery window.
 
 **`BlackboardPlanConfigurer` interaction:** `get()` does NOT call `markConfigured()`. When CONTEXT_CHANGED fires after restart for a hydrated case, `PlanningStrategyLoopControl` calls `getOrCreate()` → the case is already in the map → returns existing model → `markConfigured()` returns true → configurers run once (as designed). `addPlanItemIfAbsent()` correctly rejects re-dispatch of DELEGATED items already in `activeByBinding`. This relies on configurers being idempotent with respect to pre-populated plan items: `addPlanItemIfAbsent()` for a DELEGATED binding returns false (active item present, rejected). Any `BlackboardPlanConfigurer` implementation must honour this contract. **This contract is now explicit and required.**
 
 **Stage state gap:** Stages are populated by configurers on first `CONTEXT_CHANGED` after restart. Between restart and first CONTEXT_CHANGED, `plan.getActiveStages()` returns empty for a hydrated case. No startup path accesses stages before CONTEXT_CHANGED fires — confirmed by reviewing startup observers. The window is real but harmless.
 
-**Fail-fast on store unavailable:** If `planItemStore.findDelegated()` throws (e.g., database unavailable), the exception propagates to the caller and the case entry is not populated. The caller (`WorkItemLifecycleAdapter`) logs and returns, dropping the event — same behavior as before this PR. Partial hydration is not worse than no hydration; fail-fast is intentional.
+**Fail-fast on store unavailable:** If `planItemStore.findDelegated()` throws (e.g., database unavailable), the exception propagates to the caller and the case entry is not populated. The caller logs and returns, dropping the event — same behavior as before this PR. Partial hydration is not worse than no hydration; fail-fast is intentional.
 
-**Target reconstruction:**
+**Blocking thread requirement — four `@ConsumeEvent` handlers must add `blocking = true`:**
+
+`BlackboardRegistry.get()` now makes a blocking JDBC call via `JpaPlanItemStore.findDelegated()` on the first miss after restart. Four `@ConsumeEvent` handlers call `registry.get()` from non-blocking Vert.x IO threads:
+
+| Handler | Event | Current return type | Change |
+|---------|-------|---------------------|--------|
+| `PlanItemCompletionHandler.onWorkerFinished()` | `WORKER_EXECUTION_FINISHED` | `Uni<Void>` | `blocking = true`, `void` |
+| `PlanItemCompletionHandler.onSubCaseFinished()` | `SUBCASE_EXECUTION_COMPLETED` | `Uni<Void>` | `blocking = true`, `void` |
+| `WorkerRetryExhaustionHandler.onWorkerRetriesExhausted()` | `WORKER_RETRIES_EXHAUSTED` | `Uni<Void>` | `blocking = true`, `void` |
+| `PlanItemFaultHandler.onWorkerRetriesExhausted()` | `WORKER_RETRIES_EXHAUSTED` | `Uni<Void>` | `blocking = true`, `void` |
+
+All four handler bodies are already synchronous — they return `Uni.createFrom().voidItem()` without chaining async operations. Converting to `void` + `blocking = true` is a clean mechanical change. The `planItemCompletedEvents.fireAsync()` call in `PlanItemCompletionHandler` remains fire-and-forget and works correctly from a worker thread.
+
+These handlers are in `blackboard`. This change is a consequence of lazy hydration living in `BlackboardRegistry` — the registry now requires a blocking thread for post-restart misses. The `@ObservesAsync` handlers in `work-adapter` (`WorkItemLifecycleAdapter`) run on a CDI managed executor (not the Vert.x IO thread) and are already safe.
+
+**Target reconstruction — `PlanItemRestorer` (package-private in `blackboard`):**
+
+`BlackboardRegistry` must not import `HumanTaskTarget` or `JQExpressionEvaluator` — it is a pure key/value store. Extract reconstruction to `PlanItemRestorer`:
 
 ```java
-private PlanItem buildPlanItem(PlanItemRecord r) {
-    Binding target = r.targetType() == TargetType.HUMAN_TASK
-        ? buildHumanTaskTarget(r.outputMappingExpression())
-        : null;
-    return PlanItem.restore(r.planItemId(), r.bindingName(), target, r.status());
-}
+// package-private — io.casehub.blackboard.recovery.PlanItemRestorer
+class PlanItemRestorer {
+    PlanItem restore(PlanItemRecord r) {
+        Binding target = r.targetType() == TargetType.HUMAN_TASK
+            ? buildHumanTaskTarget(r.outputMappingExpression())
+            : null;
+        return PlanItem.restore(r.planItemId(), r.bindingName(), target, r.status());
+    }
 
-private HumanTaskTarget buildHumanTaskTarget(String expr) {
-    ExpressionEvaluator mapping = expr != null ? new JQExpressionEvaluator(expr) : null;
-    return HumanTaskTarget.builder().outputMapping(mapping).build();
+    private HumanTaskTarget buildHumanTaskTarget(String expr) {
+        ExpressionEvaluator mapping = expr != null ? new JQExpressionEvaluator(expr) : null;
+        return HumanTaskTarget.builder().outputMapping(mapping).build();
+    }
 }
 ```
+
+`BlackboardRegistry` injects `PlanItemRestorer` and calls `restorer.restore(r)` in place of `buildPlanItem(r)`. The registry itself imports only `PlanItemRecord` and `PlanItem`.
 
 **`BlackboardRegistry` Javadoc update:** Remove stale "rebuilt from EventLog on engine recovery." Replace with: "DELEGATED plan items are lazily restored from PlanItemStore on the first get() miss after restart. RUNNING items and completionIndex are not persisted; Quartz-only case recovery is a separate concern."
 
@@ -206,7 +228,18 @@ private HumanTaskTarget buildHumanTaskTarget(String expr) {
 
 `HumanTaskRecoveryService` and `WorkItemLifecycleAdapter` both: apply a status transition, apply outputMapping, load CaseInstance, publish CONTEXT_CHANGED. Extract this into a package-private `PlanItemCompletionApplier` in `work-adapter` and inject into both. Future changes to the completion path (new statuses, new events) are made once.
 
-**Transaction scope:** Steps (apply status, apply outputMapping, publish CONTEXT_CHANGED) run inside `@Transactional`. The recovery service is a `StartupEvent` observer (not a `@ConsumeEvent` handler), so `blocking = true` is not required. `@Transactional` on the method is sufficient. If step 5b succeeds and 5d fails (event bus publish), the transaction rolls back and the PlanItem status reverts — the recovery service will re-apply on next restart.
+```java
+// package-private — io.casehub.workadapter
+@ApplicationScoped
+class PlanItemCompletionApplier {
+    @Transactional
+    void apply(UUID caseId, String planItemId, WorkItemStatus status, WorkItem workItem);
+}
+```
+
+`@Transactional` uses REQUIRED semantics — propagates from `HumanTaskRecoveryService` when called during startup, and opens a new transaction when called from `WorkItemLifecycleAdapter` (which currently has no `@Transactional`). This is intentional: the applier owns the transaction boundary in both contexts.
+
+**Transaction scope:** Steps (apply status, apply outputMapping, publish CONTEXT_CHANGED) run inside `@Transactional` via `PlanItemCompletionApplier`. The recovery service is a `StartupEvent` observer (not a `@ConsumeEvent` handler), so `blocking = true` is not required — `@Transactional` on the applier method is sufficient. The `@Transactional` boundary covers the DB writes (status transition, `planItemStore.updateStatus()`). `eventBus.publish()` is async fire-and-forget and cannot be rolled back — if a synchronous failure occurs before the publish, the transaction rolls back and CONTEXT_CHANGED is not queued. If failure occurs after the publish, CONTEXT_CHANGED has been queued but the DB state reverts on rollback. Recovery re-applies on next restart in both cases.
 
 **Idempotency:** Before calling `markCompleted()` (or equivalent), check `item.getStatus()`. If already terminal, log DEBUG and skip — do not throw. The recovery service may re-run if the JVM crashes mid-recovery.
 
@@ -242,7 +275,7 @@ Flow per DELEGATED record from planItemStore.findDelegated(caseId) [scanned glob
 | `PlanItemRecord` (updated) | `common` | — |
 | `BlackboardRegistry` (lazy get) | `blackboard` | `PlanItemStore` via `common` (already a dependency) |
 | `DefaultCasePlanModel.restorePlanItem` | `blackboard` | — |
-| `PlanItem.restore()` | `blackboard` (or `api`) | — |
+| `PlanItem.restore()` | `blackboard` | — |
 | `PlanItemCompletionApplier` | `work-adapter` (pkg-private) | — |
 | `HumanTaskRecoveryService` | `work-adapter` | `WorkItemService.findByCallerRef` (new, casehub-work) |
 | `WorkAdapterPlanItemEntity` (updated) | `work-adapter` | — |
@@ -261,7 +294,7 @@ No new inter-module dependencies.
 - **Lazy get hydration:** seed memory store with DELEGATED HumanTask PlanItem (with JQ expression); call `registry.get(caseId)`; assert non-empty result; assert `getPlanItem(planItemId)` returns item with status DELEGATED; assert `item.getTarget()` is `HumanTaskTarget` with expression set.
 - **Empty store → empty result:** `MemoryPlanItemStore` empty; `registry.get(caseId)` returns empty.
 - **RUNNING items not hydrated:** store has only RUNNING items (for future RUNNING store support); `registry.get(caseId)` still returns empty (RUNNING items out of scope for `findDelegated()`).
-- **Concurrency:** two concurrent `registry.get(caseId)` calls on empty registry; assert only one DB query fires (via `computeIfAbsent` serialization).
+- **Concurrency:** two concurrent `registry.get(caseId)` calls on empty registry; assert that both complete with a populated model; assert that the double `restorePlanItem()` is a no-op (idempotent).
 
 #### `HumanTaskRecoveryTest` in `work-adapter` module
 
