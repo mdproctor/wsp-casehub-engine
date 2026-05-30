@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-05-30-mdp01-six-handlers-one-miss.md](2026-05-30-mdp01-six-handlers-one-miss.md) | 2026-05-30 | S/XS bug batch — fireAsync miss caught in review, callerRef as assigneeId, CDI @DefaultBean for @Alternative subclass, WorkItem escalation signal |
 | [2026-05-29-mdp02-unblocking-aml.md](2026-05-29-mdp02-unblocking-aml.md) | 2026-05-29 | Moving SPI types to the API tier, WorkerDecisionEntry for trust attestations, Podman socket debugging |
 | [2026-05-29-mdp01-routing-the-uncertain.md](2026-05-29-mdp01-routing-the-uncertain.md) | 2026-05-29 | Sealed AgentAssignment, reactive SPI, TrustCandidateClassifier shared CDI kernel, SemanticAgentRoutingStrategy — and why the blocking IO catch changed everything |
 | [2026-05-26-mdp01-guard-that-did-too-much.md](2026-05-26-mdp01-guard-that-did-too-much.md) | 2026-05-26 | RUNNING guard conflated dedup and blocking; LoopControl now owns dispatch dedup; WAITING cases receive signals; Qhorus bridge, ESCALATED fix, group observer |
