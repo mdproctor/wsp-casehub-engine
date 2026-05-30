@@ -1,62 +1,60 @@
-# Handoff — 2026-05-30
+# Handoff — 2026-05-31
 
-**Head commit (engine):** 6e987d0 — fix: await WorkerStarted fireAsync; trim candidateGroups; comment last-wins
-**Head commit (workspace):** b7047ee — feat: promote blog + settings from issue-392-sxs-batch
+**Head commit (engine):** c347873 — chore: branch closed
+**Head commit (workspace):** 9f85c59 — docs: mark closed, deletion due 2026-06-14
 **Both repos on:** main
 
 ## What Changed This Session
 
-**`issue-392-sxs-batch` closed — PR#401 merged to casehubio/engine.**
+**`issue-274-registry-hydration-recovery` closed.**
 
-S/XS batch (9 commits, 8 issues closed):
-- #392 (XS) — disabled-path guard tests for CaseLedger + WorkerDecision captures
-- #389 (S) — ProvisionResult return type + WorkerStarted lifecycle event
-- #393 (S) — await CaseLifecycleEvent CDI delivery (fireAsync in .invoke() fix, pattern established)
-- #395 (XS) — Flyway migrations path: `db/migration/` → `db/engine-ledger/migration/` (**AML unblocked**)
-- #399 (XS) — callerRef passed as assigneeIdOverride bug in HumanTaskScheduleHandler
-- #397 (S) — await fireAsync in 5 remaining lifecycle event handlers + workerDecisionEvents
-- #396 (S) — CaseLedgerEntryRepository @DefaultBean yields to selected alternatives (**AML unblocked**)
-- #400 (S) — WorkItem escalation → `workItemEscalated` context signal
+- `BlackboardRegistry.get()` now lazily hydrates DELEGATED PlanItems from `PlanItemStore` on first miss after JVM restart — closes engine#274
+- `HumanTaskRecoveryService` at `@Priority(25)` scans `findAllDelegated()` at startup and catches up WorkItems that terminated during downtime — closes engine#398
+- Four `@ConsumeEvent` handlers in blackboard needed `blocking = true` as a consequence (JPA call now inside `registry.get()`)
+- `PlanItemCompletionApplier` extracted — shared completion logic for both `WorkItemLifecycleAdapter` and `HumanTaskRecoveryService`
+- `PlanItemStore` extended: `PlanItemSaveRequest` value object, `TargetType` enum, `findDelegated(UUID)`, `findAllDelegated()`
+- Protocol PP-20260530-40a73c captured: `@ConsumeEvent` callers of `registry.get()` must declare `blocking = true`
 
-Code review caught one critical miss: WorkerStarted fireAsync in tryProvision() also used .invoke() — fixed before merge.
+**casehub-work:** `findByCallerRef()` added on branch `issue-235-sxs-sweep` (not on work main yet — needs PR/merge).
 
-Garden: GE-20260530-9a5474 (gh auth token lacks read:packages). Protocol: PP-20260530-8725fa (engine library @Alternative subclass → @DefaultBean); PP-20260529-3237bd revised (broadened to all CDI fireAsync).
+**Filed:** engine#404 — registry lifecycle analysis: eviction strategies, stateless-on-rest pattern, full Quartz restart recovery (RUNNING items + completionIndex).
 
 ## Immediate Next Step
 
-Start **engine#274** — BlackboardRegistry hydration from PlanItemStore on restart (M·Med, unblocked since engine#273 closed). Run `/work` to begin.
+Pick up engine#383 (oversight response loop) or engine#404 (registry lifecycle design). Run `/work` to begin.
 
 ## Cross-Module
 
-**We're blocking:** none — #395 and #396 merged; AML can now add casehub-engine-ledger.
+**We're blocking:** none.
 
-**AML tracker:** casehubio/aml#14, casehubio/aml#9 — Layer 6 unblocked; AML can wire casehub-engine-ledger now that CDI ambiguity and Flyway path are fixed.
+**AML tracker:** aml#14, aml#9 — unblocked since last session (engine#395, engine#396 already merged).
+
+**casehub-work note:** `findByCallerRef()` is on branch `issue-235-sxs-sweep`, not main. Before consuming `WorkItemService.findByCallerRef()` from another module, that branch needs to be merged to work main.
 
 ## What's Left
 
-- engine#274 — BlackboardRegistry hydration from PlanItemStore on restart · M · Med ← NEXT
-- engine#398 — HumanTask completion silently dropped after JVM restart · M · Med
-- engine#383 — oversight response loop: COMMAND re-triggers routing · M · Med ← UNBLOCKED
-- engine#384 — PlanItem state during escalation (ESCALATING?) · M · Med ← UNBLOCKED
+- engine#404 — registry lifecycle analysis: eviction, stateless-on-rest, Quartz restart recovery · L · High ← NEW
+- engine#383 — oversight response loop: COMMAND re-triggers routing · M · Med
+- engine#384 — PlanItem state during escalation (ESCALATING?) · M · Med
 - engine#387 — humanTask: dynamic candidateGroups from case context · M · Med
-- engine#299 — multi-tenancy foundation · L · High ← UNBLOCKED (platform#17 closed)
+- engine#299 — multi-tenancy foundation · L · High
 - parent#87 — PLATFORM.md capability table stale · S · Low
-- parent#88 — PLATFORM.md casehub-engine-ai and AgentEmbeddingProvider · S · Low
+- parent#88 — PLATFORM.md casehub-engine-ai · S · Low
 - ledger#100 — sequence race under READ COMMITTED (pre-existing) · M · Med
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#274 | BlackboardRegistry hydration on restart | M | Med | Unblocked, do next |
+| engine#404 | Registry lifecycle analysis — eviction + stateless-on-rest | L | High | Design-only; groundwork laid by #274 |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
-| engine#398 | HumanTask completion lost after JVM restart | M | Med | Related to #274 |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
+| engine#387 | humanTask dynamic candidateGroups | M | Med | — |
+| engine#299 | Multi-tenancy foundation | L | High | Unblocked (platform#17 closed) |
 | parent#87 | PLATFORM.md capability table stale | S | Low | — |
-| parent#88 | PLATFORM.md casehub-engine-ai | S | Low | — |
 
 ## Key References
 
-- Blog: `blog/2026-05-30-mdp01-six-handlers-one-miss.md`
-- Protocol: PP-20260530-8725fa — engine library @Alternative subclass → @DefaultBean
-- Garden: GE-20260530-9a5474 — gh auth token lacks read:packages (tools)
+- Blog: `blog/2026-05-30-mdp02-registry-hydration-recovery.md`
+- Protocol: PP-20260530-40a73c — `@ConsumeEvent` + `blocking = true` for `registry.get()` callers
+- Spec: `docs/specs/2026-05-30-registry-hydration-recovery-design.md` (promoted to engine repo)
