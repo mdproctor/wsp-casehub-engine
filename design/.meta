@@ -1,0 +1,8 @@
+branch: issue-299-multi-tenancy-foundation
+project-sha: c347873c00eb48bf03eaa3e2c1856b7e6ea2cdbf
+date: 2026-05-31
+issue: 299
+issue-repo: casehubio/engine
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
