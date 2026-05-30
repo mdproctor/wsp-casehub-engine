@@ -157,7 +157,21 @@
       "Bash(gh auth *)",
       "Bash(env)",
       "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/squash-plan.txt\" git rebase *)",
-      "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/squash-plan.txt\" git -C /Users/mdproctor/claude/casehub/engine rebase -i e12491b871d2ed710d035b9e4e7ac0b167c57f00)"
+      "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/squash-plan.txt\" git -C /Users/mdproctor/claude/casehub/engine rebase -i e12491b871d2ed710d035b9e4e7ac0b167c57f00)",
+      "mcp__intellij__search_symbol",
+      "Bash(mvn --batch-mode install -DskipTests -DskipITs -q -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -DskipITs -q -f /Users/mdproctor/claude/casehub/ledger/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -DskipITs -q -f /Users/mdproctor/claude/casehub/work/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -pl common -am -f /Users/mdproctor/claude/casehub/engine/pom.xml -q)",
+      "Bash(mvn --batch-mode install -DskipTests -pl common -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -pl common -f /Users/mdproctor/claude/casehub/engine/pom.xml -q)",
+      "Bash(mvn --batch-mode install -DskipTests -pl blackboard,persistence-memory -am -f /Users/mdproctor/claude/casehub/engine/pom.xml -q)",
+      "Bash(mvn --batch-mode install -DskipTests -pl blackboard,persistence-memory,persistence-hibernate -am -f /Users/mdproctor/claude/casehub/engine/pom.xml -q)",
+      "Bash(mvn --batch-mode install -DskipTests -pl blackboard,persistence-memory,persistence-hibernate -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -q -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -pl blackboard -am -f /Users/mdproctor/claude/casehub/engine/pom.xml -q)",
+      "Bash(mvn --batch-mode install -DskipTests -pl blackboard -am -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(mvn --batch-mode install -DskipTests -pl work-adapter -am -f /Users/mdproctor/claude/casehub/engine/pom.xml -q)"
     ]
   }
 }
