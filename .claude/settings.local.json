@@ -153,7 +153,11 @@
       "Skill(write-content)",
       "mcp__intellij__search_file",
       "Bash(/usr/libexec/java_home -v 26)",
-      "Skill(work-end)"
+      "Skill(work-end)",
+      "Bash(gh auth *)",
+      "Bash(env)",
+      "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/squash-plan.txt\" git rebase *)",
+      "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/squash-plan.txt\" git -C /Users/mdproctor/claude/casehub/engine rebase -i e12491b871d2ed710d035b9e4e7ac0b167c57f00)"
     ]
   }
 }
