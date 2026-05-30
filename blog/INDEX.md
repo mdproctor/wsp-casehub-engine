@@ -17,4 +17,5 @@
 | [2026-05-20-mdp02-the-deadline-gets-through.md](2026-05-20-mdp02-the-deadline-gets-through.md) | 2026-05-20 | deadline field in COMMAND content; Map vs Object API gap; Podman DOCKER_HOST gotcha |
 | [2026-05-21-mdp01-pin-was-two-lines-cdi-was-not.md](2026-05-21-mdp01-pin-was-two-lines-cdi-was-not.md) | 2026-05-21 | Moving a json-schema-validator pin uncovered three pre-existing CDI test failures in Quarkus 3.32.2. |
 | [2026-05-21-mdp02-the-list-that-emptied-itself.md](2026-05-21-mdp02-the-list-that-emptied-itself.md) | 2026-05-21 | Multi-session handover drift: why a full What's Next table goes stale, and the orphaned branch that explained itself |
+| [2026-05-30-mdp01-six-handlers-one-miss.md](2026-05-30-mdp01-six-handlers-one-miss.md) | 2026-05-30 | S/XS bug batch — fireAsync miss caught in review, callerRef as assigneeId, CDI @DefaultBean for @Alternative subclass, WorkItem escalation signal |
 | [2026-05-29-mdp03-worker-carries-a-definition.md](2026-05-29-mdp03-worker-carries-a-definition.md) | 2026-05-29 | ProvisionResult SPI return type + CDI delivery fix pattern |
