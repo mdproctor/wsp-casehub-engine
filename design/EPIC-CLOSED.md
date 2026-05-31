@@ -1,4 +1,4 @@
-# Branch Closed — issue-274-registry-hydration-recovery
+# Branch Closed — issue-299-multi-tenancy-foundation
 **Date:** 2026-05-31
-**Issue:** #274 (engine#398 co-closed)
+**Issue:** #299
 **Scheduled for deletion:** 2026-06-14
