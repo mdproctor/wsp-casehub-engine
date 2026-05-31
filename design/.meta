@@ -1,0 +1,8 @@
+branch: issue-408-s-xs-batch
+project-sha: HEAD
+date: 2026-06-01
+issue: 408
+issue-repo: casehubio/engine
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
