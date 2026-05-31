@@ -1,43 +1,47 @@
 # Handoff — 2026-05-31
 
-**Head commit (engine):** c347873 — chore: branch closed
-**Head commit (workspace):** 9f85c59 — docs: mark closed, deletion due 2026-06-14
+**Head commit (engine):** 9f40f5c — docs(engine#299): add multi-tenancy foundation design spec
+**Head commit (workspace):** ba8a068 — archive plan to attic
 **Both repos on:** main
 
 ## What Changed This Session
 
-**`issue-274-registry-hydration-recovery` closed.**
+**`issue-299-multi-tenancy-foundation` closed and merged to upstream.**
 
-- `BlackboardRegistry.get()` now lazily hydrates DELEGATED PlanItems from `PlanItemStore` on first miss after JVM restart — closes engine#274
-- `HumanTaskRecoveryService` at `@Priority(25)` scans `findAllDelegated()` at startup and catches up WorkItems that terminated during downtime — closes engine#398
-- Four `@ConsumeEvent` handlers in blackboard needed `blocking = true` as a consequence (JPA call now inside `registry.get()`)
-- `PlanItemCompletionApplier` extracted — shared completion logic for both `WorkItemLifecycleAdapter` and `HumanTaskRecoveryService`
-- `PlanItemStore` extended: `PlanItemSaveRequest` value object, `TargetType` enum, `findDelegated(UUID)`, `findAllDelegated()`
-- Protocol PP-20260530-40a73c captured: `@ConsumeEvent` callers of `registry.get()` must declare `blocking = true`
+- Explicit `String tenancyId` on every SPI method (no CDI injection in repositories)
+- `public String tenancyId` field on 4 domain objects + 4 records; `tenancy_id` column on 8 JPA entities
+- All JPA repositories filter/write by tenancyId; update() includes tenancyId in WHERE
+- Memory stores filter by tenancyId; `DefaultTestPrincipal` ships in persistence-memory for test classpath
+- `BlackboardRegistry`: stored tenancyId in `CaseEntry`, O(1) evict, defense-in-depth in `get(UUID, String)`
+- `CaseLifecycleEvent` gains `tenancyId` as 2nd component — **breaking for all observers**
+- `CrossTenantEventLogRepository` + `CrossTenantCaseInstanceRepository` in `common/spi/` for recovery/Quartz/DLQ
+- Subcase tenancyId inherits from parent (protocol PP-20260531-42fd93)
+- Squashed to 9 clean commits, pushed to casehubio/engine main
 
-**casehub-work:** `findByCallerRef()` added on branch `issue-235-sxs-sweep` (not on work main yet — needs PR/merge).
-
-**Filed:** engine#404 — registry lifecycle analysis: eviction strategies, stateless-on-rest pattern, full Quartz restart recovery (RUNNING items + completionIndex).
+**Filed during #299:** engine#405 (@CrossTenant CDI producer), engine#406 (DB RLS), engine#407 (WorkerDecisionEvent tenancyId), ADR (CaseMetaModel per-tenant decision pending)
 
 ## Immediate Next Step
 
-Pick up engine#383 (oversight response loop) or engine#404 (registry lifecycle design). Run `/work` to begin.
+Pick up engine#404 (registry lifecycle design — eviction, stateless-on-rest, Quartz restart recovery). Run `/work` to begin.
 
 ## Cross-Module
 
-**We're blocking:** none.
-
-**AML tracker:** aml#14, aml#9 — unblocked since last session (engine#395, engine#396 already merged).
-
-**casehub-work note:** `findByCallerRef()` is on branch `issue-235-sxs-sweep`, not main. Before consuming `WorkItemService.findByCallerRef()` from another module, that branch needs to be merged to work main.
+**We're breaking** (consumer repos need to update `@ObservesAsync CaseLifecycleEvent` observers — compile error when they pull engine main):
+- `claudony` — claudony#143
+- `devtown` — devtown#61
+- `aml` — aml#47
+- `clinical` — clinical#51
 
 ## What's Left
 
-- engine#404 — registry lifecycle analysis: eviction, stateless-on-rest, Quartz restart recovery · L · High ← NEW
+- engine#405 — @CrossTenant CDI producer pattern (system-actor principal pending) · S · Low
+- engine#406 — DB-level RLS after application-level filtering stable · M · High
+- engine#407 — WorkerDecisionEvent tenancyId audit · S · Low
+- ADR — CaseMetaModel per-tenant vs global (sentinel tenancyId consideration) · S · Low
+- engine#404 — registry lifecycle analysis: eviction + stateless-on-rest + Quartz restart recovery · L · High
 - engine#383 — oversight response loop: COMMAND re-triggers routing · M · Med
-- engine#384 — PlanItem state during escalation (ESCALATING?) · M · Med
+- engine#384 — PlanItem escalation state · M · Med
 - engine#387 — humanTask: dynamic candidateGroups from case context · M · Med
-- engine#299 — multi-tenancy foundation · L · High
 - parent#87 — PLATFORM.md capability table stale · S · Low
 - parent#88 — PLATFORM.md casehub-engine-ai · S · Low
 - ledger#100 — sequence race under READ COMMITTED (pre-existing) · M · Med
@@ -46,15 +50,15 @@ Pick up engine#383 (oversight response loop) or engine#404 (registry lifecycle d
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#404 | Registry lifecycle analysis — eviction + stateless-on-rest | L | High | Design-only; groundwork laid by #274 |
+| engine#404 | Registry lifecycle analysis | L | High | Design-only; groundwork from #274+#299 done |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
 | engine#387 | humanTask dynamic candidateGroups | M | Med | — |
-| engine#299 | Multi-tenancy foundation | L | High | Unblocked (platform#17 closed) |
-| parent#87 | PLATFORM.md capability table stale | S | Low | — |
+| parent#87 | PLATFORM.md capability table | S | Low | Quick |
 
 ## Key References
 
-- Blog: `blog/2026-05-30-mdp02-registry-hydration-recovery.md`
-- Protocol: PP-20260530-40a73c — `@ConsumeEvent` + `blocking = true` for `registry.get()` callers
-- Spec: `docs/specs/2026-05-30-registry-hydration-recovery-design.md` (promoted to engine repo)
+- Blog: `blog/2026-05-31-mdp01-tenancy-threading-explicit.md`
+- Spec: `proj/docs/specs/issue-299-multi-tenancy-foundation/2026-05-31-multi-tenancy-foundation-design.md`
+- Protocol PP-20260531-42fd93: subcase tenancyId inherits from parent
+- Garden entries: GE-20260531-935576 (regex parens), GE-20260531-446fea (Quartz job data), GE-20260531-8b1f4e (Maven module direction), GE-20260531-22e747 (Java record cascade)
