@@ -9,11 +9,23 @@
 
 ## Context
 
-The platform's `CurrentPrincipal` SPI (shipped in platform#17) exposes `tenancyId()` and `isCrossTenantAdmin()`. This spec implements the consumer side for `casehub-engine`: every entity gets a `tenancyId` column, every JPA repository filters by it unconditionally, and every domain object carries it as plain data so downstream code — event construction, audit logging, registry keying — can read it without re-injecting `CurrentPrincipal`.
+The platform's `CurrentPrincipal` SPI (shipped in platform#17) exposes `tenancyId()` and `isCrossTenantAdmin()`. This spec implements the consumer side for `casehub-engine`.
 
-**Design decision: domain objects carry tenancyId.** The repository is the single write site (reads from `CurrentPrincipal`, sets on entity and domain object). All downstream code reads from the domain object. This avoids spreading `CurrentPrincipal` injection into event constructors and Vert.x handlers.
+**Design decision: tenancyId as explicit parameter on every SPI method.**
 
-**Implicit vs explicit tradeoff.** The implicit approach (inject `CurrentPrincipal`, filter silently) is ergonomic for callers — they never think about tenancy. It works correctly for HTTP-triggered synchronous paths where CDI request scope is always active. For async contexts (`@ObservesAsync`, recovery startup), CDI request scope is NOT active and `currentPrincipal.tenancyId()` throws `ContextNotActiveException`. The resolution for async sites is documented in Section 3.
+Repositories do not inject `CurrentPrincipal`. Instead, every SPI method takes `String tenancyId` as an explicit parameter. The caller is responsible for supplying it:
+
+- **HTTP boundary** (`CaseHubReactor`, REST endpoints): `currentPrincipal.tenancyId()` — the one place where CDI request scope is reliably active
+- **Any code that has a `CaseInstance`**: `instance.tenancyId` — domain objects carry it as plain data
+- **`@ObservesAsync` observers**: `event.tenancyId()` — `CaseLifecycleEvent` carries it
+- **Vert.x `@ConsumeEvent` handlers**: `event.caseInstance().tenancyId` or the Vert.x event payload equivalent
+- **Recovery at startup**: cross-tenant interfaces (no tenancyId needed — see Section 2)
+
+This approach is immune to CDI scope issues (no `@RequestScoped` CurrentPrincipal in repositories, no ThreadLocal, no `@ActivateRequestContext`), works identically in every execution context, and makes the tenancy requirement visible at every call site.
+
+**Why not ThreadLocal-backed CurrentPrincipal (Option A):** The engine is an embeddable library. It does not own the HTTP boundary — claudony/devtown do. Option A requires the consuming runtime to call a static setter before each request (a hidden convention, not enforced) and still breaks if the consuming runtime's `CurrentPrincipal` is CDI `@RequestScoped` (their impl overrides any `@DefaultBean` the engine provides, and async contexts fail in production). Option B is platform-agnostic.
+
+**Domain objects carry tenancyId.** The repository sets it on the domain object at save time and maps it back from the entity on load. Downstream code reads it from the domain object — no repeat reads from any principal.
 
 **No Flyway.** Schema is `drop-and-create` throughout this codebase.
 
@@ -30,7 +42,9 @@ The platform's `CurrentPrincipal` SPI (shipped in platform#17) exposes `tenancyI
 | `EventLog` | `casehub-engine-common` |
 | `PlanItemRecord` | `casehub-engine-common` |
 
-`tenancyId` is a `public String tenancyId` field, matching the `public Long id` pattern already used for the surrogate key. This makes it directly assignable by repository code without a setter and signals it is infrastructure metadata, not business logic. It is populated by the repository on save (`instance.tenancyId = tenancyId`) and on load (`fromEntity()` maps `entity.tenancyId → domain.tenancyId`). No other layer writes it.
+`tenancyId` is a `public String tenancyId` field, matching the `public Long id` pattern for the surrogate key. Set by the repository at save (`entity.tenancyId = tenancyId; instance.tenancyId = tenancyId`) and mapped back on load (`fromEntity()` maps `entity.tenancyId → domain.tenancyId`). No other layer writes it.
+
+`PlanItemRecord` is a read model assembled from `PlanItemEntity` projections; the JPA query result maps `entity.tenancyId → record.tenancyId`.
 
 ### JPA entities — `tenancyId` column + index
 
@@ -40,9 +54,9 @@ Every entity gets:
 public String tenancyId;
 ```
 
-`length = 64`: platform tenant IDs are UUIDs (36 chars; confirmed: `DEFAULT_TENANT_ID = "278776f9-e1b0-46fb-9032-8bddebdcf9ce"`). 64 provides headroom for future alternative formats without a schema migration.
+`length = 64`: platform tenant IDs are UUIDs (36 chars; `DEFAULT_TENANT_ID = "278776f9-e1b0-46fb-9032-8bddebdcf9ce"`). 64 provides headroom for future alternative formats without a schema migration.
 
-Each entity also gets a `@Index` entry: `@Index(name = "idx_<table>_tenancy_id", columnList = "tenancy_id")`. The naming follows the existing convention in `PlanItemEntity` (`idx_plan_item_case_id`, `idx_plan_item_plan_item_id`).
+Each entity also gets a `@Index` entry following the existing convention (`idx_<table>_tenancy_id`, consistent with `idx_plan_item_case_id` etc. in `PlanItemEntity`).
 
 Affected entities:
 1. `CaseInstanceEntity` — `case_instance`
@@ -58,27 +72,58 @@ Affected entities:
 
 ## Section 2: Repository Layer
 
-### JPA repositories — pattern
+### SPI method signatures — explicit `tenancyId` parameter
 
-`persistence-hibernate` adds `casehub-platform-api` as a compile dependency. `TenancyConstants` lives in `casehub-platform-api` (alongside `CurrentPrincipal`); `DefaultTestPrincipal` references it via this dep.
-
-**Capture tenancyId before any `Uni` pipeline** — CDI `@RequestScoped` context is not available on Vert.x IO threads. Every repository method reads `currentPrincipal.tenancyId()` synchronously before entering any reactive chain:
+Every SPI method that reads or writes tenant-scoped data gains `String tenancyId` as an explicit parameter. No repository implementation injects `CurrentPrincipal`.
 
 ```java
-@Inject CurrentPrincipal currentPrincipal;
+// CaseInstanceRepository
+Uni<CaseInstance> save(CaseInstance instance, String tenancyId);
+Uni<CaseInstance> update(CaseInstance instance, String tenancyId);
+Uni<CaseInstance> findByUuid(UUID uuid, String tenancyId);
+Uni<Void> updateStateAndAppendEvent(CaseInstance instance, EventLog eventLog, String tenancyId);
+
+// CaseMetaModelRepository
+Uni<CaseMetaModel> save(CaseMetaModel model, String tenancyId);
+Uni<CaseMetaModel> findByKey(String namespace, String name, String version, String tenancyId);
+
+// EventLogRepository (tenant-scoped methods)
+Uni<Void> append(EventLog eventLog, String tenancyId);
+Uni<Long> appendAndReturnId(EventLog eventLog, String tenancyId);
+Uni<EventLog> findById(Long id, String tenancyId);
+Uni<List<EventLog>> findSchedulingEvents(UUID caseId, String workerId, Instant after, String tenancyId);
+Uni<List<EventLog>> findByCaseAndTypes(UUID caseId, Collection<CaseHubEventType> types, String tenancyId);
+Uni<List<EventLog>> findByCaseAndWorkerAndType(UUID caseId, String workerId, CaseHubEventType type, String tenancyId);
+Uni<List<EventLog>> findByWorkerAndType(String workerId, CaseHubEventType type, String tenancyId);
+Uni<List<EventLog>> findByCaseWithFilters(UUID caseId, Collection<CaseHubEventType> eventTypes, Collection<EventStreamType> streamTypes, String tenancyId);
+
+// SubCaseGroupRepository
+Uni<SubCaseGroup> incrementCompleted(UUID parentCaseId, String groupId, String tenancyId);
+Uni<SubCaseGroup> incrementRejected(UUID parentCaseId, String groupId, String tenancyId);
+// ... all methods
+
+// PlanItemStore / ReactivePlanItemStore
+Uni<PlanItemRecord> save(PlanItemSaveRequest request, String tenancyId);
+List<PlanItemRecord> findDelegated(UUID caseId, String tenancyId);
+// ... all methods
+```
+
+### JPA repository implementation pattern
+
+```java
+// No @Inject CurrentPrincipal — tenancyId arrives as explicit parameter
 
 @Override
-public Uni<CaseInstance> save(CaseInstance instance) {
-    final String tenancyId = currentPrincipal.tenancyId(); // BEFORE Uni
+public Uni<CaseInstance> save(CaseInstance instance, String tenancyId) {
     return withSafeContext(() -> Panache.withTransaction(() ->
         Panache.getSession().chain(session -> {
             CaseInstanceEntity entity = new CaseInstanceEntity();
-            entity.tenancyId = tenancyId;
+            entity.tenancyId = tenancyId;         // set from parameter
             entity.uuid = instance.getUuid();
-            // ...
+            // ... other fields
             return entity.persist().map(v -> {
                 instance.id = entity.id;
-                instance.tenancyId = tenancyId; // populate domain object
+                instance.tenancyId = tenancyId;   // populate domain object
                 return instance;
             });
         })
@@ -86,8 +131,7 @@ public Uni<CaseInstance> save(CaseInstance instance) {
 }
 
 @Override
-public Uni<CaseInstance> findByUuid(UUID uuid) {
-    final String tenancyId = currentPrincipal.tenancyId();
+public Uni<CaseInstance> findByUuid(UUID uuid, String tenancyId) {
     return withSafeContext(() -> Panache.withSession(() ->
         CaseInstanceEntity.<CaseInstanceEntity>find(
             "from CaseInstanceEntity ci join fetch ci.caseMetaModel " +
@@ -96,10 +140,26 @@ public Uni<CaseInstance> findByUuid(UUID uuid) {
         .map(e -> e == null ? null : fromEntity(e)));
 }
 
+@Override
+public Uni<CaseInstance> update(CaseInstance instance, String tenancyId) {
+    // tenancyId in WHERE — guards against cross-tenant writes via guessable surrogate id
+    return withSafeContext(() -> Panache.withTransaction(() ->
+        CaseInstanceEntity.<CaseInstanceEntity>find(
+            "id = ?1 and tenancyId = ?2", instance.id, tenancyId)
+            .firstResult()
+            .invoke(entity -> {
+                entity.state = instance.getState();
+                entity.parentCaseId = instance.getParentCaseId();
+                entity.parentPlanItemId = instance.getParentPlanItemId();
+                entity.waitingForWorkId = instance.getWaitingForWorkId();
+                // tenancyId NOT updated — immutable
+            })
+            .replaceWith(instance)));
+}
+
 // CaseMetaModel: findByKey pattern
 @Override
-public Uni<CaseMetaModel> findByKey(String namespace, String name, String version) {
-    final String tenancyId = currentPrincipal.tenancyId();
+public Uni<CaseMetaModel> findByKey(String namespace, String name, String version, String tenancyId) {
     return withSafeContext(() -> Panache.withSession(() ->
         CaseMetaModelEntity.<CaseMetaModelEntity>find(
             "namespace = ?1 and name = ?2 and version = ?3 and tenancyId = ?4",
@@ -113,43 +173,37 @@ private CaseInstance fromEntity(CaseInstanceEntity entity) {
     CaseInstance instance = new CaseInstance();
     instance.tenancyId = entity.tenancyId;
     instance.id = entity.id;
-    // ...
+    // ... other fields
     return instance;
 }
 ```
 
-`update()` methods do not touch `tenancyId` — it is immutable once set.
+`update()` includes `tenancyId` in the WHERE clause on all write paths. `tenancyId` is never written on update — it is immutable once set.
 
-Repositories receiving this treatment:
-- `JpaCaseInstanceRepository`
-- `JpaCaseMetaModelRepository`
-- `JpaEventLogRepository` (tenant-scoped methods)
-- `JpaSubCaseGroupRepository`
-- `JpaPlanItemStore`
-- `JpaReactivePlanItemStore`
-- `JpaPlanItemStore` in `work-adapter`
+### Cross-tenant split — internal package
 
-### Cross-tenant split
+Cross-tenant interfaces live in `io.casehub.engine.internal.recovery.spi` (not the public `casehub-engine-common/spi/`). Package placement is the first line of defence against accidental injection outside recovery services.
 
-**Methods that cross tenant boundaries** — these currently exist in `EventLogRepository` with no tenant filter and are called by recovery services or from async observers dealing with events from any tenant:
+**`CrossTenantEventLogRepository`** (internal package):
+- `findByTypes(Collection<CaseHubEventType>)` — recovery: all tenant WORKER_SCHEDULED events at startup
+- `findByCaseAndTypes(UUID caseId, Collection<CaseHubEventType>)` — recovery: rebuild case state context (caseId is known; no tenant filter needed since recovery runs before any principal context exists)
+- `findSubmittedWorkWithoutCompletion()` — recovery
+- `findByWorkerAndTypeAcrossTenants(String workerId, CaseHubEventType type)` — recovery-only cross-tenant variant
 
-`findByTypes(Collection<CaseHubEventType>)` — called by `DefaultWorkerExecutionRecoveryService.recoverPendingScheduledWorkers()` to scan all WORKER_SCHEDULED events at startup. Genuinely cross-tenant.
+`findByWorkerAndType(String, CaseHubEventType, String tenancyId)` **stays in `EventLogRepository`** (tenant-scoped): `SubCaseCompletionService` calls it in a same-tenant context (querying for a child case's `SUBCASE_STARTED` event, which lives on the parent — always the same tenant).
 
-`findSubmittedWorkWithoutCompletion()` — recovery use, cross-tenant.
+**`CrossTenantCaseInstanceRepository`** (internal package):
+- `findByUuid(UUID caseId)` — recovery: load case instance without tenant filter
 
-`findByWorkerAndTypeAcrossTenants(String workerId, CaseHubEventType type)` — **new method, recovery-only**. `findByWorkerAndType` stays in `EventLogRepository` **with a tenant filter** because `SubCaseCompletionService` calls it in a same-tenant context (querying by child case UUID for `SUBCASE_STARTED` events belonging to the same parent case's tenant). The recovery-only cross-tenant variant is a separate method.
+`DefaultWorkerExecutionRecoveryService` injects `CrossTenantEventLogRepository` and `CrossTenantCaseInstanceRepository` instead of the tenanted interfaces.
 
-These three methods move to / are added to `CrossTenantEventLogRepository` (new interface in `casehub-engine-common/spi/`). `JpaCrosstenantEventLogRepository` in `persistence-hibernate` implements it with no tenancy filter. `InMemoryEventLogRepository` implements both `EventLogRepository` and `CrossTenantEventLogRepository` — the cross-tenant methods return unfiltered in-memory data (correct for single-tenant test contexts).
-
-**Recovery also calls `CaseInstanceRepository`** — `loadOrRestoreCaseInstance` calls `caseInstanceRepository.findByUuid(caseId)` and `rebuildStateContext` calls `eventLogRepository.findByCaseAndTypes(caseId, types)`. At startup recovery time there is no active principal. Resolution: add `CrossTenantCaseInstanceRepository` (new SPI in `casehub-engine-common/spi/`) with `findByUuid(UUID)`, and add `findByCaseAndTypes(UUID, Collection)` to `CrossTenantEventLogRepository`. `DefaultWorkerExecutionRecoveryService` injects both cross-tenant interfaces instead of the tenanted ones.
-
-The `@CrossTenant` CDI qualifier and `isCrossTenantAdmin()` producer are deferred to engine#405, pending a system-actor principal from the platform.
+`JpaCrosstenantEventLogRepository` and `JpaCrosstenantCaseInstanceRepository` live in `persistence-hibernate`. `InMemoryEventLogRepository` implements both `EventLogRepository` and `CrossTenantEventLogRepository` (cross-tenant methods return unfiltered data — correct for single-tenant test contexts).
 
 ### Memory stores
 
-`persistence-memory` adds `casehub-platform-api` as a compile dependency. Every in-memory store injects `CurrentPrincipal` and filters its internal map by `tenancyId`.
+`persistence-memory` adds `casehub-platform-api` as a compile dependency (for `TenancyConstants`, not `CurrentPrincipal`). Every in-memory store filters its internal map by the explicit `tenancyId` parameter.
 
-`persistence-memory` ships a `@DefaultBean @ApplicationScoped DefaultTestPrincipal` (main sources) so any consumer's test classpath gets a working principal without extra wiring:
+`persistence-memory` ships a `@DefaultBean @ApplicationScoped DefaultTestPrincipal` (main sources) so any consumer's test classpath has a working `CurrentPrincipal` at the HTTP boundary without extra wiring. Add `@SuppressWarnings("deprecation")` and a Javadoc warning: *"For testing only. If persistence-memory is on the compile classpath in production, all operations silently use DEFAULT_TENANT_ID."*
 
 ```java
 @DefaultBean
@@ -166,37 +220,49 @@ public class DefaultTestPrincipal implements CurrentPrincipal {
 
 ## Section 3: In-Process Isolation
 
-### Async CDI observer context — `@ObservesAsync` and `@RequestScoped`
+### Tenancy propagation — no CDI magic
 
-CDI `@ObservesAsync` observers run on a separate CDI executor thread pool. Quarkus does **not** activate CDI request scope for these threads. Any call to `@RequestScoped CurrentPrincipal` in an `@ObservesAsync` observer throws `ContextNotActiveException` at runtime.
+There is no `MutableTenantContext`, no `@ActivateRequestContext`, no `ThreadLocal`. Tenancy flows as plain data:
 
-`SubCaseCompletionListener.onCaseLifecycle(@ObservesAsync CaseLifecycleEvent)` is the affected site. Resolution:
+**HTTP-triggered paths** (case start, signal, REST): `currentPrincipal.tenancyId()` is read once at the entry point and passed to all repository calls. The loaded `CaseInstance` carries `tenancyId` for all subsequent calls.
+
+**`@ObservesAsync` observers** (`SubCaseCompletionListener`): `event.tenancyId()` supplies the value. No context activation needed:
 
 ```java
 @ApplicationScoped
 public class SubCaseCompletionListener {
     @Inject SubCaseCompletionService subCaseCompletionService;
-    @Inject MutableTenantContext tenantContext;  // NEW — engine-internal @RequestScoped bean
 
-    @ActivateRequestContext  // NEW — activates a fresh CDI request scope for this observer
     public void onCaseLifecycle(@ObservesAsync CaseLifecycleEvent event) {
-        tenantContext.set(event.tenancyId());   // populate from event before delegate
+        // tenancyId flows from event — no CDI scope activation
         subCaseCompletionService.handleCompletion(event);
     }
 }
 ```
 
-`MutableTenantContext` is an engine-internal `@RequestScoped` bean (in `casehub-engine-common` or `runtime`) that implements `CurrentPrincipal`, stores the tenant ID in a plain field, and is populated by the observer before delegating. `@ActivateRequestContext` (Quarkus CDI annotation) starts a fresh request scope for the duration of the observer method — `MutableTenantContext` is active within it.
+`SubCaseCompletionService.handleCompletion(CaseLifecycleEvent event)` passes `event.tenancyId()` to every repository call: `findByWorkerAndType(childCaseId.toString(), SUBCASE_STARTED, event.tenancyId())`, `append(log, event.tenancyId())`, etc.
 
-This pattern is self-contained (no platform changes required) and works for any future `@ObservesAsync` site that calls tenanted repositories. Any new `@ObservesAsync` observer that calls a tenanted repository must follow the same `@ActivateRequestContext` + `tenantContext.set(event.tenancyId())` pattern.
+**`@ConsumeEvent` handlers**: the event payload carries `CaseInstance` (which has `tenancyId`) or another domain object. The handler extracts and passes it.
 
-**Recovery startup** — `@Observes StartupEvent` has no CDI request scope either. Recovery services inject `CrossTenantCaseInstanceRepository` and `CrossTenantEventLogRepository` (see Section 2) and never call tenanted repositories at startup. No `@ActivateRequestContext` needed there — the cross-tenant interfaces are explicitly unscoped by design.
+**`PlanExecutionContext`**: add `String tenancyId()` sourced from the loaded `CaseInstance.tenancyId`. `PlanningStrategyLoopControl.select()` uses `ctx.tenancyId()` for registry calls.
 
-### BlackboardRegistry — composite key with stored tenancyId
+### Subcase tenancyId inheritance — enforced invariant
 
-`BlackboardRegistry` changes its map from `ConcurrentHashMap<UUID, CaseEntry>` to `ConcurrentHashMap<String, CaseEntry>`.
+Subcases always inherit `tenancyId` from the parent case, never from `currentPrincipal`. `SubCaseExecutionHandler` must propagate `parentInstance.tenancyId` when creating the child `CaseInstance`:
 
-`CaseEntry` stores tenancyId at construction time, making eviction robust regardless of what principal is active when a case reaches terminal state:
+```java
+// SubCaseExecutionHandler — when spawning a child case
+CaseInstance child = new CaseInstance();
+child.tenancyId = parentInstance.tenancyId;  // inherit, not from principal
+// ...
+caseInstanceRepository.save(child, child.tenancyId);
+```
+
+This invariant makes `findByWorkerAndType(childCaseId.toString(), SUBCASE_STARTED, tenancyId)` correct: the `SUBCASE_STARTED` event is on the parent case (same tenancyId as the child). Violating this invariant would cause the lookup to silently return null.
+
+### BlackboardRegistry — stored tenancyId + O(1) evict
+
+**Map key stays `UUID caseId`** — UUIDs are globally unique; composite keys are unnecessary for correctness. `CaseEntry` stores `tenancyId` at creation for defense-in-depth in `get()` and robustness of `evict()`.
 
 ```java
 private static final class CaseEntry {
@@ -210,32 +276,28 @@ private static final class CaseEntry {
         this.planModel = new DefaultCasePlanModel(caseId);
     }
 }
+
+private final ConcurrentHashMap<UUID, CaseEntry> entries = new ConcurrentHashMap<>();
 ```
 
-`getOrCreate(caseId)` reads `currentPrincipal.tenancyId()` synchronously (called from HTTP-triggered `PlanningStrategyLoopControl.select()` — request scope active), stores it in `CaseEntry`, and uses `entry.tenancyId + ':' + caseId` as the map key.
+`getOrCreate(UUID caseId, String tenancyId)` — explicit, stores tenancyId in `CaseEntry`.
 
-`evict(caseId)` cannot use `currentPrincipal` — it fires from terminal-state handlers that may not have request scope. Instead: look up the entry, read its stored `tenancyId`, and remove by the stored composite key. If the entry is not found, eviction is a no-op (already evicted).
+`get(UUID caseId, String tenancyId)` — explicit. Defense-in-depth: if the stored `entry.tenancyId` does not match the caller's `tenancyId`, log a warning and return `Optional.empty()`. Lazy hydration calls `planItemStore.findDelegated(caseId, tenancyId)` — explicit parameter, no CDI scope needed.
 
-```java
-public void evict(UUID caseId) {
-    // Find any entry for this caseId across all tenant prefixes, using stored tenancyId
-    entries.values().stream()
-        .filter(e -> e.planModel.getCaseId().equals(caseId))
-        .findFirst()
-        .ifPresent(e -> entries.remove(e.tenancyId + ':' + caseId));
-}
-```
+`evict(UUID caseId)` — O(1) `entries.remove(caseId)`. UUID uniqueness guarantees no cross-tenant collision. Does not read `currentPrincipal` at all.
 
-Alternative: entries carry their own composite key. Either approach is correct; the linear scan in `evict()` is negligible (cases don't accumulate in production — they are evicted on terminal state).
+`PlanningStrategyLoopControl` passes `ctx.tenancyId()` to `getOrCreate(caseId, tenancyId)`.
 
-`BlackboardRegistry` injects `CurrentPrincipal` for `getOrCreate` only. All other methods use stored tenancyId.
+`PlanItemCompletionHandler` (and other completion handlers) pass the tenancyId from their event to `get(caseId, tenancyId)`.
+
+**No `@Inject CurrentPrincipal` in `BlackboardRegistry`.**
 
 ### `CaseLifecycleEvent` — add `tenancyId`
 
 ```java
 public record CaseLifecycleEvent(
     UUID caseId,
-    String tenancyId,   // NEW
+    String tenancyId,   // NEW — sourced from CaseInstance.tenancyId at fire sites
     String commandType,
     String eventType,
     String caseStatus,
@@ -244,9 +306,13 @@ public record CaseLifecycleEvent(
     String traceId) {}
 ```
 
-`tenancyId` is sourced from `caseInstance.tenancyId` at every fire site. Breaking change for all observers. Issues filed: claudony#143, devtown#61, aml#47, clinical#51.
+Breaking change for all observers. Issues filed: claudony#143, devtown#61, aml#47, clinical#51.
 
-All internal Vert.x bus messages (`WorkerScheduleEvent`, `WorkerRetriesExhaustedEvent`, etc.) carry `CaseInstance` — they already carry tenancyId via the domain object. No additional changes needed.
+All internal Vert.x bus messages (`WorkerScheduleEvent` etc.) carry `CaseInstance` — tenancyId is already present via the domain object. No structural changes needed.
+
+### `update()` WHERE clause — tenancyId in all write queries
+
+All `update()` operations filter by `tenancyId` in the WHERE clause, not just read queries. Surrogate IDs are sequential and guessable; without this filter, a bug obtaining a different tenant's surrogate id could mutate that tenant's record. Every `UPDATE ... WHERE id = ? AND tenancy_id = ?`.
 
 ---
 
@@ -254,17 +320,18 @@ All internal Vert.x bus messages (`WorkerScheduleEvent`, `WorkerRetriesExhausted
 
 | Module | Change |
 |---|---|
-| `persistence-hibernate` | Add `casehub-platform-api` compile dep |
+| `persistence-hibernate` | Add `casehub-platform-api` compile dep (for `TenancyConstants`) |
 | `persistence-memory` | Add `casehub-platform-api` compile dep; ship `DefaultTestPrincipal` |
-| `common` | No dep change — domain objects carry `String tenancyId` as plain data; `MutableTenantContext` lives here |
-| `blackboard`, `work-adapter`, `resilience`, `runtime` | Already depend on `casehub-platform`; no pom changes |
+| `common` | No dep change; `PlanExecutionContext` gains `tenancyId()` method |
+| `blackboard`, `work-adapter`, `resilience`, `runtime` | No pom changes; no CurrentPrincipal injection in repositories |
 
-New SPI interfaces in `casehub-engine-common/spi/`:
-- `CrossTenantEventLogRepository` — `findByTypes`, `findByCaseAndTypes`, `findSubmittedWorkWithoutCompletion`, `findByWorkerAndTypeAcrossTenants`
-- `CrossTenantCaseInstanceRepository` — `findByUuid(UUID)`
+New interfaces in `io.casehub.engine.internal.recovery.spi` (internal, not exported via `casehub-engine-common/spi/`):
+- `CrossTenantEventLogRepository`
+- `CrossTenantCaseInstanceRepository`
 
-New engine-internal class:
-- `MutableTenantContext` — `@RequestScoped`, implements `CurrentPrincipal`, plain field for tenancyId, used only by `@ObservesAsync` observers via `@ActivateRequestContext`
+**No `MutableTenantContext` class.** Removed entirely.
+
+`PlanExecutionContext` gains `String tenancyId()` — implement in the concrete class; source from the loaded `CaseInstance.tenancyId` passed into `PlanExecutionContext` at construction.
 
 ---
 
@@ -272,45 +339,41 @@ New engine-internal class:
 
 ### Single-tenant pass-through
 
-Existing `@QuarkusTest` suites require no test-logic changes. `DefaultTestPrincipal` is `@DefaultBean` — activates automatically wherever no real principal is wired. All existing tests run against `DEFAULT_TENANT_ID` transparently.
+Existing `@QuarkusTest` suites change mechanically: every repository call site adds a `tenancyId` argument. The value is `TenancyConstants.DEFAULT_TENANT_ID` everywhere (sourced from `DefaultTestPrincipal.tenancyId()` at the HTTP boundary, which propagates through). No logic changes — compiler flags every call site.
 
 ### Multi-tenant isolation contract test
 
-One new abstract contract test per repository following the `PlanItemStoreContractTest` pattern. `MutableTestPrincipal` ships in `persistence-memory` test sources:
+One abstract contract test per repository. `MutableTestPrincipal` is not needed — tests pass tenancyId strings directly:
 
 ```java
-// @ApplicationScoped with ThreadLocal backing — safe for parallel test execution
-@ApplicationScoped
-@Alternative
-@Priority(1)
-public class MutableTestPrincipal implements CurrentPrincipal {
-    private static final ThreadLocal<String> TENANT = new ThreadLocal<>();
+@Test
+void tenantIsolation() {
+    String tenantA = "tenant-a";
+    String tenantB = "tenant-b";
 
-    public static void set(String tenancyId) { TENANT.set(tenancyId); }
-    public static void reset() { TENANT.remove(); }
+    // Save as tenant A
+    CaseInstance a = buildInstance();
+    repository.save(a, tenantA).await().atMost(Duration.ofSeconds(5));
 
-    public String tenancyId() {
-        String t = TENANT.get();
-        return t != null ? t : TenancyConstants.DEFAULT_TENANT_ID;
-    }
-    public boolean isCrossTenantAdmin() { return false; }
-    // ...
+    // Query as tenant B — must not find it
+    CaseInstance found = repository.findByUuid(a.getUuid(), tenantB).await().atMost(Duration.ofSeconds(5));
+    assertThat(found).isNull();
+
+    // Query as tenant A — must find it
+    found = repository.findByUuid(a.getUuid(), tenantA).await().atMost(Duration.ofSeconds(5));
+    assertThat(found).isNotNull();
 }
 ```
 
-Each contract test:
-1. `MutableTestPrincipal.set("tenant-a")` → save entity → verify found
-2. `MutableTestPrincipal.set("tenant-b")` → verify not found
-3. `MutableTestPrincipal.set("tenant-a")` → verify found again
-4. `MutableTestPrincipal.reset()` in `@AfterEach`
+No CDI mock beans. No ThreadLocal setup. Just strings.
 
-### `SubCaseCompletionListener` — `@ActivateRequestContext` test
+### `BlackboardRegistry` isolation unit test
 
-`@ObservesAsync` is unreliable in `@QuarkusTest` (per CLAUDE.md). Test `SubCaseCompletionService.handleCompletion()` directly, injecting `MutableTenantContext` and setting the tenant before calling — confirms the service correctly reads tenant context via `MutableTenantContext.get()`.
+`getOrCreate(caseId, "tenant-a")` then `get(caseId, "tenant-b")` returns `Optional.empty()` — tenant mismatch defense-in-depth. `get(caseId, "tenant-a")` returns the plan model. `evict(caseId)` removes it; subsequent `get(caseId, "tenant-a")` returns empty.
 
-### BlackboardRegistry isolation unit test
+### `SubCaseExecutionHandler` invariant test
 
-Two plan models registered with the same UUID under different tenant prefixes; `get()` from each tenant context returns only that tenant's plan model. Verifies composite key isolation.
+Creates a parent case with `tenancyId = "tenant-a"`. Spawns a subcase. Asserts child `CaseInstance.tenancyId == "tenant-a"` — inheritance enforced, not read from principal.
 
 ### `CaseLifecycleEvent` fire sites
 
@@ -320,7 +383,7 @@ Record gains a new component — compiler enforces exhaustive construction at al
 
 ## Architectural Note — CaseMetaModel per-tenant
 
-Case definitions are per-tenant: the same `(namespace, name, version)` triple can exist independently for different tenants, who own and customise their own process types. This makes `CaseMetaModelEntity` tenant-scoped (unique constraint includes `tenancyId`). ADR to be filed documenting this decision and the alternative (global/shared definitions).
+Case definitions are per-tenant: each tenant owns its own `(namespace, name, version)` namespace. The unique constraint includes `tenancyId`. ADR to file: this forecloses a shared "template catalog" model unless a sentinel `tenancyId` (e.g. `PLATFORM_TENANT_ID`) is introduced for global definitions. This option should be noted in the ADR before it is implemented — the constraint shape `(tenancy_id, namespace, name, version)` already supports it.
 
 ---
 
@@ -332,4 +395,4 @@ Case definitions are per-tenant: the same `(namespace, name, version)` triple ca
 | engine#406 | DB-level RLS after application-level filtering is stable |
 | engine#407 | `WorkerDecisionEvent` tenancyId audit |
 | claudony#143, devtown#61, aml#47, clinical#51 | `CaseLifecycleEvent` observer updates in consuming repos |
-| ADR (to file) | CaseMetaModel per-tenant vs global decision |
+| ADR (to file) | CaseMetaModel per-tenant vs global (with sentinel tenancyId consideration) |
