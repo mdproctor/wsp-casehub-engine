@@ -21,3 +21,4 @@
 | [2026-05-30-mdp02-registry-hydration-recovery.md](2026-05-30-mdp02-registry-hydration-recovery.md) | 2026-05-30 | Lazy BlackboardRegistry hydration from PlanItemStore + HumanTaskRecoveryService for offline completions |
 | [2026-05-29-mdp03-worker-carries-a-definition.md](2026-05-29-mdp03-worker-carries-a-definition.md) | 2026-05-29 | ProvisionResult SPI return type + CDI delivery fix pattern |
 | [2026-05-31-mdp01-tenancy-threading-explicit.md](2026-05-31-mdp01-tenancy-threading-explicit.md) | 2026-05-31 | Explicit tenancyId parameters on all SPI methods; subcase inheritance invariant; registry evict memory leak catch |
+| [2026-06-01-mdp01-fixes-a-mystery-and-three-migrations.md](2026-06-01-mdp01-fixes-a-mystery-and-three-migrations.md) | 2026-06-01 | S/XS batch: three missing Flyway migrations, registry lookup mystery, trust score audit fields, API improvements |
