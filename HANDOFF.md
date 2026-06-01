@@ -1,64 +1,55 @@
-# Handoff — 2026-05-31
+# Handoff — 2026-06-01
 
-**Head commit (engine):** 9f40f5c — docs(engine#299): add multi-tenancy foundation design spec
-**Head commit (workspace):** ba8a068 — archive plan to attic
+**Head commit (engine):** 403dc53 — feat: CaseHub.startCase accepts Object input (6 squashed commits on main)
+**Head commit (workspace):** 3d1bd1e — chore: clean up plan originals after attic move
 **Both repos on:** main
+**casehubio/engine:** ✅ green (manually triggered after force-push — gh workflow run required)
 
 ## What Changed This Session
 
-**`issue-299-multi-tenancy-foundation` closed and merged to upstream.**
+**Merged PR #2 after fixing 4 CI failures in the S/XS batch:**
 
-- Explicit `String tenancyId` on every SPI method (no CDI injection in repositories)
-- `public String tenancyId` field on 4 domain objects + 4 records; `tenancy_id` column on 8 JPA entities
-- All JPA repositories filter/write by tenancyId; update() includes tenancyId in WHERE
-- Memory stores filter by tenancyId; `DefaultTestPrincipal` ships in persistence-memory for test classpath
-- `BlackboardRegistry`: stored tenancyId in `CaseEntry`, O(1) evict, defense-in-depth in `get(UUID, String)`
-- `CaseLifecycleEvent` gains `tenancyId` as 2nd component — **breaking for all observers**
-- `CrossTenantEventLogRepository` + `CrossTenantCaseInstanceRepository` in `common/spi/` for recovery/Quartz/DLQ
-- Subcase tenancyId inherits from parent (protocol PP-20260531-42fd93)
-- Squashed to 9 clean commits, pushed to casehubio/engine main
+1. `fix(persistence)`: V1.2.0 migration missing — `persistence-hibernate` uses Flyway+validate; `tenancy_id` on 5 tables needed a migration
+2. `fix(runtime)`: `CurrentPrincipal` bean missing in default profile — `DefaultTestPrincipal` only loaded in `persistence-memory` Maven profile; fixed by making it an always-on test dep
+3. `fix(test)`: Two `@DefaultBean` implementations of the same SPI → "Ambiguous dependencies"; excluded `casehub-platform` mock beans in blackboard, resilience, work-adapter
+4. `fix(test)`: `CaseLifecycleEvent` positional arg shift — adding `tenancyId` as 2nd field silently moved `null` from commandType to tenancyId; fixed constructors in two blackboard tests
 
-**Filed during #299:** engine#405 (@CrossTenant CDI producer), engine#406 (DB RLS), engine#407 (WorkerDecisionEvent tenancyId), ADR (CaseMetaModel per-tenant decision pending)
+**Branch closed and delivered:**
+- `issue-408-s-xs-batch` closed, EPIC-CLOSED.md stamped
+- 11 commits squashed → 6, pushed to `casehubio/engine` upstream
+- CI green on both fork and blessed repo
 
 ## Immediate Next Step
 
-Pick up engine#404 (registry lifecycle design — eviction, stateless-on-rest, Quartz restart recovery). Run `/work` to begin.
+Run `/work` to start engine#404 (registry lifecycle design — L·High).
 
 ## Cross-Module
 
-**We're breaking** (consumer repos need to update `@ObservesAsync CaseLifecycleEvent` observers — compile error when they pull engine main):
-- `claudony` — claudony#143
-- `devtown` — devtown#61
-- `aml` — aml#47
-- `clinical` — clinical#51
+**We're blocking** (tenancyId SPI changes require consumer recompile):
+- `claudony` — claudony#143 · XS · Low
+- `devtown` — devtown#61 · XS · Low
+- `aml` — aml#47 + aml#48 (migration reconciliation) · S · Low
+- `clinical` — clinical#51 · XS · Low
 
 ## What's Left
 
-- engine#405 — @CrossTenant CDI producer pattern (system-actor principal pending) · S · Low
-- engine#406 — DB-level RLS after application-level filtering stable · M · High
-- engine#407 — WorkerDecisionEvent tenancyId audit · S · Low
-- ADR — CaseMetaModel per-tenant vs global (sentinel tenancyId consideration) · S · Low
-- engine#404 — registry lifecycle analysis: eviction + stateless-on-rest + Quartz restart recovery · L · High
-- engine#383 — oversight response loop: COMMAND re-triggers routing · M · Med
-- engine#384 — PlanItem escalation state · M · Med
-- engine#387 — humanTask: dynamic candidateGroups from case context · M · Med
-- parent#87 — PLATFORM.md capability table stale · S · Low
-- parent#88 — PLATFORM.md casehub-engine-ai · S · Low
-- ledger#100 — sequence race under READ COMMITTED (pre-existing) · M · Med
+- engine#405 — @CrossTenant CDI producer · S · Low — **BLOCKED** (needs system-actor principal)
+- engine#406 — DB-level RLS · M · High
+- engine#411 — NOT NULL enforcement for tenancy_id columns in V1.2.0 · S · Low
+- engine#410 — registry lookup root cause (defensive guard in place) · M · Med
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#404 | Registry lifecycle analysis | L | High | Design-only; groundwork from #274+#299 done |
+| engine#404 | Registry lifecycle: eviction + stateless-on-rest + Quartz restart | L | High | Design-only; groundwork done |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
 | engine#387 | humanTask dynamic candidateGroups | M | Med | — |
-| parent#87 | PLATFORM.md capability table | S | Low | Quick |
 
 ## Key References
 
-- Blog: `blog/2026-05-31-mdp01-tenancy-threading-explicit.md`
-- Spec: `proj/docs/specs/issue-299-multi-tenancy-foundation/2026-05-31-multi-tenancy-foundation-design.md`
-- Protocol PP-20260531-42fd93: subcase tenancyId inherits from parent
-- Garden entries: GE-20260531-935576 (regex parens), GE-20260531-446fea (Quartz job data), GE-20260531-8b1f4e (Maven module direction), GE-20260531-22e747 (Java record cascade)
+- Blog: `blog/2026-06-01-mdp01-fixes-a-mystery-and-three-migrations.md`, `blog/2026-06-01-mdp02-what-ci-found-in-tenancy-tests.md`
+- Garden entries: GE-20260601-fcf0d9 (@DefaultBean ambiguity), GE-20260601-53763c (gh log truncation), GE-20260601-6170a6 (Java record positional shift), GE-20260601-ad3154 (bytecode parser)
+- Protocol: PP-20260601-70e9ea (platform mock exclusion)
+- Note: Force-pushes to casehubio/engine don't auto-trigger CI — use `gh workflow run "Build and Publish" --repo casehubio/engine --ref main`
