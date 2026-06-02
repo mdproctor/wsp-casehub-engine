@@ -1,0 +1,8 @@
+branch: issue-405-tenancy-enforcement
+project-sha: e2df85c9b0105baad64964bd172098765209a43c
+date: 2026-06-02
+issue: 405
+issue-repo: casehubio/engine
+flyway-next-v: 2005
+design-repo: workspace
+design-section-hashes:
