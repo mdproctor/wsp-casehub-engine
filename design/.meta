@@ -1,0 +1,8 @@
+branch: issue-206-flowworker-bridge
+project-sha: afd83630a01e20519fab75d3b57f878e85532fc5
+date: 2026-06-03
+issue: 206
+issue-repo: casehubio/engine
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
