@@ -3,6 +3,7 @@
 | File | Date | Title |
 |------|------|-------|
 | [2026-05-29-mdp02-unblocking-aml.md](2026-05-29-mdp02-unblocking-aml.md) | 2026-05-29 | Moving SPI types to the API tier, WorkerDecisionEntry for trust attestations, Podman socket debugging |
+| [2026-06-03-mdp01-four-issues-two-surprises.md](2026-06-03-mdp01-four-issues-two-surprises.md) | 2026-06-03 | RLS on reactive Hibernate, @CrossTenant CDI qualifier, CaseKey immutable registry key |
 | [2026-05-29-mdp01-routing-the-uncertain.md](2026-05-29-mdp01-routing-the-uncertain.md) | 2026-05-29 | Sealed AgentAssignment, reactive SPI, TrustCandidateClassifier shared CDI kernel, SemanticAgentRoutingStrategy — and why the blocking IO catch changed everything |
 | [2026-05-26-mdp01-guard-that-did-too-much.md](2026-05-26-mdp01-guard-that-did-too-much.md) | 2026-05-26 | RUNNING guard conflated dedup and blocking; LoopControl now owns dispatch dedup; WAITING cases receive signals; Qhorus bridge, ESCALATED fix, group observer |
 | [2026-05-23-mdp01-scope-and-the-silent-guard.md](2026-05-23-mdp01-scope-and-the-silent-guard.md) | 2026-05-23 | HumanTaskTarget scope field for SLA preference routing; binding when-field evaluated for contextChange triggers |
