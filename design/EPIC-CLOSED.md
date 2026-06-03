@@ -1,4 +1,4 @@
-# Branch Closed — issue-405-tenancy-enforcement
-**Date:** 2026-06-03
-**Issues:** #405, #406, #410, #411
-**Scheduled for deletion:** 2026-06-17
+# Branch Closed — issue-274-registry-hydration-recovery
+**Date:** 2026-05-31
+**Issue:** #274 (engine#398 co-closed)
+**Scheduled for deletion:** 2026-06-14
