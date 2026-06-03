@@ -159,7 +159,10 @@
       "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/squash-plan.txt\" git rebase *)",
       "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/squash-plan.txt\" git -C /Users/mdproctor/claude/casehub/engine rebase -i e12491b871d2ed710d035b9e4e7ac0b167c57f00)",
       "Bash(gh run *)",
-      "Bash(gh workflow *)"
+      "Bash(gh workflow *)",
+      "Bash(curl -s -H 'Authorization: Bearer __CMDSUB_OUTPUT__' https://maven.pkg.github.com/casehubio/engine/io/casehub/casehub-engine-common/0.2-SNAPSHOT/maven-metadata.xml)",
+      "Bash(mvn *)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-engine.md\")"
     ]
   }
 }
