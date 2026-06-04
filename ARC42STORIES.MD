@@ -122,6 +122,18 @@ Per the Arc42Stories spec: only decisions not captured inline elsewhere. Should 
 
 🔲 Cross-cutting decisions — complete in dedicated session.
 
+### 2026-06-04 · FlowWorker bridge — module boundary, SPI extraction, non-blocking dispatch
+
+`WorkOrchestrator` was a concrete `@ApplicationScoped` class in `runtime`. Extracted as an interface to `casehub-engine-common/spi/` — the same placement as `CaseInstanceRepository` and `EventLogRepository` — because it uses `CaseInstance` and placing it in `api/spi/` would create a circular dependency (`api` ← `common` ← `api`). The concrete `DefaultWorkOrchestrator` remains in `runtime`; CDI resolves the implementation at startup without flow needing a runtime compile dependency.
+
+New module `casehub-engine-flow` depends on `casehub-engine-common` only (not `runtime`). This is the correct isolation boundary: `FlowWorkerExecutor`, `CasehubDispatch`, `CasehubCallableTaskBuilder`, and `FlowExecutionRegistry` all live here and give the flow module visibility into the engine's domain types without pulling in the full runtime event loop.
+
+The Workflow execution path in `QuartzWorkerExecutionJob` is now non-blocking: for `Worker(Workflow)`, the Quartz thread fires `workflowExecutor.execute()` and returns immediately. Success publishes `WORKER_EXECUTION_FINISHED`; failure publishes `WorkflowExecutionFailed` on the event bus. `QuartzWorkerExecutionJobListener` handles the failure via `@ConsumeEvent(blocking=true)`, persists `WORKER_EXECUTION_FAILED`, and calls `maybeRescheduleWorker(WorkerRetryContext)`. `WorkerRetryContext` replaces `JobExecutionContext` as the value object, allowing both sync and async failure paths to share one retry implementation.
+
+`WORKFLOW_STEP_DISPATCHED` / `COMPLETED` / `FAILED` are emitted via `whenComplete` (always fires, preserving exception propagation). The YAML extension point is `CallableTaskBuilder<CallFunction>` via Java SPI — `call: casehub:dispatch` parses as `CallFunction` (in `io.serverlessworkflow.api.types`, not the `.func` experimental subpackage). `CasehubCallableTaskBuilder` uses a `ThreadLocal<String>` to pass capability between `init()` and `build()` because `ServiceLoader.Provider.get()` caches the builder instance.
+
+*engine commit: 790a103 — feat(flow): FlowWorker ↔ WorkOrchestrator bridge — engine#206*
+
 ---
 
 ## §11 Quality Requirements
