@@ -42,6 +42,7 @@ Run `/work` to start engine#404 (registry lifecycle design — L·High).
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
+| — | AI Fusion typed fact space implementation | XL | High | New module — own session; spec at casehubio/parent:docs/specs/2026-06-03-ai-fusion-hybrid-fact-space.md |
 | engine#404 | Registry lifecycle: eviction + stateless-on-rest + Quartz restart | L | High | Design-only; groundwork done |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
