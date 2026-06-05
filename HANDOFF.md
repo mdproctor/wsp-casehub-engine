@@ -1,35 +1,33 @@
 # Handoff — 2026-06-05
 
-**Head commit (engine):** 9b29427 — fix(ci): use push trigger for publish
-**Head commit (workspace):** a88cc58 — docs(issue-206-flowworker-bridge): mark closed
+**Head commit (engine):** 9fb81f2 — feat: promote spec from issue-415-bootstrap-fallback-type
+**Head commit (workspace):** e39e4ce — archive(issue-415-bootstrap-fallback-type): move plans to attic
 **Both repos on:** main
-**casehubio/engine:** ✅ green (11m38s, push-triggered build+publish)
+**PR open:** casehubio/engine#427 — bootstrap escalation required guard
 
 ## What Changed This Session
 
-**engine#206 — FlowWorker ↔ WorkOrchestrator bridge: implemented, merged, CI green.**
+**engine#415 — bootstrapEscalationRequired guard: implemented, PR #427 open.**
 
-New `casehub-engine-flow` module: `FlowWorkerExecutor`, `CasehubCallableTaskBuilder` (call: casehub:dispatch YAML), `CasehubDispatch`, `CasehubFlow`. Non-blocking workflow path in `QuartzWorkerExecutionJob` — Quartz thread returns immediately, async `whenComplete` handles result/failure via event bus + `WorkerRetryContext`.
+Added `boolean bootstrapEscalationRequired` to `TrustRoutingPolicy`. When set, BOOTSTRAP-phase agents are never assigned to high-stakes capabilities. Two-part guard: pre-screen fires before scoring (before `emitOn(workerPool)` in `SemanticAgentRoutingStrategy`), then BOOTSTRAP candidates are stripped from the eligible scoring pool. A busy QUALIFIED agent beats an idle BOOTSTRAP agent.
 
-**CI fixes (24-hour debugging marathon — three root causes found):**
-
-1. **actor-state module lacked `quarkus-maven-plugin`** — without it, Quarkus augmentation of the full engine+work+qhorus+ledger CDI graph ran inside Surefire's forked JVM at test time, hanging indefinitely on 2-core CI. Fix: add `generate-code`/`generate-code-tests` goals. Actor-state was never tested in CI before (missing from Jun 3 reactor). The CI log's visible hang point (persistence-hibernate) was misleading — Hibernate SQL traces filled the stdout pipe buffer, silencing all subsequent output. Surefire reports artifact proved persistence-hibernate passed every time.
-
-2. **CI workflow lacked `push` trigger** — fork PRs (`mdproctor/engine` → `casehubio/engine`) get downgraded `GITHUB_TOKEN` (packages: read, not write). Previous PRs were same-repo branches. Fix: added `push: branches: [main]` trigger; removed `closed` from `pull_request` types; simplified all step conditions.
-
-3. **No concurrency group or timeout** — stale PR runs piled up (3 concurrent), default 6h timeout. Fix: `concurrency` group with `cancel-in-progress`, `timeout-minutes: 45`.
+Key design choices:
+- `allMatch(BOOTSTRAP)` was the wrong guard — missed [BOOTSTRAP, BORDERLINE] pools where BOOTSTRAP wins by workload score. Correct: `!hasQualified && hasBootstrap`.
+- `EscalationReason` enum (BORDERLINE_STALEMATE, NO_QUALIFIED_AGENT) promoted to top-level type; carried by `AgentAssignment.EscalateToOversight` and `AgentRoutingEscalationEvent`.
+- `[METRIC:escalation.no-qualified-agent]` log fires before channel lookup — fires even when no oversight channel is open.
 
 ## Immediate Next Step
 
-Run `/work` to pick next issue. engine#404 (registry lifecycle) is the largest open item.
+Run `/work` to pick next issue. engine#404 (registry lifecycle) remains the largest open item.
 
 ## Cross-Module
 
-*Unchanged — `git show HEAD~1:HANDOFF.md`*
+**Blocking** (other modules waiting on us):
+- `devtown` — devtown#62 needs `DevtownTrustRoutingPolicyProvider` to set `bootstrapEscalationRequired = true` for merge-executor, security-review, architecture-review · XS · Low
 
 ## What's Left
 
-- engine#404 — registry lifecycle: eviction + stateless-on-rest + Quartz restart · L · High
+- PR #427 pending merge at casehubio/engine
 
 ## What's Next
 
@@ -43,8 +41,8 @@ Run `/work` to pick next issue. engine#404 (registry lifecycle) is the largest o
 
 ## Key References
 
-- Spec: `docs/specs/2026-06-03-flowworker-bridge-design.md`
-- Blog: `blog/2026-06-04-mdp01-flow-worker-bridge.md`, `blog/2026-06-05-mdp01-the-ci-that-cried-wolf.md`
-- Garden: GE-20260605-97cd1e (pipe buffer mask), GE-20260605-e91aa0 (quarkus-maven-plugin hang), GE-20260605-6aa860 (fork PR token), GE-20260605-035a79 (Surefire reports diagnostic), GE-20260605-fc9ae7 (forkedProcessTimeout undoc)
-- Protocol: PP-20260605-1259d1 (quarkus-maven-plugin required for @QuarkusTest modules)
-- CI note: push-triggered builds now handle publish+downstream. Fork PRs only build+test.
+- PR: https://github.com/casehubio/engine/pull/427
+- Spec: `docs/specs/2026-06-05-bootstrap-fallback-type-design.md`
+- Blog: `blog/2026-06-05-mdp02-bootstrap-guard-mixed-pool-gap.md`
+- Garden: GE-20260605-e7c2e9 (trust routing mixed-pool gap), GE-20260605-58f57c (Mutiny emitOn guard placement)
+- Protocol: PP-20260605-0b4818 (AgentRoutingStrategy guard-before-emitOn)
