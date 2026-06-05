@@ -44,5 +44,7 @@ Run `/work` to pick next issue. engine#404 (registry lifecycle) is the largest o
 ## Key References
 
 - Spec: `docs/specs/2026-06-03-flowworker-bridge-design.md`
-- Blog: `blog/2026-06-04-mdp01-flow-worker-bridge.md`
+- Blog: `blog/2026-06-04-mdp01-flow-worker-bridge.md`, `blog/2026-06-05-mdp01-the-ci-that-cried-wolf.md`
+- Garden: GE-20260605-97cd1e (pipe buffer mask), GE-20260605-e91aa0 (quarkus-maven-plugin hang), GE-20260605-6aa860 (fork PR token), GE-20260605-035a79 (Surefire reports diagnostic), GE-20260605-fc9ae7 (forkedProcessTimeout undoc)
+- Protocol: PP-20260605-1259d1 (quarkus-maven-plugin required for @QuarkusTest modules)
 - CI note: push-triggered builds now handle publish+downstream. Fork PRs only build+test.
