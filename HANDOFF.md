@@ -1,56 +1,48 @@
-# Handoff — 2026-06-01
+# Handoff — 2026-06-05
 
-**Head commit (engine):** 403dc53 — feat: CaseHub.startCase accepts Object input (6 squashed commits on main)
-**Head commit (workspace):** 3d1bd1e — chore: clean up plan originals after attic move
+**Head commit (engine):** 9b29427 — fix(ci): use push trigger for publish
+**Head commit (workspace):** a88cc58 — docs(issue-206-flowworker-bridge): mark closed
 **Both repos on:** main
-**casehubio/engine:** ✅ green (manually triggered after force-push — gh workflow run required)
+**casehubio/engine:** ✅ green (11m38s, push-triggered build+publish)
 
 ## What Changed This Session
 
-**Merged PR #2 after fixing 4 CI failures in the S/XS batch:**
+**engine#206 — FlowWorker ↔ WorkOrchestrator bridge: implemented, merged, CI green.**
 
-1. `fix(persistence)`: V1.2.0 migration missing — `persistence-hibernate` uses Flyway+validate; `tenancy_id` on 5 tables needed a migration
-2. `fix(runtime)`: `CurrentPrincipal` bean missing in default profile — `DefaultTestPrincipal` only loaded in `persistence-memory` Maven profile; fixed by making it an always-on test dep
-3. `fix(test)`: Two `@DefaultBean` implementations of the same SPI → "Ambiguous dependencies"; excluded `casehub-platform` mock beans in blackboard, resilience, work-adapter
-4. `fix(test)`: `CaseLifecycleEvent` positional arg shift — adding `tenancyId` as 2nd field silently moved `null` from commandType to tenancyId; fixed constructors in two blackboard tests
+New `casehub-engine-flow` module: `FlowWorkerExecutor`, `CasehubCallableTaskBuilder` (call: casehub:dispatch YAML), `CasehubDispatch`, `CasehubFlow`. Non-blocking workflow path in `QuartzWorkerExecutionJob` — Quartz thread returns immediately, async `whenComplete` handles result/failure via event bus + `WorkerRetryContext`.
 
-**Branch closed and delivered:**
-- `issue-408-s-xs-batch` closed, EPIC-CLOSED.md stamped
-- 11 commits squashed → 6, pushed to `casehubio/engine` upstream
-- CI green on both fork and blessed repo
+**CI fixes (24-hour debugging marathon — three root causes found):**
+
+1. **actor-state module lacked `quarkus-maven-plugin`** — without it, Quarkus augmentation of the full engine+work+qhorus+ledger CDI graph ran inside Surefire's forked JVM at test time, hanging indefinitely on 2-core CI. Fix: add `generate-code`/`generate-code-tests` goals. Actor-state was never tested in CI before (missing from Jun 3 reactor). The CI log's visible hang point (persistence-hibernate) was misleading — Hibernate SQL traces filled the stdout pipe buffer, silencing all subsequent output. Surefire reports artifact proved persistence-hibernate passed every time.
+
+2. **CI workflow lacked `push` trigger** — fork PRs (`mdproctor/engine` → `casehubio/engine`) get downgraded `GITHUB_TOKEN` (packages: read, not write). Previous PRs were same-repo branches. Fix: added `push: branches: [main]` trigger; removed `closed` from `pull_request` types; simplified all step conditions.
+
+3. **No concurrency group or timeout** — stale PR runs piled up (3 concurrent), default 6h timeout. Fix: `concurrency` group with `cancel-in-progress`, `timeout-minutes: 45`.
 
 ## Immediate Next Step
 
-Run `/work` to start engine#404 (registry lifecycle design — L·High).
+Run `/work` to pick next issue. engine#404 (registry lifecycle) is the largest open item.
 
 ## Cross-Module
 
-**We're blocking** (tenancyId SPI changes require consumer recompile):
-- `claudony` — claudony#143 · XS · Low
-- `devtown` — devtown#61 · XS · Low
-- `aml` — aml#47 + aml#48 (migration reconciliation) · S · Low
-- `clinical` — clinical#51 · XS · Low
+*Unchanged — `git show HEAD~1:HANDOFF.md`*
 
 ## What's Left
 
-- engine#405 — @CrossTenant CDI producer · S · Low — **BLOCKED** (needs system-actor principal)
-- engine#406 — DB-level RLS · M · High
-- engine#411 — NOT NULL enforcement for tenancy_id columns in V1.2.0 · S · Low
-- engine#410 — registry lookup root cause (defensive guard in place) · M · Med
+- engine#404 — registry lifecycle: eviction + stateless-on-rest + Quartz restart · L · High
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| — | AI Fusion typed fact space implementation | XL | High | New module — own session; spec at casehubio/parent:docs/specs/2026-06-03-ai-fusion-hybrid-fact-space.md |
-| engine#404 | Registry lifecycle: eviction + stateless-on-rest + Quartz restart | L | High | Design-only; groundwork done |
+| — | AI Fusion typed fact space | XL | High | New module — own session |
+| engine#404 | Registry lifecycle design | L | High | Design-only |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
 | engine#387 | humanTask dynamic candidateGroups | M | Med | — |
 
 ## Key References
 
-- Blog: `blog/2026-06-01-mdp01-fixes-a-mystery-and-three-migrations.md`, `blog/2026-06-01-mdp02-what-ci-found-in-tenancy-tests.md`
-- Garden entries: GE-20260601-fcf0d9 (@DefaultBean ambiguity), GE-20260601-53763c (gh log truncation), GE-20260601-6170a6 (Java record positional shift), GE-20260601-ad3154 (bytecode parser)
-- Protocol: PP-20260601-70e9ea (platform mock exclusion)
-- Note: Force-pushes to casehubio/engine don't auto-trigger CI — use `gh workflow run "Build and Publish" --repo casehubio/engine --ref main`
+- Spec: `docs/specs/2026-06-03-flowworker-bridge-design.md`
+- Blog: `blog/2026-06-04-mdp01-flow-worker-bridge.md`
+- CI note: push-triggered builds now handle publish+downstream. Fork PRs only build+test.
