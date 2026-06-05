@@ -1,0 +1,9 @@
+branch: issue-402-action-risk-classifier-spi
+project-sha: 9fb81f2ecef414ba5452d6d290fd9ff141623cb3
+date: 2026-06-05
+issue: 402
+issue-repo: casehubio/engine
+covers: 402
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
