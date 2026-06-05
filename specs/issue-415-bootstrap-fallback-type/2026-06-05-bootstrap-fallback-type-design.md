@@ -67,7 +67,8 @@ public enum EscalationReason {
     /** All candidates scored 0.0 and at least one was BORDERLINE. */
     BORDERLINE_STALEMATE,
 
-    /** No QUALIFIED agent exists; all candidates with positive scores are in BOOTSTRAP phase. */
+    /** No QUALIFIED agent is available; only BOOTSTRAP-phase agents could be assigned.
+     *  Requires human routing. Pre-screen fires before scoring, so no scoring has occurred. */
     NO_QUALIFIED_AGENT
 }
 ```
@@ -133,7 +134,7 @@ The stripping approach means:
 - BOOTSTRAP candidates are invisible to scoring when the flag is set
 - QUALIFIED agents compete among themselves — workload comparison is only between QUALIFIED
 - A busy QUALIFIED agent is preferred over an idle BOOTSTRAP agent, which is the intent of the flag
-- `decide()` is called with the stripped eligible list; the classifier's existing logic applies unchanged
+- `decide()` is called with `eligible` (not `classified`). The `anyBorderline` check inside `decide()` then only inspects candidates that were actually eligible, which is semantically correct — a BOOTSTRAP candidate that was stripped is not contributing to a borderline stalemate.
 
 **In `SemanticAgentRoutingStrategy`:** `eligible` is computed before `emitOn(workerPool)`. The
 lambda captures `eligible` and only pays embedding cost for agents that can actually win. If the
@@ -148,6 +149,7 @@ pre-screen fires, `emitOn()` is never entered.
 | [BOOTSTRAP, EXCLUDED_*] | Yes — no QUALIFIED | `NO_QUALIFIED_AGENT` |
 | [BOOTSTRAP, QUALIFIED] | No — QUALIFIED exists | Strip BOOTSTRAP; QUALIFIED wins |
 | [BOOTSTRAP, QUALIFIED, BORDERLINE] | No — QUALIFIED exists | Strip BOOTSTRAP; QUALIFIED wins |
+| [BORDERLINE only] | No — no BOOTSTRAP | `BORDERLINE_STALEMATE` (existing path via `decide()`) |
 | [QUALIFIED only] | No — no BOOTSTRAP | Existing behaviour unchanged |
 | Flag = false | Pre-screen skipped | All existing behaviour unchanged |
 
@@ -163,7 +165,31 @@ All three construction sites updated.
 
 ### 6. `AgentRoutingEscalationHandler` — message per reason + metric log
 
+The `[METRIC:escalation.no-qualified-agent]` log fires unconditionally at the top of `handle()`,
+before the channel lookup. This ensures the metric fires even when no oversight channel is open
+(the scenario where the alert is most critical — bootstrap guard fired AND no channel to route to).
+
 ```java
+@ConsumeEvent(value = EventBusAddresses.AGENT_ROUTING_ESCALATION, blocking = true)
+public void handle(final AgentRoutingEscalationEvent event) {
+    // Metric log fires unconditionally — before channel search
+    if (event.reason() == EscalationReason.NO_QUALIFIED_AGENT) {
+        LOG.warnf(
+            "[METRIC:escalation.no-qualified-agent] caseId=%s capability=%s binding=%s"
+                + " — bootstrap guard fired; no trust-qualified agent available.",
+            event.caseId(), event.capabilityName(), event.bindingName());
+    }
+
+    final String oversightName = CaseChannel.oversightChannelName(event.caseId());
+    final List<CaseChannel> channels = channelProvider.listChannels(event.caseId());
+    channels.stream()
+        .filter(c -> oversightName.equals(c.name()))
+        .findFirst()
+        .ifPresentOrElse(
+            channel -> postQuery(channel, event),
+            () -> LOG.warnf("[METRIC:escalation.no-oversight-channel] ..."));
+}
+
 private void postQuery(final CaseChannel channel, final AgentRoutingEscalationEvent event) {
     final String message = switch (event.reason()) {
         case BORDERLINE_STALEMATE ->
@@ -174,19 +200,12 @@ private void postQuery(final CaseChannel channel, final AgentRoutingEscalationEv
                 event.capabilityName(), event.bindingName());
         case NO_QUALIFIED_AGENT ->
             String.format(
-                "All agents for capability '%s' (binding: '%s') are in bootstrap phase"
-                    + " — no agent with established trust history is available."
+                "No trust-qualified agent is available for capability '%s' (binding: '%s')."
+                    + " Routing policy requires an agent with established trust history."
                     + " Human routing required.",
                 event.capabilityName(), event.bindingName());
     };
     channelProvider.postToChannel(channel, "casehub-engine", message, MessageType.QUERY, null, null);
-
-    if (event.reason() == EscalationReason.NO_QUALIFIED_AGENT) {
-        LOG.warnf(
-            "[METRIC:escalation.no-qualified-agent] caseId=%s capability=%s binding=%s"
-                + " — bootstrap guard fired; no trust-qualified agent available.",
-            event.caseId(), event.capabilityName(), event.bindingName());
-    }
 }
 ```
 
