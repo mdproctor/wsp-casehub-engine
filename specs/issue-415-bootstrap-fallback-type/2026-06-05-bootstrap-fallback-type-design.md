@@ -229,6 +229,7 @@ New tests:
 - `bootstrap_noQualified_bootstrapPlusExcluded_escalatesNoQualifiedAgent()` — same gap, EXCLUDED variant
 - `bootstrap_qualifiedExists_bootstrapStripped_qualifiedAssigned()` — BOOTSTRAP idle, QUALIFIED busy → QUALIFIED wins
 - `bootstrap_qualifiedExists_bootstrapStripped_busyQualifiedWinsOverIdleBootstrap()` — explicit: flag overrides workload comparison
+- `bootstrap_qualifiedExists_bootstrapPlusBorderline_qualifiedWins_noBorderlineStalemate()` — [BOOTSTRAP, QUALIFIED, BORDERLINE] with flag on → BOOTSTRAP stripped, BORDERLINE remains in eligible but QUALIFIED wins; verifies `BORDERLINE_STALEMATE` does not fire when QUALIFIED exists in stripped pool
 - `bootstrap_flagFalse_allBootstrap_assignsByWorkload()` — flag off → existing behaviour preserved
 
 Updates to existing:
@@ -246,17 +247,19 @@ Mirror of the `TrustWeightedAgentStrategyTest` bootstrap cases.
 
 ### Runtime tests
 
-- `AgentRoutingEscalationHandlerTest` — update event construction to include reason; add message
-  assertions for both `BORDERLINE_STALEMATE` and `NO_QUALIFIED_AGENT`; add metric log assertion for
-  `NO_QUALIFIED_AGENT`
+- `AgentRoutingEscalationHandlerTest` — update event construction to include reason; add two
+  `NO_QUALIFIED_AGENT` sub-cases:
+  - Channel open: metric log fires AND QUERY is posted (message matches `NO_QUALIFIED_AGENT` text)
+  - No channel open: metric log fires AND QUERY is NOT posted (this is the regression test for the metric placement decision — the log must fire even when the channel is absent)
+  - Also add message assertion for `BORDERLINE_STALEMATE`
 - `DefaultWorkOrchestratorTest` — `AgentAssignment.escalate("analyse", EscalationReason.BORDERLINE_STALEMATE)`
 - `CaseContextChangedEventHandlerRoutingTest` — same update
 
 ### Devtown side (devtown#62)
 
-Engine-side tests verify the mechanism in isolation. Devtown#62 must include an end-to-end test:
-configure a `merge-executor` routing policy with `bootstrapEscalationRequired = true`, present
-an all-BOOTSTRAP pool, and confirm `NO_QUALIFIED_AGENT` escalation fires.
+Engine-side tests verify the mechanism in isolation. Devtown#62 must include two end-to-end tests:
+- **Escalation path:** `merge-executor` with `bootstrapEscalationRequired = true`, all-BOOTSTRAP pool → `NO_QUALIFIED_AGENT` escalation fires
+- **Stripping path:** `merge-executor` with `bootstrapEscalationRequired = true`, [BOOTSTRAP + QUALIFIED] pool → QUALIFIED wins, no escalation (covers the more common production scenario where a trusted agent exists)
 
 ---
 
