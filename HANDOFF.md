@@ -3,11 +3,11 @@
 **Head commit (engine):** 9fb81f2 — feat: promote spec from issue-415-bootstrap-fallback-type
 **Head commit (workspace):** e39e4ce — archive(issue-415-bootstrap-fallback-type): move plans to attic
 **Both repos on:** main
-**PR open:** casehubio/engine#427 — bootstrap escalation required guard
+**PR merged:** casehubio/engine#427 — bootstrap escalation required guard
 
 ## What Changed This Session
 
-**engine#415 — bootstrapEscalationRequired guard: implemented, PR #427 open.**
+**engine#415 — bootstrapEscalationRequired guard: implemented, PR #427 merged.**
 
 Added `boolean bootstrapEscalationRequired` to `TrustRoutingPolicy`. When set, BOOTSTRAP-phase agents are never assigned to high-stakes capabilities. Two-part guard: pre-screen fires before scoring (before `emitOn(workerPool)` in `SemanticAgentRoutingStrategy`), then BOOTSTRAP candidates are stripped from the eligible scoring pool. A busy QUALIFIED agent beats an idle BOOTSTRAP agent.
 
@@ -23,11 +23,11 @@ Run `/work` to pick next issue. engine#404 (registry lifecycle) remains the larg
 ## Cross-Module
 
 **Blocking** (other modules waiting on us):
-- `devtown` — devtown#62 needs `DevtownTrustRoutingPolicyProvider` to set `bootstrapEscalationRequired = true` for merge-executor, security-review, architecture-review · XS · Low
+- `devtown` — devtown#62 unblocked (PR #427 merged); set `bootstrapEscalationRequired = true` in `DevtownTrustRoutingPolicyProvider` · XS · Low
 
 ## What's Left
 
-- PR #427 pending merge at casehubio/engine
+*(nothing)*
 
 ## What's Next
 
