@@ -163,7 +163,9 @@
       "Bash(curl -s -H 'Authorization: Bearer __CMDSUB_OUTPUT__' https://maven.pkg.github.com/casehubio/engine/io/casehub/casehub-engine-common/0.2-SNAPSHOT/maven-metadata.xml)",
       "Bash(mvn *)",
       "Bash(curl -s \"https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-engine.md\")",
-      "Bash(GIT_EDITOR=true git -C /Users/mdproctor/claude/casehub/engine rebase --continue)"
+      "Bash(GIT_EDITOR=true git -C /Users/mdproctor/claude/casehub/engine rebase --continue)",
+      "Bash(Read /private/tmp/claude-501/-Users-mdproctor-claude-public-casehub-engine/bb074aa6-a6f4-4d33-a3c5-0f57c9c56b9e/tasks/bbx4ekbh3.output)",
+      "Bash(Read /private/tmp/claude-501/-Users-mdproctor-claude-public-casehub-engine/bb074aa6-a6f4-4d33-a3c5-0f57c9c56b9e/tasks/b37kb77fp.output)"
     ]
   }
 }
