@@ -1,0 +1,9 @@
+branch: issue-387-humantask-dynamic-candidategroups
+project-sha: a1e87bfab02b1e140ab1d26081b31f8a24b64595
+date: 2026-06-07
+issue: 387
+issue-repo: casehubio/engine
+covers: 387
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes:
