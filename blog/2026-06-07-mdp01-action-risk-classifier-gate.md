@@ -1,6 +1,10 @@
 ---
+layout: post
 title: "The gate that doesn't exist in the code until it fires"
 date: 2026-06-07
+entry_type: note
+subtype: diary
+projects: [casehub-engine]
 tags: [casehub-engine, ActionRiskClassifier, design, gate, WorkerResult]
 ---
 
