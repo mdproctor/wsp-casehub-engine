@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-06-07-mdp02-humantask-dynamic-routing.md](2026-06-07-mdp02-humantask-dynamic-routing.md) | 2026-06-07 | Dynamic candidateGroups/Users via JQ; ListEvaluator sealed type; Awaitility.during() for negative tests; universal routing architecture gap |
 | [2026-05-29-mdp02-unblocking-aml.md](2026-05-29-mdp02-unblocking-aml.md) | 2026-05-29 | Moving SPI types to the API tier, WorkerDecisionEntry for trust attestations, Podman socket debugging |
 | [2026-06-03-mdp01-four-issues-two-surprises.md](2026-06-03-mdp01-four-issues-two-surprises.md) | 2026-06-03 | RLS on reactive Hibernate, @CrossTenant CDI qualifier, CaseKey immutable registry key |
 | [2026-05-29-mdp01-routing-the-uncertain.md](2026-05-29-mdp01-routing-the-uncertain.md) | 2026-05-29 | Sealed AgentAssignment, reactive SPI, TrustCandidateClassifier shared CDI kernel, SemanticAgentRoutingStrategy — and why the blocking IO catch changed everything |
