@@ -1,33 +1,41 @@
-# Handoff — 2026-06-05
+# Handoff — 2026-06-07
 
-**Head commit (engine):** 9fb81f2 — feat: promote spec from issue-415-bootstrap-fallback-type
-**Head commit (workspace):** e39e4ce — archive(issue-415-bootstrap-fallback-type): move plans to attic
+**Head commit (engine):** a1e87bf — fix: remaining WorkerResult migration issues — CI green (engine#402)
+**Head commit (workspace):** d2137fc — docs(issue-402-action-risk-classifier-spi): mark closed
 **Both repos on:** main
-**PR merged:** casehubio/engine#427 — bootstrap escalation required guard
+**PR open:** casehubio/engine#435 — ActionRiskClassifier SPI (engine#402)
 
 ## What Changed This Session
 
-**engine#415 — bootstrapEscalationRequired guard: implemented, PR #427 merged.**
+**engine#402 — ActionRiskClassifier SPI: fully implemented, PR #435 open.**
 
-Added `boolean bootstrapEscalationRequired` to `TrustRoutingPolicy`. When set, BOOTSTRAP-phase agents are never assigned to high-stakes capabilities. Two-part guard: pre-screen fires before scoring (before `emitOn(workerPool)` in `SemanticAgentRoutingStrategy`), then BOOTSTRAP candidates are stripped from the eligible scoring pool. A busy QUALIFIED agent beats an idle BOOTSTRAP agent.
+Platform-level oversight gate for consequential worker actions. Workers declare `PlannedAction` in `WorkerResult`; engine classifies with `ReactiveActionRiskClassifier`; `GateRequired` creates a WorkItem pending human approval. Approved gates re-fire `WorkflowExecutionCompleted(plannedAction=null)` — reuses entire completion machinery. `pendingActionGate` is in-memory only (not JPA-persisted) — resolution handlers use `CaseInstanceCache`, not `CrossTenantRepo`.
 
-Key design choices:
-- `allMatch(BOOTSTRAP)` was the wrong guard — missed [BOOTSTRAP, BORDERLINE] pools where BOOTSTRAP wins by workload score. Correct: `!hasQualified && hasBootstrap`.
-- `EscalationReason` enum (BORDERLINE_STALEMATE, NO_QUALIFIED_AGENT) promoted to top-level type; carried by `AgentAssignment.EscalateToOversight` and `AgentRoutingEscalationEvent`.
-- `[METRIC:escalation.no-qualified-agent]` log fires before channel lookup — fires even when no oversight channel is open.
+Key components: `ChainedReactiveActionRiskClassifier` (@RiskClassifier qualifier, most-restrictive-wins), `WorkflowExecutionCompletedHandler` gate fork, `ActionGateWorkItemHandler`, `ActionGateCompletionApplier`, `CallerRef` sealed hierarchy (PlanItemCallerRef|GateCallerRef), gate resolution handlers (approved/rejected/expired), blackboard `ActionGateWorkerFaultedPlanItemHandler`.
+
+Breaking change: all worker function lambdas and `Agent.execute()` return `WorkerResult` (51+ test files updated). SW task `function(lambda, Map.class)` lambdas must NOT be wrapped — see gotcha GE-20260607-115619.
+
+CI note: "Build and test" passes. "Publish to GitHub Packages" fails with 403 — pre-existing fork configuration issue, not a code bug.
 
 ## Immediate Next Step
 
-Run `/work` to pick next issue. engine#404 (registry lifecycle) remains the largest open item.
+Review and merge PR #435. Then devtown#62 (set `bootstrapEscalationRequired=true`) is already unblocked (engine#427 merged last session).
 
 ## Cross-Module
 
-**Blocking** (other modules waiting on us):
-- `devtown` — devtown#62 unblocked (PR #427 merged); set `bootstrapEscalationRequired = true` in `DevtownTrustRoutingPolicyProvider` · XS · Low
+**Blocking** (other modules waiting on PR #435 merge):
+- `aml` — aml#42: SAR filing, account freeze, law enforcement referral · L · Med
+- `clinical` — clinical#47: SUSAR filing, dose modification, patient withdrawal · L · Med
+- `devtown` — devtown#56: production deploy, contributor access, security escalation · M · Med
+- `life` — life#20: spend threshold, non-refundable bookings, contractor instruction · M · Low
+- `openclaw` — openclaw#6: oversight channel gate (Epic 6 end-to-end wiring) · L · High
 
 ## What's Left
 
-*(nothing)*
+- PR #435 pending review/merge
+- engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (v2, restart resilience) · M · Med
+- engine#434: integration test for classifier-throws fail-safe in full engine pipeline · S · Low
+- parent#183: sync PLATFORM.md + casehub-engine.md deep-dive for engine#402 · XS · Low
 
 ## What's Next
 
@@ -41,8 +49,7 @@ Run `/work` to pick next issue. engine#404 (registry lifecycle) remains the larg
 
 ## Key References
 
-- PR: https://github.com/casehubio/engine/pull/427
-- Spec: `docs/specs/2026-06-05-bootstrap-fallback-type-design.md`
-- Blog: `blog/2026-06-05-mdp02-bootstrap-guard-mixed-pool-gap.md`
-- Garden: GE-20260605-e7c2e9 (trust routing mixed-pool gap), GE-20260605-58f57c (Mutiny emitOn guard placement)
-- Protocol: PP-20260605-0b4818 (AgentRoutingStrategy guard-before-emitOn)
+- PR: https://github.com/casehubio/engine/pull/435
+- Spec: `docs/specs/2026-06-05-action-risk-classifier-design.md`
+- Blog: `blog/2026-06-07-mdp01-action-risk-classifier-gate.md`
+- Garden: GE-20260607-b6478d (pendingActionGate in-memory), GE-20260607-cedf69 (@Startup/@PostConstruct), GE-20260607-115619 (SW lambda migration), GE-20260607-66daf2 (re-fire technique), GE-20260607-4bb9a7 (cross-test await)
