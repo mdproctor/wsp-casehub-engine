@@ -1,52 +1,46 @@
 # Handoff — 2026-06-08
 
-*Updated: devtown#62 closed — removed from backlog. parent#188 closed — removed from backlog.*
-
-**Head commit (engine):** 508b8dc — fix: adapt to TrustGateService and AgentDescriptor API changes — unblock CI
-**Head commit (workspace):** b926672 — fix: promote corrected mdp01 frontmatter to main
+**Head commit (engine):** 67323a19 — feat: add NoOpWorkerExecutionManager @DefaultBean to engine runtime
+**Head commit (workspace):** 2a3c24d — docs: add diary entry 2026-06-08-mdp01
 **Both repos on:** main
-**PR merged:** casehubio/engine#443 — dynamic candidateGroups/Users for humanTask (engine#387)
 
 ## What Changed This Session
 
-**engine#387 — dynamic candidateGroups/candidateUsers for humanTask: shipped and merged.**
+**engine#447 — NoOpWorkerExecutionManager shipped.** `@DefaultBean @ApplicationScoped` in `engine/internal/worker/`. Unblocks casehub-workers. Protocol `PP-20260514-engine-spi-noops-defaultbean` updated in garden; CLAUDE.md beans table updated (nine → ten).
 
-`candidateGroups` and `candidateUsers` in humanTask YAML bindings now accept JQ expressions evaluated against the case context at event-publish time. `ListEvaluator` sealed interface (`StaticList`/`JQList`) keeps the type hierarchy clean — separate from `ExpressionEvaluator` (which is a boolean predicate). `ListExpressionResolver @ApplicationScoped` handles JQ evaluation; resolution failure blocks the event. ADR-0008 records the hierarchy decision. PR #443 green and merged after fixing two pre-existing CI failures: `TrustGateService.findScore()` → `currentScore()` in actor-state, and `AgentDescriptor` constructor arity in engine-ai tests.
-
-**engine#442 filed — universal routing architecture.** Post-merge discussion surfaced that `ListEvaluator` is a sealed dead-end for richer routing strategies (Drools, ML). Opened as a platform-coherence design initiative: audit all routing decision points, design a named-strategy SPI pattern, document in PLATFORM.md and protocols. Affects engine#439 scope.
+**epic #445 filed — Full Drools Integration.** Dependency chain established: CaseContext is a flat `Map<String, JsonNode>`; Drools needs typed Java facts in WorkingMemory. Issues #80/#81 (typed panels) are prerequisites, not optional evolution work. Full order: engine#289 → #80/#81 → #446 → #5 → #207. engine#446 (WorkingMemoryBridge) filed as a new child issue.
 
 ## Immediate Next Step
 
-engine#383 — Oversight response loop. M · Med · Unblocked. Run `/work engine#383`.
+engine#289 — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools chain. Run `/work engine#289`.
 
 ## Cross-Module
 
-**Unblocked by engine#387 merge** (these can now proceed):
-- `aml` — aml#42: SAR filing, account freeze, law enforcement referral · L · Med
-- `clinical` — clinical#47: SUSAR filing, dose modification, patient withdrawal · L · Med
-- `devtown` — devtown#56: production deploy, contributor access, security escalation · M · Med
-- `life` — life#20: spend threshold, non-refundable bookings, contractor instruction · M · Low
-- `openclaw` — openclaw#6: oversight channel gate (Epic 6 end-to-end wiring) · L · High
+*Unchanged — `git show HEAD~1:HANDOFF.md`*
 
 ## What's Left
 
 - engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (restart resilience) · M · Med
 - engine#434: integration test for classifier-throws fail-safe · S · Low
+- ⚠️ issue-274-registry-hydration-recovery: workspace branch open, no EPIC-CLOSED.md, last commit 8 days ago — stale
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#383 | Oversight response loop | M | Med | Immediate |
+| engine#289 | ExpressionEvaluatorFactory SPI | S | Low | First in Drools chain (#445) |
+| engine#80 + #81 | Typed CaseContext panels | M | High | Prerequisite for WorkingMemoryBridge |
+| engine#446 | WorkingMemoryBridge | M | Med | Depends on #80/#81 |
+| engine#5 | DroolsExpressionEvaluator | M | Med | Depends on #289 |
+| engine#207 | RulesRouter + RULES_DECISION lineage | L | Med | Final Drools piece — depends on #446 |
+| engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
 | engine#442 | Universal routing architecture design | L | High | Design-first; affects engine#439 |
 | engine#404 | Registry lifecycle design | L | High | Design-only |
-| — | AI Fusion typed fact space | XL | High | New module — own session |
 
 ## Key References
 
-- PR: https://github.com/casehubio/engine/pull/443 (merged)
-- Spec: `docs/specs/2026-06-07-humantask-dynamic-candidate-groups-design.md`
-- ADR: `docs/adr/0008-list-evaluator-separate-sealed-hierarchy.md`
-- Blog: `blog/2026-06-07-mdp02-humantask-dynamic-routing.md`
-- engine#442: https://github.com/casehubio/engine/issues/442 (universal routing architecture)
+- Epic: https://github.com/casehubio/engine/issues/445 (Full Drools Integration)
+- Blog: `blog/2026-06-08-mdp01-the-data-store-drools-needs.md`
+- Protocol: `PP-20260514-engine-spi-noops-defaultbean` (garden — updated)
+- engine#446: WorkingMemoryBridge (new child issue for Drools epic)
