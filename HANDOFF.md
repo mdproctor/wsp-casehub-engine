@@ -1,5 +1,7 @@
 # Handoff — 2026-06-08
 
+*Updated: devtown#62 closed — removed from backlog. parent#188 closed — removed from backlog.*
+
 **Head commit (engine):** 508b8dc — fix: adapt to TrustGateService and AgentDescriptor API changes — unblock CI
 **Head commit (workspace):** b926672 — fix: promote corrected mdp01 frontmatter to main
 **Both repos on:** main
@@ -15,7 +17,7 @@
 
 ## Immediate Next Step
 
-devtown#62 — set `bootstrapEscalationRequired=true`. S · Low · already unblocked. Run `/work devtown#62`.
+engine#383 — Oversight response loop. M · Med · Unblocked. Run `/work engine#383`.
 
 ## Cross-Module
 
@@ -28,17 +30,14 @@ devtown#62 — set `bootstrapEscalationRequired=true`. S · Low · already unblo
 
 ## What's Left
 
-- devtown#62: set `bootstrapEscalationRequired=true` · S · Low
 - engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (restart resilience) · M · Med
 - engine#434: integration test for classifier-throws fail-safe · S · Low
-- parent#188: 3 missing doc gaps in casehub-engine.md (binding guard, workItemEscalated signal, ProvisionResult) · XS · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| devtown#62 | bootstrapEscalationRequired=true | S | Low | Immediate |
-| engine#383 | Oversight response loop | M | Med | Unblocked |
+| engine#383 | Oversight response loop | M | Med | Immediate |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
 | engine#442 | Universal routing architecture design | L | High | Design-first; affects engine#439 |
 | engine#404 | Registry lifecycle design | L | High | Design-only |
