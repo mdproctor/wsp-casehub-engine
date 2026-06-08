@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-06-08-mdp01-the-data-store-drools-needs.md](2026-06-08-mdp01-the-data-store-drools-needs.md) | 2026-06-08 | Typed blackboard data store gap surfaces as Drools prerequisite; full integration dependency chain; epic #445 |
 | [2026-06-07-mdp02-humantask-dynamic-routing.md](2026-06-07-mdp02-humantask-dynamic-routing.md) | 2026-06-07 | Dynamic candidateGroups/Users via JQ; ListEvaluator sealed type; Awaitility.during() for negative tests; universal routing architecture gap |
 | [2026-05-29-mdp02-unblocking-aml.md](2026-05-29-mdp02-unblocking-aml.md) | 2026-05-29 | Moving SPI types to the API tier, WorkerDecisionEntry for trust attestations, Podman socket debugging |
 | [2026-06-03-mdp01-four-issues-two-surprises.md](2026-06-03-mdp01-four-issues-two-surprises.md) | 2026-06-03 | RLS on reactive Hibernate, @CrossTenant CDI qualifier, CaseKey immutable registry key |
