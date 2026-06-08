@@ -1,18 +1,23 @@
 # Handoff — 2026-06-08
 
-**Head commit (engine):** 67323a19 — feat: add NoOpWorkerExecutionManager @DefaultBean to engine runtime
-**Head commit (workspace):** 2a3c24d — docs: add diary entry 2026-06-08-mdp01
+**Head commit (engine):** eaa84398 — docs: promote design specs for registry lifecycle and hybrid execution
+**Head commit (workspace):** 649210b — feat: promote blog from issue-413-sx-scale-batch
 **Both repos on:** main
+**PR:** https://github.com/casehubio/engine/pull/451 (open — actor-state tests + design specs)
 
 ## What Changed This Session
 
-**engine#447 — NoOpWorkerExecutionManager shipped.** `@DefaultBean @ApplicationScoped` in `engine/internal/worker/`. Unblocks casehub-workers. Protocol `PP-20260514-engine-spi-noops-defaultbean` updated in garden; CLAUDE.md beans table updated (nine → ten).
+**issue-274-registry-hydration-recovery closed.** Plans archived, EPIC-CLOSED.md stamped.
 
-**epic #445 filed — Full Drools Integration.** Dependency chain established: CaseContext is a flat `Map<String, JsonNode>`; Drools needs typed Java facts in WorkingMemory. Issues #80/#81 (typed panels) are prerequisites, not optional evolution work. Full order: engine#289 → #80/#81 → #446 → #5 → #207. engine#446 (WorkingMemoryBridge) filed as a new child issue.
+**S/XS batch (issue-413-sx-scale-batch) closed.** PR #451 open.
+- #413 (XS): actor-state test gaps — partial-write contributor contract + deleted-channel race. Package-private test constructor added to QhorusActorStateContributor.
+- #404 (S): BlackboardRegistry lifecycle analysis. Key finding: at WAITING state, WorkItemLifecycleAdapter routes via callerRef (not completionIndex). Phase 1 stateless-on-rest eviction is safe today — zero persistence changes.
+- #200 (S): Hybrid execution design. FlowWorker gap already closed by casehub-engine-flow. Designed Worker(Plan.of(...)) + Plan.fromContext() for plan-based execution. Filed #448/#449.
+- #187 (S): Closed as superseded — WorkerRegistry never materialised, WorkerProvisioner SPI is the right abstraction.
 
 ## Immediate Next Step
 
-engine#289 — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools chain. Run `/work engine#289`.
+Run `/work engine#289` — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools chain.
 
 ## Cross-Module
 
@@ -22,7 +27,7 @@ engine#289 — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools c
 
 - engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (restart resilience) · M · Med
 - engine#434: integration test for classifier-throws fail-safe · S · Low
-- ⚠️ issue-274-registry-hydration-recovery: workspace branch open, no EPIC-CLOSED.md, last commit 8 days ago — stale
+- PR #451: awaiting review/merge
 
 ## What's Next
 
@@ -36,11 +41,11 @@ engine#289 — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools c
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
 | engine#442 | Universal routing architecture design | L | High | Design-first; affects engine#439 |
-| engine#404 | Registry lifecycle design | L | High | Design-only |
+| engine#448 | Worker(Plan.of(...)) function type | M | Med | Plan-based execution Phase 1 |
 
 ## Key References
 
+- PR: https://github.com/casehubio/engine/pull/451
 - Epic: https://github.com/casehubio/engine/issues/445 (Full Drools Integration)
-- Blog: `blog/2026-06-08-mdp01-the-data-store-drools-needs.md`
-- Protocol: `PP-20260514-engine-spi-noops-defaultbean` (garden — updated)
-- engine#446: WorkingMemoryBridge (new child issue for Drools epic)
+- Registry lifecycle spec: `docs/specs/issue-413-sx-scale-batch/2026-06-08-blackboard-registry-lifecycle-design.md`
+- Hybrid execution spec: `docs/specs/issue-413-sx-scale-batch/2026-06-08-hybrid-execution-design.md`
