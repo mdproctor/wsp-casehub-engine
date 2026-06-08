@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-06-08-mdp02-the-map-before-you-dig.md](2026-06-08-mdp02-the-map-before-you-dig.md) | 2026-06-08 | callerRef routing bypasses completionIndex at WAITING state; stateless-on-rest Phase 1 needs zero persistence changes; Worker(Plan.of(...)) design |
 | [2026-06-08-mdp01-the-data-store-drools-needs.md](2026-06-08-mdp01-the-data-store-drools-needs.md) | 2026-06-08 | Typed blackboard data store gap surfaces as Drools prerequisite; full integration dependency chain; epic #445 |
 | [2026-06-07-mdp02-humantask-dynamic-routing.md](2026-06-07-mdp02-humantask-dynamic-routing.md) | 2026-06-07 | Dynamic candidateGroups/Users via JQ; ListEvaluator sealed type; Awaitility.during() for negative tests; universal routing architecture gap |
 | [2026-05-29-mdp02-unblocking-aml.md](2026-05-29-mdp02-unblocking-aml.md) | 2026-05-29 | Moving SPI types to the API tier, WorkerDecisionEntry for trust attestations, Podman socket debugging |
