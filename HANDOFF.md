@@ -1,18 +1,30 @@
 # Handoff — 2026-06-08
 
-**Head commit (engine):** 67323a19 — feat: add NoOpWorkerExecutionManager @DefaultBean to engine runtime
-**Head commit (workspace):** 2a3c24d — docs: add diary entry 2026-06-08-mdp01
-**Both repos on:** main
+**Head commit (engine):** eaa84398 — docs: promote design specs for registry lifecycle and hybrid execution
+**Head commit (workspace):** pending commit after this session
+**Engine on:** issue-413-sx-scale-batch
+**Workspace on:** issue-413-sx-scale-batch
 
 ## What Changed This Session
 
-**engine#447 — NoOpWorkerExecutionManager shipped.** `@DefaultBean @ApplicationScoped` in `engine/internal/worker/`. Unblocks casehub-workers. Protocol `PP-20260514-engine-spi-noops-defaultbean` updated in garden; CLAUDE.md beans table updated (nine → ten).
+**issue-274-registry-hydration-recovery closed.** Plans archived, EPIC-CLOSED.md stamped. All work (code, spec, blog) was already merged/promoted from a prior session.
 
-**epic #445 filed — Full Drools Integration.** Dependency chain established: CaseContext is a flat `Map<String, JsonNode>`; Drools needs typed Java facts in WorkingMemory. Issues #80/#81 (typed panels) are prerequisites, not optional evolution work. Full order: engine#289 → #80/#81 → #446 → #5 → #207. engine#446 (WorkingMemoryBridge) filed as a new child issue.
+**#413 (XS) — actor-state test gaps closed.** Two tests added:
+- `ActorStateAggregatorTest.partialWriteContributor_partialDataVisible_sourceExcluded` — documents that partial accumulator writes before a throw are NOT rolled back (contributor responsibility, not engine enforcement).
+- `QhorusActorStateContributorTest.deletedChannel_caseIdNull_noException` — covers deleted-channel race: caseId null, no NPE. Added package-private test constructor to `QhorusActorStateContributor`.
+
+**#404 (S) — BlackboardRegistry lifecycle analysis.** Full design doc written at `docs/specs/issue-413-sx-scale-batch/2026-06-08-blackboard-registry-lifecycle-design.md`. Key findings:
+- At WAITING, all active PlanItems are DELEGATED. `completionIndex` is not needed for WorkItem re-entry (routes via callerRef, not completionIndex). Evicting at WAITING is safe today — zero persistence changes needed.
+- Strategy B (stateless-on-rest) recommended in two phases: Phase 1 (evict at WAITING, safe now), Phase 2 (persist RUNNING PlanItems, needs `workerName` in PlanItemRecord).
+- LRU without Phase 2 is dangerous: silent data loss if a RUNNING case is evicted.
+
+**#200 (S) — True hybrid execution design.** FlowWorker dispatch gap (`call: casehub:dispatch`) is already closed by `casehub-engine-flow`. Rules-driven deferred to Drools epic #445. Plan-based execution design written: `Worker(Plan.of(...))` as new Worker function type + `Plan.fromContext(".executionPlan")` for dynamic LLM-generated plans. Filed #448 (Worker(Plan) impl) and #449 (YAML plan: binding type).
+
+**#187 (S) — WorkerCandidateSource future consideration. Closed as superseded.** WorkerRegistry never materialised; `WorkerProvisioner` SPI + `CaseDefinitionRegistry` + `QuartzWorkerExecutionManager` are already the separate candidate sources the issue anticipated.
 
 ## Immediate Next Step
 
-engine#289 — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools chain. Run `/work engine#289`.
+Run `/work engine#289` — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools chain.
 
 ## Cross-Module
 
@@ -22,7 +34,7 @@ engine#289 — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools c
 
 - engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (restart resilience) · M · Med
 - engine#434: integration test for classifier-throws fail-safe · S · Low
-- ⚠️ issue-274-registry-hydration-recovery: workspace branch open, no EPIC-CLOSED.md, last commit 8 days ago — stale
+- Branch `issue-413-sx-scale-batch` open — needs work-end when ready
 
 ## What's Next
 
@@ -36,11 +48,13 @@ engine#289 — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools c
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
 | engine#442 | Universal routing architecture design | L | High | Design-first; affects engine#439 |
-| engine#404 | Registry lifecycle design | L | High | Design-only |
+| engine#448 | Worker(Plan.of(...)) function type | M | Med | Plan-based execution Phase 1 |
 
 ## Key References
 
+- Branch: `issue-413-sx-scale-batch` (engine + workspace)
 - Epic: https://github.com/casehubio/engine/issues/445 (Full Drools Integration)
-- Blog: `blog/2026-06-08-mdp01-the-data-store-drools-needs.md`
-- Protocol: `PP-20260514-engine-spi-noops-defaultbean` (garden — updated)
-- engine#446: WorkingMemoryBridge (new child issue for Drools epic)
+- Registry lifecycle spec: `docs/specs/issue-413-sx-scale-batch/2026-06-08-blackboard-registry-lifecycle-design.md`
+- Hybrid execution spec: `docs/specs/issue-413-sx-scale-batch/2026-06-08-hybrid-execution-design.md`
+- #448: Worker(Plan.of(...)) implementation (filed this session)
+- #449: YAML plan: binding type (filed this session, blocked on #448)
