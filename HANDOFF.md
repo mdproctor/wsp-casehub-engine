@@ -1,29 +1,25 @@
-# Handoff — 2026-06-07
+# Handoff — 2026-06-08
 
-**Head commit (engine):** a1e87bf — fix: remaining WorkerResult migration issues — CI green (engine#402)
-**Head commit (workspace):** d2137fc — docs(issue-402-action-risk-classifier-spi): mark closed
+**Head commit (engine):** 508b8dc — fix: adapt to TrustGateService and AgentDescriptor API changes — unblock CI
+**Head commit (workspace):** b926672 — fix: promote corrected mdp01 frontmatter to main
 **Both repos on:** main
-**PR open:** casehubio/engine#435 — ActionRiskClassifier SPI (engine#402)
+**PR merged:** casehubio/engine#443 — dynamic candidateGroups/Users for humanTask (engine#387)
 
 ## What Changed This Session
 
-**engine#402 — ActionRiskClassifier SPI: fully implemented, PR #435 open.**
+**engine#387 — dynamic candidateGroups/candidateUsers for humanTask: shipped and merged.**
 
-Platform-level oversight gate for consequential worker actions. Workers declare `PlannedAction` in `WorkerResult`; engine classifies with `ReactiveActionRiskClassifier`; `GateRequired` creates a WorkItem pending human approval. Approved gates re-fire `WorkflowExecutionCompleted(plannedAction=null)` — reuses entire completion machinery. `pendingActionGate` is in-memory only (not JPA-persisted) — resolution handlers use `CaseInstanceCache`, not `CrossTenantRepo`.
+`candidateGroups` and `candidateUsers` in humanTask YAML bindings now accept JQ expressions evaluated against the case context at event-publish time. `ListEvaluator` sealed interface (`StaticList`/`JQList`) keeps the type hierarchy clean — separate from `ExpressionEvaluator` (which is a boolean predicate). `ListExpressionResolver @ApplicationScoped` handles JQ evaluation; resolution failure blocks the event. ADR-0008 records the hierarchy decision. PR #443 green and merged after fixing two pre-existing CI failures: `TrustGateService.findScore()` → `currentScore()` in actor-state, and `AgentDescriptor` constructor arity in engine-ai tests.
 
-Key components: `ChainedReactiveActionRiskClassifier` (@RiskClassifier qualifier, most-restrictive-wins), `WorkflowExecutionCompletedHandler` gate fork, `ActionGateWorkItemHandler`, `ActionGateCompletionApplier`, `CallerRef` sealed hierarchy (PlanItemCallerRef|GateCallerRef), gate resolution handlers (approved/rejected/expired), blackboard `ActionGateWorkerFaultedPlanItemHandler`.
-
-Breaking change: all worker function lambdas and `Agent.execute()` return `WorkerResult` (51+ test files updated). SW task `function(lambda, Map.class)` lambdas must NOT be wrapped — see gotcha GE-20260607-115619.
-
-CI note: "Build and test" passes. "Publish to GitHub Packages" fails with 403 — pre-existing fork configuration issue, not a code bug.
+**engine#442 filed — universal routing architecture.** Post-merge discussion surfaced that `ListEvaluator` is a sealed dead-end for richer routing strategies (Drools, ML). Opened as a platform-coherence design initiative: audit all routing decision points, design a named-strategy SPI pattern, document in PLATFORM.md and protocols. Affects engine#439 scope.
 
 ## Immediate Next Step
 
-Review and merge PR #435. Then devtown#62 (set `bootstrapEscalationRequired=true`) is already unblocked (engine#427 merged last session).
+devtown#62 — set `bootstrapEscalationRequired=true`. S · Low · already unblocked. Run `/work devtown#62`.
 
 ## Cross-Module
 
-**Blocking** (other modules waiting on PR #435 merge):
+**Unblocked by engine#387 merge** (these can now proceed):
 - `aml` — aml#42: SAR filing, account freeze, law enforcement referral · L · Med
 - `clinical` — clinical#47: SUSAR filing, dose modification, patient withdrawal · L · Med
 - `devtown` — devtown#56: production deploy, contributor access, security escalation · M · Med
@@ -32,24 +28,26 @@ Review and merge PR #435. Then devtown#62 (set `bootstrapEscalationRequired=true
 
 ## What's Left
 
-- PR #435 pending review/merge
-- engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (v2, restart resilience) · M · Med
-- engine#434: integration test for classifier-throws fail-safe in full engine pipeline · S · Low
-- parent#183: sync PLATFORM.md + casehub-engine.md deep-dive for engine#402 · XS · Low
+- devtown#62: set `bootstrapEscalationRequired=true` · S · Low
+- engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (restart resilience) · M · Med
+- engine#434: integration test for classifier-throws fail-safe · S · Low
+- parent#188: 3 missing doc gaps in casehub-engine.md (binding guard, workItemEscalated signal, ProvisionResult) · XS · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| — | AI Fusion typed fact space | XL | High | New module — own session |
-| engine#404 | Registry lifecycle design | L | High | Design-only |
+| devtown#62 | bootstrapEscalationRequired=true | S | Low | Immediate |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
-| engine#387 | humanTask dynamic candidateGroups | M | Med | — |
+| engine#442 | Universal routing architecture design | L | High | Design-first; affects engine#439 |
+| engine#404 | Registry lifecycle design | L | High | Design-only |
+| — | AI Fusion typed fact space | XL | High | New module — own session |
 
 ## Key References
 
-- PR: https://github.com/casehubio/engine/pull/435
-- Spec: `docs/specs/2026-06-05-action-risk-classifier-design.md`
-- Blog: `blog/2026-06-07-mdp01-action-risk-classifier-gate.md`
-- Garden: GE-20260607-b6478d (pendingActionGate in-memory), GE-20260607-cedf69 (@Startup/@PostConstruct), GE-20260607-115619 (SW lambda migration), GE-20260607-66daf2 (re-fire technique), GE-20260607-4bb9a7 (cross-test await)
+- PR: https://github.com/casehubio/engine/pull/443 (merged)
+- Spec: `docs/specs/2026-06-07-humantask-dynamic-candidate-groups-design.md`
+- ADR: `docs/adr/0008-list-evaluator-separate-sealed-hierarchy.md`
+- Blog: `blog/2026-06-07-mdp02-humantask-dynamic-routing.md`
+- engine#442: https://github.com/casehubio/engine/issues/442 (universal routing architecture)
