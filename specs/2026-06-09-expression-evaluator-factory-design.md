@@ -44,21 +44,45 @@ complementary parts of the same SPI: one declares what handles a language, the o
 across all registered handlers.
 
 **Blast radius:** 15 references, all in `runtime` or `scheduler-quartz`. All already transitively
-depend on `api` (via `common`). Change is import-path only — no `pom.xml` changes. Affected files:
+depend on `api` via `common`. Change is import-path only for `runtime`; `scheduler-quartz`
+requires one `pom.xml` change (see below). Affected files:
 - `DefaultExpressionEngineRegistry` (implements clause + import)
 - `DefaultCaseDefinitionRegistry`, `MilestoneLifecycleManager`, `CaseContextChangedEventHandler`
   (inject + import)
 - `ConditionalScheduledTriggerJob` in `scheduler-quartz` (inject + import)
 - `ExpressionEngineRegistryTest`, `CaseContextChangedEventHandlerRoutingTest` (test import)
 
-### Move `@YamlMapper` qualifier from `runtime/internal/marshaller/` → `api/engine/`
+**`scheduler-quartz/pom.xml`** — add explicit dependency:
+
+```xml
+<dependency>
+    <groupId>io.casehub</groupId>
+    <artifactId>casehub-engine-api</artifactId>
+    <version>${project.version}</version>
+</dependency>
+```
+
+`scheduler-quartz` currently declares only `casehub-engine-common` as a direct dependency.
+`casehub-engine-api` is available transitively (common → api), so the build compiles today —
+but after moving `ExpressionEngineRegistry` to `api/engine/`, `ConditionalScheduledTriggerJob`
+would directly import from a module it does not declare. Maven permits this but it is dependency
+hygiene debt. Making the dependency explicit is the correct fix.
+
+### Move `@YamlMapper` qualifier from `runtime/internal/marshaller/` → `api/marshaller/` (new package)
 
 Currently: `io.casehub.engine.internal.marshaller.YamlMapper`
-New location: `io.casehub.api.engine.YamlMapper`
+New location: `io.casehub.api.marshaller.YamlMapper`
 
-`@YamlMapper` is a pure CDI qualifier annotation — no runtime implementation, no deps beyond
-`jakarta.inject.Qualifier`. Moving it to `api/engine/` allows `YamlCaseHub` (in `api`) to
-declare the injection point. The producer `CaseHubObjectMapperProducer` stays in `runtime`.
+`@YamlMapper` is a marshaller qualifier — it identifies an `ObjectMapper` configured for YAML
+with placeholder resolution. Placing it in `api/engine/` alongside `ExpressionEngine` and
+`CaseHubRuntime` would mix marshalling infrastructure into the engine SPI package. A new
+`api/marshaller/` package is the architecturally correct home: it describes purpose, not
+convenience. `api/engine/` has CDI qualifier precedent in `common/qualifier/`, but those are
+engine-operation qualifiers (`@CrossTenant`, `@EngineSystem`) — `@YamlMapper` is not.
+
+`@YamlMapper` is a pure annotation with no deps beyond `jakarta.inject.Qualifier` (already in
+`api/pom.xml`). Moving it creates no new module dependency. The producer
+`CaseHubObjectMapperProducer` stays in `runtime`.
 
 **Blast radius:** 7 references, all import updates:
 - `CaseHubObjectMapperProducer` (qualifier on `@Produces` method, import update)
@@ -165,8 +189,9 @@ public void assertLanguageSupported(final String expressionLang) {
         if (engine.type().equals(expressionLang)) {
             if (!engine.supportsStringCreation()) {
                 throw new UnsupportedOperationException(
-                    "ExpressionEngine '" + expressionLang + "' is registered but does not support "
-                    + "creation from string expressions (Java-DSL-only type).");
+                    "expressionLang '" + expressionLang + "' is a Java-DSL-only type and cannot "
+                    + "be used in YAML definitions. Use expressionLang: jq or register a custom "
+                    + "ExpressionEngine that overrides supportsStringCreation().");
             }
             return;
         }
@@ -269,7 +294,9 @@ private static final ExpressionEngineRegistry JQ_ONLY = new ExpressionEngineRegi
         throw new UnsupportedOperationException("Evaluation requires CDI"); }
     @Override public boolean evaluate(ExpressionEvaluator e, JsonNode n) {
         throw new UnsupportedOperationException("Evaluation requires CDI"); }
-    @Override public void validate(ExpressionEvaluator e) { /* no-op: validate at registration */ }
+    @Override public void validate(ExpressionEvaluator e) {
+        /* no-op: loading-only registry; validation occurs through the CDI path
+           during case definition registration in DefaultCaseDefinitionRegistry */ }
 };
 
 /** Non-CDI convenience overload. JQ only; does not support custom expression languages. */
@@ -282,9 +309,9 @@ public static CaseDefinition load(InputStream stream) throws IOException {
 
 ### 7. `YamlCaseHub` — inject dependencies directly
 
-After the module moves above, both `ExpressionEngineRegistry` (now in `api/engine/`) and
-`@YamlMapper` (now in `api/engine/`) are reachable from `api`. `jakarta.inject-api` is
-already a declared dependency of `api/pom.xml`.
+After the module moves above, `ExpressionEngineRegistry` (now in `api/engine/`) and
+`@YamlMapper` (now in `api/marshaller/`) are both reachable from `api`. `jakarta.inject-api`
+is already a declared dependency of `api/pom.xml`.
 
 ```java
 public class YamlCaseHub extends CaseHub {
@@ -304,7 +331,13 @@ public class YamlCaseHub extends CaseHub {
         if (definition == null) {
             synchronized (this) {
                 if (definition == null) {
-                    try (InputStream is = loadStream()) {
+                    try (InputStream is =
+                            Thread.currentThread().getContextClassLoader()
+                                .getResourceAsStream(path)) {
+                        if (is == null) {
+                            throw new IllegalStateException(
+                                "Resource " + path + " not found on classpath");
+                        }
                         definition = CaseDefinitionYamlMapper.load(is, objectMapper,
                             expressionEngineRegistry);
                     } catch (IOException e) {
@@ -340,13 +373,53 @@ class also deletes the `setObjectMapper()` workaround.
 
 ## Five Mapper Call Sites
 
-| Location | Expression source |
-|----------|------------------|
-| `convertBinding` | `schemaBinding.getWhen()` |
-| `convertTrigger` | `schemaTrigger.getContextChange().getFilter()` |
-| Milestones loop | `sm.getCondition()` |
-| Milestones loop | `sm.getEntryCriteria()` |
-| Goals loop | `sg.getCondition()` |
+`expressionLang` and `registry` are local variables in `convertToApiModel`. Two of the five
+call sites are in private static helpers that must receive them as additional parameters.
+
+### Private method signature changes
+
+```java
+// Before:
+private static Binding convertBinding(
+    io.casehub.model.Binding schemaBinding, Map<String, Capability> capabilityMap)
+
+private static io.casehub.api.model.Trigger convertTrigger(
+    io.casehub.model.Trigger schemaTrigger)
+
+// After:
+private static Binding convertBinding(
+    io.casehub.model.Binding schemaBinding,
+    Map<String, Capability> capabilityMap,
+    ExpressionEngineRegistry registry,
+    String expressionLang)
+
+private static io.casehub.api.model.Trigger convertTrigger(
+    io.casehub.model.Trigger schemaTrigger,
+    ExpressionEngineRegistry registry,
+    String expressionLang)
+```
+
+### Call site updates in `convertToApiModel`
+
+```java
+// Before:
+Binding binding = convertBinding(sr, capabilityMap);
+io.casehub.api.model.Trigger trigger = convertTrigger(schemaBinding.getOn());
+
+// After:
+Binding binding = convertBinding(sr, capabilityMap, registry, expressionLang);
+io.casehub.api.model.Trigger trigger = convertTrigger(schemaBinding.getOn(), registry, expressionLang);
+```
+
+### All five sites
+
+| Location | Method | Expression source |
+|----------|--------|-----------------|
+| `convertBinding` | private helper | `schemaBinding.getWhen()` |
+| `convertTrigger` | private helper | `schemaTrigger.getContextChange().getFilter()` |
+| `convertToApiModel` | milestones loop | `sm.getCondition()` |
+| `convertToApiModel` | milestones loop | `sm.getEntryCriteria()` |
+| `convertToApiModel` | goals loop | `sg.getCondition()` |
 
 Each replaces `new JQExpressionEvaluator(expr)` with `registry.create(expr, expressionLang)`.
 
