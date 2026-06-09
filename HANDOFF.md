@@ -1,23 +1,35 @@
-# Handoff — 2026-06-08
+# Handoff — 2026-06-09
 
-**Head commit (engine):** eaa84398 — docs: promote design specs for registry lifecycle and hybrid execution
-**Head commit (workspace):** 649210b — feat: promote blog from issue-413-sx-scale-batch
-**Both repos on:** main
-**PR:** https://github.com/casehubio/engine/pull/451 (open — actor-state tests + design specs)
+**Head commit (engine):** 05f3fd56 — test(#434): integration test for classifier-throws fail-safe
+**Head commit (workspace):** 7265837 — chore: update covers to 289,434
+**Branch:** issue-289-expression-evaluator-factory (open — covers #289, #434; ready to close)
+**PR #451:** open — actor-state tests + design specs (awaiting review/merge)
 
 ## What Changed This Session
 
-**issue-274-registry-hydration-recovery closed.** Plans archived, EPIC-CLOSED.md stamped.
+**#289 (ExpressionEvaluatorFactory SPI) — closed.**
+- `ExpressionEngine` extended: `create(String expression)` default + `supportsStringCreation()` default
+- `JQExpressionEngine` overrides both: `create()` returns `new JQExpressionEvaluator(expression)`, `supportsStringCreation()` returns `true`
+- `ExpressionEngineRegistry` (moved from `common/spi/` → `api/engine/`): `create(expr, lang)` with type-assertion invariant; `assertLanguageSupported(lang)` without side effects
+- `DefaultExpressionEngineRegistry`: implements both, enforces `evaluator.type() == expressionLang`
+- `@YamlMapper` qualifier moved `runtime/internal/marshaller/` → `api/marshaller/` (new package)
+- `casehub-engine-api` added as explicit dep in `scheduler-quartz/pom.xml`
+- Schema: `expressionLang` field added to `CaseDefinition.yaml` (default `"jq"`)
+- `CaseDefinitionYamlMapper`: static `yamlMapper`/`setObjectMapper()` deleted; 3-arg `load(InputStream, ObjectMapper, ExpressionEngineRegistry)` added; all 5 `new JQExpressionEvaluator()` call sites delegate to registry; `JQ_ONLY` anonymous registry for non-CDI path
+- `YamlCaseHub`: injects `ExpressionEngineRegistry` and `@YamlMapper ObjectMapper` directly; no static workaround
+- `ObjectMapperInjector` deleted (TODO resolved)
+- Pre-existing fixes: `NoOpLedgerEntryRepository` (new tenancyId-scoped API), `QhorusMessageSignalBridgeTest` (new tenancyId param)
 
-**S/XS batch (issue-413-sx-scale-batch) closed.** PR #451 open.
-- #413 (XS): actor-state test gaps — partial-write contributor contract + deleted-channel race. Package-private test constructor added to QhorusActorStateContributor.
-- #404 (S): BlackboardRegistry lifecycle analysis. Key finding: at WAITING state, WorkItemLifecycleAdapter routes via callerRef (not completionIndex). Phase 1 stateless-on-rest eviction is safe today — zero persistence changes.
-- #200 (S): Hybrid execution design. FlowWorker gap already closed by casehub-engine-flow. Designed Worker(Plan.of(...)) + Plan.fromContext() for plan-based execution. Filed #448/#449.
-- #187 (S): Closed as superseded — WorkerRegistry never materialised, WorkerProvisioner SPI is the right abstraction.
+**#434 (classifier-throws fail-safe integration test) — closed.**
+- Added `throwOnClassify` flag to `CapturingClassifier`
+- New test `classifierThrows_failSafeGateRequired_caseRemainsRunning` in `ActionGateIntegrationTest`
+- Confirmed `.onFailure().recoverWithItem()` path in `handleWithPlannedAction` fires correctly
+
+**Design spec:** `specs/2026-06-09-expression-evaluator-factory-design.md` (in workspace, not promoted yet)
 
 ## Immediate Next Step
 
-Run `/work engine#289` — ExpressionEvaluatorFactory SPI. S · Low · first in the Drools chain.
+Close branch `issue-289-expression-evaluator-factory` (covers 289, 434 — both done). Then start `issue-80-typed-casefile-panels` for #80 + #81.
 
 ## Cross-Module
 
@@ -26,17 +38,15 @@ Run `/work engine#289` — ExpressionEvaluatorFactory SPI. S · Low · first in 
 ## What's Left
 
 - engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (restart resilience) · M · Med
-- engine#434: integration test for classifier-throws fail-safe · S · Low
 - PR #451: awaiting review/merge
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#289 | ExpressionEvaluatorFactory SPI | S | Low | First in Drools chain (#445) |
-| engine#80 + #81 | Typed CaseContext panels | M | High | Prerequisite for WorkingMemoryBridge |
+| engine#80 + #81 | Typed CaseContext panels | M | High | Brainstorm-first; prerequisite for WorkingMemoryBridge |
 | engine#446 | WorkingMemoryBridge | M | Med | Depends on #80/#81 |
-| engine#5 | DroolsExpressionEvaluator | M | Med | Depends on #289 |
+| engine#5 | DroolsExpressionEvaluator | M | Med | Depends on #289 (now done) |
 | engine#207 | RulesRouter + RULES_DECISION lineage | L | Med | Final Drools piece — depends on #446 |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#384 | PlanItem escalation state | M | Med | Unblocked |
@@ -45,7 +55,6 @@ Run `/work engine#289` — ExpressionEvaluatorFactory SPI. S · Low · first in 
 
 ## Key References
 
-- PR: https://github.com/casehubio/engine/pull/451
-- Epic: https://github.com/casehubio/engine/issues/445 (Full Drools Integration)
-- Registry lifecycle spec: `docs/specs/issue-413-sx-scale-batch/2026-06-08-blackboard-registry-lifecycle-design.md`
-- Hybrid execution spec: `docs/specs/issue-413-sx-scale-batch/2026-06-08-hybrid-execution-design.md`
+- Design spec: `wksp/specs/2026-06-09-expression-evaluator-factory-design.md`
+- PR #451: https://github.com/casehubio/engine/pull/451
+- Epic #445 (Full Drools Integration): https://github.com/casehubio/engine/issues/445
