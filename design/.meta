@@ -3,7 +3,7 @@ project-sha: eaa84398f1e618c62994b80fa9daf1dc8da1463b
 date: 2026-06-08
 issue: 289
 issue-repo: casehubio/engine
-covers: 289,434,80,81
+covers: 289,434
 flyway-next-v: none
 design-repo: workspace
 design-section-hashes: 7337f3d0:## Overview|845987f3:## Architecture Layers|69cf8fcc:## Execution Models|8b321ac4:## Worker Execution Lifecycle|690c33da:## Worker Function Types|552f1d75:## Failure and Retry Lifecycle|9010b62b:## EventLog Event Sequence|16ee7170:## Naming Conventions|ea452518:## Case Lifecycle|d756cb09:## Dependencies and SPI|ceaee750:## Public API|37f210b4:## Configuration|58c0e453:## Testing|6d42d36f:## Resilience (`casehub-resilience`)|b9143874:## Roadmap|dfd43c88:## Further Reading
