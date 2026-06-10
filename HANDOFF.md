@@ -1,48 +1,42 @@
-# Handoff — 2026-06-09
+# Handoff — 2026-06-10
 
-**Head commit (engine):** f1dd5edd — fix: update stubs for casehub-ledger/qhorus tenancyId API
-**Head commit (workspace):** d61c5e1 — feat: promote blog from issue-289-expression-evaluator-factory
+**Head commit (engine):** 5c3d38b4 — feat(panels): user-defined panels, listenPanel filtering, quality fixes — Closes #80, #81
+**Head commit (workspace):** c80d925 — archive(issue-80-typed-casefile-panels): move plans to attic
 **Both repos on:** main
-**PR #462:** open — https://github.com/casehubio/engine/pull/462
+**PR #467:** open — https://github.com/casehubio/engine/pull/467
 
 ## What Changed This Session
 
-**#289 (ExpressionEvaluatorFactory SPI) — closed.** Three spec critique rounds before implementation. Key design: extended `ExpressionEngine` with `create(String)` + `supportsStringCreation()` rather than a new factory interface. `ExpressionEngineRegistry` moved `common/spi/` → `api/engine/`; `@YamlMapper` moved to `api/marshaller/`. `CaseDefinitionYamlMapper` static workaround deleted; `YamlCaseHub` now injects directly. `ObjectMapperInjector` deleted (was firing at CDI priority 2500, after definitions loaded). `expressionLang` YAML field added.
+**#80 + #81 (CaseContext panels) — closed.** Full panel architecture delivered: `ReadablePanel`/`WritablePanel` interface hierarchy, `WritablePanelImpl` with `freeze()`, `CaseContextImpl` restructured to panel map. `asJsonNode()` now returns full panel document — all JQ expressions migrated to `.working.key` prefix (47 test files). Semantic panel (definition defaults + call-site augmentation), episodic panel intra-case (EventLog) + inter-case (`ReactiveCaseMemoryStore`), panel-aware recovery (`fromPanelDocument()`). User-defined panels + `listenPanel` binding subscription.
 
-**#434 (classifier-throws fail-safe integration test) — closed.** `throwOnClassify` flag added to `CapturingClassifier`; one new test in `ActionGateIntegrationTest`.
+**Key quality fixes from review:** `deepCopyMap` shallow list bug (episodic workers list aliasing), `EpisodicPanelUpdater` R-M-W race → `engineUpdate()` atomic pattern, `CaseContextChangedEvent` `contextSnapshot` changed to `CaseContext` (eliminates milestones/goals asymmetry).
 
-**Pre-existing API fix-ups:** casehub-ledger and casehub-qhorus 0.2-SNAPSHOT added tenancyId param to all repo/event methods. Fixed stubs and callers across runtime, blackboard, work-adapter, resilience, actor-state, ledger modules.
-
-**ADR-0009:** expressionLang granularity — per-definition vs per-expression. CNCF SW 1.0 alignment.
+**Squash:** 30 → 18 commits. Fork push done. PR open to upstream.
 
 ## Immediate Next Step
 
-Start `issue-80-typed-casefile-panels` for #80 + #81. **Brainstorm-first, no code.** M/High — these need platform coherence review before implementation.
-
-## Cross-Module
-
-*Unchanged — `git show HEAD~1:HANDOFF.md`*
+Merge PR #467 or wait for review. While waiting: start `issue-446-working-memory-bridge` for the Drools `WorkingMemoryBridge` that depends on panels.
 
 ## What's Left
 
-- engine#433: persist `pendingActionGate` in `CaseInstanceEntity` (restart resilience) · M · Med
-- PR #462: awaiting review/merge
-- Ledger QuarkusTest CDI startup issue (CurrentPrincipal unsatisfied) — pre-existing, tracked separately
+- PR #467: awaiting review/merge
+- ledger#134: pre-existing `LedgerEntry.tenancyId` field shadowing blocks `@QuarkusTest` suites — fix in ledger repo before next engine `@QuarkusTest` work
+- engine#466: review `casehub-platform` compile scope in `runtime/pom.xml`
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#80 + #81 | Typed CaseContext panels | M | High | Brainstorm-first; prerequisite for WorkingMemoryBridge |
-| engine#446 | WorkingMemoryBridge | M | Med | Depends on #80/#81 |
-| engine#5 | DroolsExpressionEvaluator | M | Med | Depends on #289 (now done) — but Drools integration design unclear, file GH issue before #5 |
+| engine#446 | WorkingMemoryBridge — typed Drools facts from named panels | M | Med | Depends on #80/#81 (now done) |
+| engine#5 | DroolsExpressionEvaluator | M | Med | Depends on #289 (done) |
 | engine#207 | RulesRouter + RULES_DECISION lineage | L | Med | Final Drools piece — depends on #446 |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#448 | Worker(Plan.of(...)) function type | M | Med | Plan-based execution Phase 1 |
+| engine#465 | Validate panel event model serves Drools re-fire triggers | XS | Low | Before starting #446 |
 
 ## Key References
 
-- PR #462: https://github.com/casehubio/engine/pull/462
-- Design spec: `wksp/specs/2026-06-09-expression-evaluator-factory-design.md`
-- ADR-0009: `docs/adr/0009-expression-lang-granularity.md`
-- Diary: `wksp/blog/2026-06-09-mdp01-the-factory-that-wasnt.md`
+- PR #467: https://github.com/casehubio/engine/pull/467
+- Spec: `proj/docs/specs/2026-06-09-casefile-panels-design.md` (rev 6)
+- Blog: `wksp/blog/2026-06-10-mdp01-the-flat-map-that-grew-three-dimensions.md`
+- Follow-up issues: engine#464 (panel naming), engine#465 (Drools events), engine#466 (pom scope), ledger#134 (field shadowing)
