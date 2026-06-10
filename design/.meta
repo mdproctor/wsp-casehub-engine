@@ -1,0 +1,9 @@
+branch: issue-460-multitenancy-fix-batch
+project-sha: 73480eb06bf88df278d8ce40c28749360e83ee1a
+date: 2026-06-10
+issue: 460
+issue-repo: casehubio/engine
+covers: 460,459,450,429
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes: 
