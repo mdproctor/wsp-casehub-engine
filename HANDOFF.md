@@ -1,42 +1,43 @@
 # Handoff — 2026-06-10
 
-**Head commit (engine):** 5c3d38b4 — feat(panels): user-defined panels, listenPanel filtering, quality fixes — Closes #80, #81
-**Head commit (workspace):** c80d925 — archive(issue-80-typed-casefile-panels): move plans to attic
+**Head commit (engine):** a1ae3523 — fix(runtime): exclude CaseLedgerEventCapture from runtime test CDI
+**Head commit (workspace):** 5baea5a — docs: add diary entry 2026-06-10-mdp02
 **Both repos on:** main
-**PR #467:** open — https://github.com/casehubio/engine/pull/467
+**PRs #462 and #467:** MERGED ✓
 
 ## What Changed This Session
 
-**#80 + #81 (CaseContext panels) — closed.** Full panel architecture delivered: `ReadablePanel`/`WritablePanel` interface hierarchy, `WritablePanelImpl` with `freeze()`, `CaseContextImpl` restructured to panel map. `asJsonNode()` now returns full panel document — all JQ expressions migrated to `.working.key` prefix (47 test files). Semantic panel (definition defaults + call-site augmentation), episodic panel intra-case (EventLog) + inter-case (`ReactiveCaseMemoryStore`), panel-aware recovery (`fromPanelDocument()`). User-defined panels + `listenPanel` binding subscription.
+**#289 (expression evaluator) and #80/#81 (panels) — both merged.** Session started from two open PRs with conflicts. Resolved conflicts, fixed CI failures, squashed both branches, merged in order (#462 first, then #467).
 
-**Key quality fixes from review:** `deepCopyMap` shallow list bug (episodic workers list aliasing), `EpisodicPanelUpdater` R-M-W race → `engineUpdate()` atomic pattern, `CaseContextChangedEvent` `contextSnapshot` changed to `CaseContext` (eliminates milestones/goals asymmetry).
-
-**Squash:** 30 → 18 commits. Fork push done. PR open to upstream.
+**CI failures uncovered along the way:**
+- `casehub-ledger` SNAPSHOT post-20260529 added `LedgerSequenceAllocator` requiring `ledger_subject_sequence` table. Engine runtime tests don't run ledger Flyway migrations → CDI observer fails silently → cascading test timeouts. Fix: exclude `CaseLedgerEventCapture` and `WorkerDecisionEventCapture` from CDI in `runtime/src/test/resources/application.properties`.
+- `LedgerEntry.tenancyId` field shadowing: both `CaseLedgerEntry` and `WorkerDecisionEntry` had duplicate fields rejected by the new `LedgerProcessor` validator. Removed from subclasses and V2000/V2001 SQL.
+- `DefaultOutcomeRecorder`/`BlockingToReactiveOutcomeRecorder` needed CDI exclusion in ledger test `application.properties` — inject `CurrentPrincipal` not on test classpath.
+- `applyTopLevelChanges` recovery bug: after panels, diff keys are panel names. `CaseContext.set("working", Map)` went through flat API and stored "working" as a nested key instead of replacing the panel. Fix: `ctxImpl.writablePanel(key).clear().setAll(afterMap)`.
+- Several JQ expressions missed in the panels migration: `candidateGroupsExpression`, `Milestone.entryCriteria`, `WorkerScheduleDedupTest.inputSchema`.
 
 ## Immediate Next Step
 
-Merge PR #467 or wait for review. While waiting: start `issue-446-working-memory-bridge` for the Drools `WorkingMemoryBridge` that depends on panels.
+Panels and expression evaluator are on main. Start `engine#465` (validate panel event model serves Drools re-fire triggers) then `engine#446` (WorkingMemoryBridge). Run `/work` to begin.
 
 ## What's Left
 
-- PR #467: awaiting review/merge
-- ledger#134: pre-existing `LedgerEntry.tenancyId` field shadowing blocks `@QuarkusTest` suites — fix in ledger repo before next engine `@QuarkusTest` work
-- engine#466: review `casehub-platform` compile scope in `runtime/pom.xml`
+- ledger#134: pre-existing `LedgerEntry.tenancyId` field shadowing — now FIXED in engine. No further engine action needed; ledger repo may need its own cleanup.
+- engine#466: review `casehub-platform` compile scope in `runtime/pom.xml` · XS · Low — still open, not urgent
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#446 | WorkingMemoryBridge — typed Drools facts from named panels | M | Med | Depends on #80/#81 (now done) |
+| engine#465 | Validate panel event model serves Drools re-fire triggers | XS | Low | Do before #446 |
+| engine#446 | WorkingMemoryBridge — typed Drools facts from named panels | M | Med | Unblocked |
 | engine#5 | DroolsExpressionEvaluator | M | Med | Depends on #289 (done) |
 | engine#207 | RulesRouter + RULES_DECISION lineage | L | Med | Final Drools piece — depends on #446 |
 | engine#383 | Oversight response loop | M | Med | Unblocked |
 | engine#448 | Worker(Plan.of(...)) function type | M | Med | Plan-based execution Phase 1 |
-| engine#465 | Validate panel event model serves Drools re-fire triggers | XS | Low | Before starting #446 |
 
 ## Key References
 
-- PR #467: https://github.com/casehubio/engine/pull/467
-- Spec: `proj/docs/specs/2026-06-09-casefile-panels-design.md` (rev 6)
-- Blog: `wksp/blog/2026-06-10-mdp01-the-flat-map-that-grew-three-dimensions.md`
-- Follow-up issues: engine#464 (panel naming), engine#465 (Drools events), engine#466 (pom scope), ledger#134 (field shadowing)
+- Blog: `wksp/blog/2026-06-10-mdp02-the-database-that-wasnt-there-yesterday.md`
+- Protocol: PP-20260610-18a084 (runtime test CDI exclusion) · PP-20260610-ecc2b2 (CASE_STARTED panel format)
+- Garden entries: GE-20260610-1c73c1 (SNAPSHOT cascade), GE-20260610-c003ba (Surefire ClassSelector null)
