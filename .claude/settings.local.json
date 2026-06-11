@@ -163,7 +163,18 @@
       "Bash(curl -s -H 'Authorization: Bearer __CMDSUB_OUTPUT__' https://maven.pkg.github.com/casehubio/engine/io/casehub/casehub-engine-common/0.2-SNAPSHOT/maven-metadata.xml)",
       "Bash(mvn *)",
       "Bash(curl -s \"https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-engine.md\")",
-      "Bash(GIT_EDITOR=true git -C /Users/mdproctor/claude/casehub/engine rebase --continue)"
+      "Bash(GIT_EDITOR=true git -C /Users/mdproctor/claude/casehub/engine rebase --continue)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode -U -q -f /Users/mdproctor/claude/casehub/engine/ledger/pom.xml dependency:resolve)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode install -DskipTests -q -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode test -f /Users/mdproctor/claude/casehub/engine/ledger/pom.xml)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode test-compile -f /Users/mdproctor/claude/casehub/engine/work-adapter/pom.xml)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode -U -q dependency:resolve -f /Users/mdproctor/claude/casehub/engine/work-adapter/pom.xml)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode install -DskipTests -q -f /Users/mdproctor/claude/casehub/engine/pom.xml -pl '!casehub-engine-work-adapter')",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode test -f /Users/mdproctor/claude/casehub/engine/runtime/pom.xml -Dtest=\"ContextDiffEndToEndTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode install -DskipTests -q -f /Users/mdproctor/claude/casehub/engine/pom.xml -pl \"common,api,codegen,engine-model,persistence-memory,runtime\" -am)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode test -f /Users/mdproctor/claude/casehub/engine/pom.xml -pl runtime -Dtest=\"ContextDiffEndToEndTest\" -am)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn --batch-mode test -f /Users/mdproctor/claude/casehub/engine/pom.xml -pl runtime -Dtest=\"ContextDiffEndToEndTest\" -am -Dsurefire.failIfNoSpecifiedTests=false)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/casehubio/parent/main/docs/PLATFORM.md\")"
     ]
   }
 }
