@@ -1,0 +1,9 @@
+branch: issue-473-fix-ci-timeouts
+project-sha: f3abca8a3ed9d5d214a6cef9a73abe8eac0bc894
+date: 2026-06-11
+issue: 473
+issue-repo: casehubio/engine
+covers: 473
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes: 
