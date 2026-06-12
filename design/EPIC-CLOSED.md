@@ -1,4 +1,4 @@
-# Branch Closed — issue-274-registry-hydration-recovery
-**Date:** 2026-05-31
-**Issue:** #274 (engine#398 co-closed)
-**Scheduled for deletion:** 2026-06-14
+# Branch Closed — issue-465-xs-s-batch
+**Date:** 2026-06-13
+**Issue:** #465
+**Covers:** 465,466,464,444,441,437,421,409,479,475,436,432,430,428,424
