@@ -1,4 +1,4 @@
-# Branch Closed — issue-274-registry-hydration-recovery
-**Date:** 2026-05-31
-**Issue:** #274 (engine#398 co-closed)
-**Scheduled for deletion:** 2026-06-14
+# Branch Closed — issue-480-cross-test-quartz-contamination
+**Date:** 2026-06-12
+**Issue:** #480
+**Covers:** 480
