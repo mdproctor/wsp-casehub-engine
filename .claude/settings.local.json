@@ -164,7 +164,16 @@
       "Bash(mvn *)",
       "Bash(curl -s \"https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-engine.md\")",
       "Bash(GIT_EDITOR=true git -C /Users/mdproctor/claude/casehub/engine rebase --continue)",
-      "Bash(curl -s -H \"Authorization: Bearer $\\(gh auth token\\)\" \"https://maven.pkg.github.com/casehubio/work/io/casehub/casehub-work-api/0.2-SNAPSHOT/maven-metadata.xml\")"
+      "Bash(curl -s -H \"Authorization: Bearer $\\(gh auth token\\)\" \"https://maven.pkg.github.com/casehubio/work/io/casehub/casehub-work-api/0.2-SNAPSHOT/maven-metadata.xml\")",
+      "mcp__intellij-index__ide_find_symbol",
+      "mcp__intellij-index__ide_read_file",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl runtime -Dtest=SchedulerServiceTest -Ppersistence-memory)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl api -Dtest=CaseDefinitionYamlMapperTest -Ppersistence-memory)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl runtime -Dtest=\"DefaultWorkerSpiImplementationsTest\" -Ppersistence-memory)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl ledger -Ppersistence-memory)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl ledger -Dtest=\"CaseLedgerEventCaptureTest#happyPath_singleEvent_writesLedgerEntry\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl ledger)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl runtime -Dtest=ChainedReactiveActionRiskClassifierTest -Ppersistence-memory)"
     ]
   }
 }
