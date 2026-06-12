@@ -1,44 +1,65 @@
-# Handoff — 2026-06-11
+# Handoff — 2026-06-12
 
-**Head commit (engine):** e4413172 — feat(blackboard): add tenancyId to PlanItemCompletedEvent and SubCaseExecutionCompleted
-**Head commit (workspace):** fc96142 — feat: promote blog from issue-460-multitenancy-fix-batch
-**Both repos on:** main
-**PR #470:** OPEN — multi-tenancy fix batch → casehubio/engine
+**Paused branch:** issue-473-fix-ci-timeouts (stack depth 1)
+**Head commit (engine main):** f3abca8a — style: spotless formatting (Refs #473)
+**Head commit (engine branch):** 8562036d — fix(runtime): flip default Maven profile to persistence-memory for CI
 
 ## What Changed This Session
 
-**#460, #459, #450, #429 — all closed.** Multi-tenancy fix batch on branch `issue-460-multitenancy-fix-batch` (now closed).
+### engine#471 — domainContentBytes() overrides (MERGED via PR #474)
 
-- **#460** — already fixed in prior session (dc37cd50); closed without code change
-- **#459** — `WorkItemGroupLifecycleEvent.of()` SNAPSHOT cascade: three test call sites in `WorkItemLifecycleAdapterTest` updated with new `tenancyId` 9th arg
-- **#450** — `CaseLedgerEntryRepository.caseEm` missing `@LedgerPersistenceUnit` qualifier; silent wrong-PU in multi-datasource
-- **#429** — `tenancyId` added to `PlanItemCompletedEvent` and `SubCaseExecutionCompleted`; eliminates `CrossTenantCaseInstanceRepository` workaround in devtown#43
+Added `domainContentBytes()` to `CaseLedgerEntry` (4 fields) and `WorkerDecisionEntry` (5 fields) for Merkle content integrity. Required by ledger#128's build-time guard. Three CI iterations:
+1. Compilation failure — ledger SNAPSHOT on GitHub Packages didn't have `domainContentBytes()` yet (ledger#128 not merged). Waited for ledger#128 to land.
+2. `WorkerDecisionEntry` missing override — same guard, second entity. Fixed.
+3. `HumanTaskScheduleHandlerTest` — `WorkItemTemplate.tenancyId` null (NOT NULL constraint) + `WorkItem.tenancyId` null in template mode. Fixed test helper + production handler.
 
-**New protocols:** PP-20260611-d4e5cf (CDI async events must carry tenancyId) · PP-20260611-cc63b4 (LedgerRepository subclass EM qualifier)
+### engine#473 — fix CI timeouts (PAUSED, 2 unpushed commits on branch)
+
+Two commits on `issue-473-fix-ci-timeouts`:
+
+**Commit 1 — ledger guard cherry-pick:** `domainContentBytes()` overrides (same as #471, needed on this branch since it predates the #471 merge).
+
+**Commit 2 — profile flip:**
+- `persistence-memory` is now `activeByDefault` in `runtime/pom.xml`; `persistence-hibernate` is opt-in (`-P persistence-hibernate,!persistence-memory`)
+- `quarkus-jdbc-h2` promoted to main test deps
+- `quarkus.datasource.db-kind=postgresql` added explicitly to `application.properties` (was in `persistence-hibernate` module's main resources — polluted consumer classpath)
+- `application-test.properties` deleted; `QuarkusConfigManagerTest` fixtures moved to base `application.properties` (the `memory` profile doesn't load `application-test.properties` because the active profile is `memory`, not `test`)
+
+### engine#480 — cross-test Quartz contamination (FILED, blocks #473 push)
+
+Discovered during #473 investigation. When the full runtime suite runs under `persistence-memory`, 5 tests fail with `ConditionTimeoutException` — cases start but workers never execute. Root cause: `CaseFaultedStateTest` starts 6 cases with `AlwaysFailingCaseHubBean` (retries, failures, event bus saturation). Stale Quartz jobs and event bus messages bleed into subsequent test classes. Hidden in `persistence-hibernate` by Testcontainers startup latency (~8-12s drain window).
+
+**Production-correct fix direction:** terminal cases (FAULTED, COMPLETED, CANCELLED) should cancel all their Quartz jobs in `CaseStatusChangedHandler`. This fixes the contamination as a side-effect of correct behavior.
 
 ## Immediate Next Step
 
-Review PR #470 or start `engine#465` (validate panel event model serves Drools re-fire triggers). Run `/work` to begin.
+**Start engine#480.** The #473 branch is committed but NOT pushed — it needs #480 resolved first so the full local suite passes before pushing. Follow fix-ci discipline: reproduce isolated, root-cause, fix, verify full suite, then push.
+
+Investigation done so far:
+- `SimpleCaseHubBeanTest` alone: 1.7s, passes
+- After `CaseFaultedStateTest`: 10.2s timeout, no "Agent selected" for `document-processor` in logs
+- The context-change event for `.working.status == "processing"` never fires after CaseFaultedStateTest runs
+- Fix direction: cancel Quartz jobs on terminal case state, or clear scheduler between test classes
+
+## Branch State
+
+| Branch | Repo | Status |
+|--------|------|--------|
+| `issue-473-fix-ci-timeouts` | engine | 2 unpushed commits, blocked on #480 — PAUSED |
+| `issue-473-fix-ci-timeouts` | workspace | scaffold + WIP commit |
+| `issue-471-domain-content-bytes` | engine | MERGED (PR #474) |
 
 ## What's Left
 
-- **PR #470** — open on casehubio/engine, awaiting merge · XS · Low
-- **engine#466** — review `casehub-platform` compile scope in `runtime/pom.xml` · XS · Low · not urgent
-- **devtown#43** — can now use `event.tenancyId()` directly; devtown team should remove `CrossTenantCaseInstanceRepository` workaround
-
-## What's Next
-
-| # | Description | Scale | Complexity | Notes |
-|---|-------------|-------|------------|-------|
-| engine#465 | Validate panel event model serves Drools re-fire triggers | XS | Low | Do before #446 |
-| engine#446 | WorkingMemoryBridge — typed Drools facts from named panels | M | Med | Unblocked |
-| engine#5 | DroolsExpressionEvaluator | M | Med | Depends on #289 (done) |
-| engine#207 | RulesRouter + RULES_DECISION lineage | L | Med | Final Drools piece — depends on #446 |
-| engine#383 | Oversight response loop | M | Med | Unblocked |
-| engine#448 | Worker(Plan.of(...)) function type | M | Med | Plan-based execution Phase 1 |
+| # | Title | Scale | Complexity | Status |
+|---|-------|-------|------------|--------|
+| 480 | Cross-test Quartz contamination | S | Med | Filed, not started — blocks #473 push |
+| 473 | Fix CI timeouts | S | Low | PAUSED — committed, not pushed, blocked by #480 |
+| 465 | Validate panel event model for Drools re-fire | XS | Low | Not started |
+| 446 | WorkingMemoryBridge — typed Drools facts | M | Med | Unblocked |
 
 ## Key References
 
-- Blog: `wksp/blog/2026-06-11-mdp01-the-qualifier-nobody-inherits.md`
-- Protocols: PP-20260611-d4e5cf (CDI async event tenancyId) · PP-20260611-cc63b4 (LedgerRepository EM qualifier)
-- Garden: GE-20260611-a42c0b (unqualified EntityManager silently wrong PU in multi-datasource)
+- PR #474: merged (engine#471)
+- Issue #480: cross-test Quartz contamination
+- Spec: `specs/issue-473-fix-ci-timeouts/2026-06-11-ci-timeout-fix-design.md` (reviewed, findings addressed in implementation)
