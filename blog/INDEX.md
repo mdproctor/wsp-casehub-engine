@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-06-12-mdp01-the-registry-that-ate-the-scheduler.md](2026-06-12-mdp01-the-registry-that-ate-the-scheduler.md) | 2026-06-12 | CaseDefinition key collision masquerading as Quartz contamination — CDI bean ordering non-determinism, JQ expression mismatch |
 | [2026-06-11-mdp01-the-qualifier-nobody-inherits.md](2026-06-11-mdp01-the-qualifier-nobody-inherits.md) | 2026-06-11 | EntityManager @LedgerPersistenceUnit qualifier not inherited by subclass; tenancyId must travel on CDI events crossing async boundaries |
 | [2026-06-08-mdp02-the-map-before-you-dig.md](2026-06-08-mdp02-the-map-before-you-dig.md) | 2026-06-08 | callerRef routing bypasses completionIndex at WAITING state; stateless-on-rest Phase 1 needs zero persistence changes; Worker(Plan.of(...)) design |
 | [2026-06-08-mdp01-the-data-store-drools-needs.md](2026-06-08-mdp01-the-data-store-drools-needs.md) | 2026-06-08 | Typed blackboard data store gap surfaces as Drools prerequisite; full integration dependency chain; epic #445 |
