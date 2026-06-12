@@ -1,0 +1,5 @@
+- branch: issue-473-fix-ci-timeouts
+  issue: 473
+  paused: 2026-06-12T09:28:18Z
+  wip_project: false
+  wip_workspace: true
