@@ -1,16 +1,14 @@
 # Handoff — 2026-06-14
 
-**Head commit (engine main):** 7e28f676 — feat: casehub-engine-inbound — MessageReceivedEvent → WorkItem bridge (engine#468 + engine#469)
-**PR:** #492 open (casehub-engine-inbound bridge module — awaiting merge)
-**CI:** not yet run on PR
+**Head commit (engine main):** 9dcb8d24 — Merge pull request #492 from mdproctor/main
+**PR:** #492 merged ✅
+**CI:** green
 
 ## What Changed This Session
 
-Built `casehub-engine-inbound` — a new optional module bridging qhorus `MessageReceivedEvent` to casehub-work WorkItems. `InboundWorkItemBridge implements MessageObserver`; consumer apps provide `InboundWorkItemPolicy` to decide per-message whether and how to create a WorkItem. Bridge is inert without a policy. 10 tests green. Spec through two rounds of review before implementation. Closed #468 and #469.
+Fixed CI on PR #492 — new `@Default CurrentPrincipal` bean (`QhorusInboundCurrentPrincipal`) appeared in qhorus SNAPSHOT 2026-06-14, creating CDI ambiguity with `TenantScopedPrincipal` (casehub-work) in `actor-state` test classpath. Fix: added `QhorusInboundCurrentPrincipal` to `quarkus.arc.exclude-types` in `actor-state/src/test/resources/application.properties`. PR #492 merged; upstream main synced.
 
-Two bugs found in spec before implementation:
-- `ifPresent()` inside try/catch absorbs lambda exceptions (infrastructure failures logged as policy failures) — required separating the policy call
-- Excluding `JpaWorkloadProvider` without `StubWorkloadProvider` fails CDI boot — `WorkItemAssignmentService` direct-injects `WorkloadProvider` (not `Instance<>`)
+Also updated casehub-work HANDOFF — removed engine#468 and engine#469 (done).
 
 ## What's Left
 
@@ -21,9 +19,8 @@ Two bugs found in spec before implementation:
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #492 | Merge PR — casehub-engine-inbound bridge | XS | Low | Awaiting CI + review |
-| #486 | Thread tenancyId through WorkerRetriesExhaustedEvent and ActionGateWorkerFaultedEvent | S | Low | Filed; unblocked |
 | #491 | Fix @QuarkusTest investigations stuck in RUNNING | S | High | P0 — all AML tests affected; three suspects |
+| #486 | Thread tenancyId through WorkerRetriesExhaustedEvent and ActionGateWorkerFaultedEvent | S | Low | Filed; unblocked |
 | #476 | ImplementationRoutingStrategy SPI | M | Med | Blocks ledger#136 |
 
 ## Key References
@@ -31,4 +28,4 @@ Two bugs found in spec before implementation:
 - Blog: `blog/2026-06-14-mdp01-the-bridge-and-the-try-catch-that-lied.md`
 - Spec: `docs/specs/2026-06-13-inbound-workitem-bridge-design.md` (in project repo)
 - Garden: GE-20260427-5d7c67 revised (WorkloadProvider injection chain + test inner class activation)
-- Garden: GE-20260614-21317a (new — ifPresent inside try/catch silently reclassifies exceptions)
+- Garden: GE-20260614-21317a (ifPresent inside try/catch silently reclassifies exceptions)
