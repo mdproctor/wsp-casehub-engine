@@ -1,0 +1,9 @@
+branch: issue-491-quarkustest-stuck-running
+project-sha: 9dcb8d240c0aff9ff0f0948a836cc98dbcd54350
+date: 2026-06-14
+issue: 491
+issue-repo: casehubio/engine
+covers: 491,231,477,472
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 7337f3d0:## Overview|845987f3:## Architecture Layers|69cf8fcc:## Execution Models|8b321ac4:## Worker Execution Lifecycle|690c33da:## Worker Function Types|552f1d75:## Failure and Retry Lifecycle|9010b62b:## EventLog Event Sequence|16ee7170:## Naming Conventions|ea452518:## Case Lifecycle|d756cb09:## Dependencies and SPI|ceaee750:## Public API|37f210b4:## Configuration|58c0e453:## Testing|6d42d36f:## Resilience (casehub-resilience)|b9143874:## Roadmap|dfd43c88:## Further Reading
