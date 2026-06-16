@@ -185,7 +185,10 @@
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl common -Dtest=\"RetryPoliciesTest\")",
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl api,common,flow,blackboard)",
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl flow -Dtest=\"CasehubDispatchTest\")",
-      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl flow -Dtest=\"CasehubDispatchTest,FlowExecutionRegistryTest,FlowWorkerExecutorTest\")"
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl flow -Dtest=\"CasehubDispatchTest,FlowExecutionRegistryTest,FlowWorkerExecutorTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl scheduler-quartz -Dtest=QuartzRetryServiceTest)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl common -Dtest=WorkerExecutionConfigTest)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api,common,flow,blackboard,scheduler-quartz)"
     ]
   }
 }
