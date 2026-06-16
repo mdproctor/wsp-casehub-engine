@@ -1,30 +1,24 @@
 # Handoff — 2026-06-16
 
-**Branch:** `issue-493-signal-stage-routing`
-**PR:** #499 open (upstream)
+**Branch:** `issue-463-function-worker-design`
+**Spec:** `docs/specs/2026-06-16-worker-execution-redesign.md` (rev 4, approved)
 
-## What Changed This Session
+## What This Session Did
 
-Implemented four engine changes from the signal-stage-routing design spec: signal API returns `CompletionStage<Void>` (#493), `ImplementationRoutingStrategy` SPI for capability binding selection (#476), repeatable Stage lifecycle (#482), and Stage-PlanItem auto-registration (#497). CDI lifecycle events standardised to fire-and-forget across all handlers. 25 files changed, 1014 insertions. All tests green (263 blackboard + 20 signal + 7 routing/selection).
-
-Filed engine#497 (auto-registration precursor) and engine#498 (protocol update for CDI fire-and-forget pattern).
+Implemented engine#493 (signal API), #476 (ImplementationRoutingStrategy), #482 (repeatable stage), #497 (auto-registration) — PR#499 merged. Closed engine#498 (CDI protocol update). Designed engine#463 (worker execution redesign) through 4 review rounds to approved spec.
 
 ## What's Left
 
-- PR #499 — awaiting review/merge on upstream · M · Med
-- engine#498 — update engine-cdi-event-await-chain protocol · XS · Low
-- parent#243 — add casehub-engine-inbound to engine deep-dive module table · S · Low
-- parent#244 — sync PLATFORM.md cross-repo dependency rows · S · Low
+- engine#463 — implementation of approved spec (next session)
+- parent#243 — add casehub-engine-inbound to engine deep-dive module table
+- parent#244 — sync PLATFORM.md cross-repo dependency rows
 
 ## What's Next
 
-| # | Description | Scale | Complexity | Notes |
-|---|-------------|-------|------------|-------|
-| #486 | Thread tenancyId through WorkerRetriesExhaustedEvent and ActionGateWorkerFaultedEvent | S | Low | Filed; unblocked |
-| — | TrustWeightedImplementationStrategy in casehub-engine-ledger | M | Med | Symmetric with TrustWeightedAgentStrategy |
-| — | QuarkMind migration — delete StrategyTrustRouter (~300 lines) | S | Low | Depends on #476 merge |
+Implementation of #463 spec. First step: add `quarkus-virtual-threads` to `runtime/pom.xml`. Then sealed types, executor, retry utility, Quartz adapter, tests. Protocol PP-20260531 update after implementation.
 
 ## Key References
 
-- Design spec: `docs/specs/2026-06-15-signal-stage-routing-design.md`
-- Blog: `blog/2026-06-15-mdp01-the-wrong-hypothesis.md` (previous session)
+- Spec: `docs/specs/2026-06-16-worker-execution-redesign.md`
+- PR#499 merged (signal API, routing SPI, repeatable stage)
+- Protocol updated: `engine-cdi-event-await-chain` (fire-and-forget for audit CDI events)
