@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-06-16-mdp01-the-type-dispatch-that-didnt-belong.md](2026-06-16-mdp01-the-type-dispatch-that-didnt-belong.md) | 2026-06-16 | WorkerExecutor SPI, fire-and-forget Quartz adapter, QuartzRetryService extraction |
 | [2026-06-15-mdp01-the-wrong-hypothesis.md](2026-06-15-mdp01-the-wrong-hypothesis.md) | 2026-06-15 | The Wrong Hypothesis and the JSON Document That Ate Every Binding |
 | [2026-06-13-mdp02-the-inheritance-chain-nobody-missed.md](2026-06-13-mdp02-the-inheritance-chain-nobody-missed.md) | 2026-06-13 | Composition refactor breaks downstream CDI resolution via invisible @DefaultBean inheritance coupling |
 | [2026-06-13-mdp01-the-batch-that-paid-for-itself.md](2026-06-13-mdp01-the-batch-that-paid-for-itself.md) | 2026-06-13 | 15 XS/S issues on one branch; CDI inheritance trap in composition refactors; reactive classifier synchronous-throw fail-safe gap |
