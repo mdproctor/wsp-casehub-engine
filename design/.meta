@@ -1,0 +1,9 @@
+branch: issue-463-function-worker-design
+project-sha: d8e809a6bc06e8339e8c6a3cfae0240d0b93b022
+date: 2026-06-16
+issue: 463
+issue-repo: casehubio/engine
+covers: 463
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 7337f3d0:##
