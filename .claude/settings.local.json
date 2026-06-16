@@ -164,7 +164,28 @@
       "Bash(mvn *)",
       "Bash(curl -s \"https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-engine.md\")",
       "Bash(GIT_EDITOR=true git -C /Users/mdproctor/claude/casehub/engine rebase --continue)",
-      "Bash(curl -s -H \"Authorization: Bearer $\\(gh auth token\\)\" \"https://maven.pkg.github.com/casehubio/work/io/casehub/casehub-work-api/0.2-SNAPSHOT/maven-metadata.xml\")"
+      "Bash(curl -s -H \"Authorization: Bearer $\\(gh auth token\\)\" \"https://maven.pkg.github.com/casehubio/work/io/casehub/casehub-work-api/0.2-SNAPSHOT/maven-metadata.xml\")",
+      "mcp__intellij-index__ide_read_file",
+      "mcp__intellij-index__ide_find_symbol",
+      "mcp__intellij-index__ide_file_structure",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl casehub-blackboard -Dtest=\"BindingGatingTest#staged_binding_auto_registers_planItem_with_owning_stage+free_floating_binding_does_not_register_with_any_stage+auto_registration_skipped_when_planItem_already_exists\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl blackboard -Dtest=\"BindingGatingTest#staged_binding_auto_registers_planItem_with_owning_stage+free_floating_binding_does_not_register_with_any_stage+auto_registration_skipped_when_planItem_already_exists\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl blackboard -Dtest=\"BindingGatingTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl blackboard)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl runtime -Dtest=\"SignalGoalCompletionTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl runtime -Dtest=\"SignalGoalCompletionTest+SignalDedupExtendedTest+SignalTest+SignalPersistenceAndDedupTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl runtime -Dtest=\"SignalGoalCompletionTest,SignalDedupExtendedTest,SignalTest,SignalPersistenceAndDedupTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl api -Dtest=\"ImplementationSelectionTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl blackboard -Dtest=\"ImplementationRoutingTest,BindingGatingTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl blackboard -Dtest=\"ImplementationRoutingTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl blackboard -Dtest=\"StageTest,StageAutocompleteEvaluatorTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl api,blackboard,runtime -Dtest=\"ImplementationSelectionTest,BindingGatingTest,ImplementationRoutingTest,StageTest,StageAutocompleteEvaluatorTest,NoOpImplementationRoutingStrategyTest,SignalGoalCompletionTest,SignalDedupExtendedTest,SignalTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl blackboard -Dtest=\"StageAutocompleteEvaluatorTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl api -Dtest=\"WorkerFunctionTest,AgentWorkerTest,CaseDefinitionYamlMapperTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl common -Dtest=\"RetryPoliciesTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl api,common,flow,blackboard)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl flow -Dtest=\"CasehubDispatchTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl flow -Dtest=\"CasehubDispatchTest,FlowExecutionRegistryTest,FlowWorkerExecutorTest\")"
     ]
   }
 }
