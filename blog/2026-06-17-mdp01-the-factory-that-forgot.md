@@ -1,0 +1,11 @@
+# The Factory That Forgot
+
+The failure cascade landed today — four issues, one branch, seven functional commits. WorkerOutcome sealed type, OutcomePolicy on bindings, structured failure state at `_outcomes.<bindingName>`, agent exclusion before routing, and failure goals producing COMPLETED instead of FAULTED. The design went through three rounds of review before implementation started.
+
+The architecture is straightforward: when a worker returns `WorkerResult.declined()`, the engine writes failure state to a reserved namespace in the working panel, marks the PlanItem FAULTED (existing valid transition), and publishes CONTEXT_CHANGED. The binding re-fires because its trigger condition checks worker output keys, not `_outcomes.*`. The routing strategy filters excluded agents. A new PlanItem is created because the old one is terminal. No state machine changes needed — the existing lifecycle handles it.
+
+The bug that ate the afternoon was in `DefaultWorkerExecutor.applyOutputSchema()`. It evaluates JQ output schema expressions and reconstructs the result: `return WorkerResult.of(evaluated, result.plannedAction())`. That factory defaults `outcome` to `Success`. If the worker returned `Declined`, the outcome is silently erased before the completion handler ever sees it.
+
+The trap is structural: adding a field with a default to a record doesn't break any existing factory call sites at compile time. Every `WorkerResult.of(...)` call becomes an outcome-erasing call. The fix is one line — use the canonical constructor instead of the convenience factory — but diagnosing it took thirty minutes of tracing through Quartz jobs and event bus handlers with no error, no warning, and no log output. The worker function returned `Declined`. The handler received `Success`. Nothing in between logged the transformation.
+
+The session also surfaced a process gap. A manual `git merge` to main — bypassing work-end — hit a stale local main and created a divergence with origin. The fix is a pre-push hook that fetches origin and blocks pushes when local main is behind. Installed in `.githooks/pre-push`, committed to the repo. The work-end HARD-GATE now explicitly states that main-branch mutations go through work-end only.
