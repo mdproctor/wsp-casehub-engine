@@ -1,26 +1,29 @@
 # Handoff — 2026-06-17
 
-**Branch:** `issue-463-function-worker-design` — CLOSED, merged to main, pushed to upstream
+**Branch:** `issue-502-failure-cascade-devtown` — CLOSED, PR#529 open to upstream
 
 ## What's Done
 
-- engine#463 closed — sealed WorkerFunction, WorkerExecutor SPI, DefaultWorkerExecutor, QuartzRetryService, fire-and-forget Quartz adapter, WORKFLOW_EXECUTION_FAILED deleted
-- PR#499 merged (signal API #493, implementation routing #476, repeatable stage #482, auto-registration #497)
-- engine#498 closed (CDI protocol updated in garden)
-- parent#261 filed (casehub-engine.md deep-dive stale WorkflowExecutionFailed reference)
-- GE-20260616-0175da submitted (ReactiveUtils.runOnSafeVertxContext mock Vertx gotcha)
-- AgentDescriptor briefing parameter fix (casehub-eidos-api dependency update)
-- 1,837 tests green across all modules
+- engine#502, #503, #504, #506 closed — failure cascade: WorkerOutcome sealed type, OutcomePolicy, structured failure state at `_outcomes.<bindingName>`, agent exclusion filter, WorkerOutcomeResolvedHandler, failure goals → COMPLETED not FAULTED
+- engine#123 TrustScoreSource migration merged to main (TrustScoreCache retired)
+- engine#524 closed (SemanticAgentRoutingStrategy migrated to TrustScoreSource)
+- GE-20260617-127601 submitted (WorkerResult factory erases outcome field)
+- Pre-push hook updated: blocks pushes to main when local behind origin
+- work-end HARD-GATE: main-branch mutations go through work-end only
+- cc-praxis updated: pre-push hook + work-end HARD-GATE committed and synced
+- PR#529 open to upstream — covers both failure cascade and TrustScoreSource migration
 
 ## Immediate Next Step
 
-DevTown needs engine#502, #503, #504, #506. Start with #502 (agent exclusion — S/Low, no blockers).
+Merge PR#529 when CI passes. Then pick up DevTown work — devtown#14 is unblocked by the four engine issues.
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #502 | Agent exclusion — read excludedAgents from case context in routing | S | Low | For DevTown |
-| #503 | Semantic DECLINE/FAIL — write structured failure state to blackboard | L | High | For DevTown |
-| #504 | OutcomePolicy — retry/re-route for speech-act outcomes | L | High | Blocked by #503 |
-| #506 | Failure goals → COMPLETED not FAULTED | S | Med | For DevTown |
+| #513 | Wire EXPIRED signal to OutcomePolicy | M | Med | Needs SLA timeout or qhorus#281 |
+| #514 | Record success outcome in `_outcomes` after reroute | XS | Low | Observability improvement |
+| #515 | Qhorus commitment bridge → WorkerOutcome | M | Med | Connects Qhorus DECLINE/FAILED to failure cascade |
+| #517 | Clear `_outcomes` on repeatable stage reset | S | Med | Cross-module coordination |
+| #520 | PlanItem stuck RUNNING when all candidates excluded | S | Med | Pre-existing gap made more visible |
+| #522 | FailureCascadeIntegrationTest debugging | S | Low | Reroute test needs blackboard on test classpath |
