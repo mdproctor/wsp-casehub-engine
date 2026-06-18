@@ -1,4 +1,4 @@
-# Branch Closed — issue-274-registry-hydration-recovery
-**Date:** 2026-05-31
-**Issue:** #274 (engine#398 co-closed)
-**Scheduled for deletion:** 2026-06-14
+# Branch Closed — issue-530-provisioning-binding-enhancements
+**Date:** 2026-06-18
+**Issue:** #530
+**Covers:** 530,531,512,509,511,508,515
