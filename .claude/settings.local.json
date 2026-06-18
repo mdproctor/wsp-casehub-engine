@@ -188,7 +188,17 @@
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl flow -Dtest=\"CasehubDispatchTest,FlowExecutionRegistryTest,FlowWorkerExecutorTest\")",
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl scheduler-quartz -Dtest=QuartzRetryServiceTest)",
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl common -Dtest=WorkerExecutionConfigTest)",
-      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api,common,flow,blackboard,scheduler-quartz)"
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api,common,flow,blackboard,scheduler-quartz)",
+      "Bash(GIT_SEQUENCE_EDITOR=\"cp /tmp/squash-plan.txt\" git *)",
+      "mcp__intellij-index__ide_project_status",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api -q)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl runtime -Dtest=\"DefaultWorkerSpiImplementationsTest,CaseContextChangedEventHandlerRoutingTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api -Dtest=\"HumanTaskTargetTest,CaseDefinitionYamlMapperTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api -Dtest=\"BindingTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api -Dtest=\"ConflictResolverTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl runtime -Dtest=\"QhorusMessageSignalBridgeTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api,common,runtime)"
     ]
   }
 }
