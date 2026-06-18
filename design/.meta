@@ -1,0 +1,9 @@
+branch: issue-533-codec-and-expired-wiring
+project-sha: f9981d5a732998bea917150209585f5e345b128e
+date: 2026-06-18
+issue: 533
+issue-repo: casehubio/engine
+covers: 533,513
+flyway-next-v: unknown
+design-repo: project
+design-section-hashes: 
