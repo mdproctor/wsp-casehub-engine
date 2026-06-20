@@ -1,33 +1,34 @@
 # Handoff — 2026-06-20
 
-**Branch:** `issue-539-lifecycle-alignment-faulted-obsolete` — CLOSED
-
 ## What's Done
 
-- engine#539 closed — lifecycle alignment: OBSOLETE added to PlanItemStatus with isTerminal()/isActive() as single source of truth; PlanItemFaultedEvent workerId→bindingName; PlanItemObsoleteEvent added; 7 hardcoded checks migrated; work-adapter bridge updated for FAULTED/OBSOLETE
-- engine#536 closed — BlackboardEventCodecRegistrar idempotency (already in codebase)
-- engine#537 closed — CaseContextChangedEventHandler blocking=true; resume test rewritten (signal-while-suspended race fixed)
-- engine#538 closed — OversightGateService SPI + move ChainedReactive to api/classification
-- engine#519 closed — bindingName threaded through WorkerRetriesExhaustedEvent
-- engine#518 closed — auto-exhaust PlanItem when tryProvision fails
+**Lifecycle alignment (#539, #540) + batch fixes (#536–#544)**
+
+- engine#539 closed — OBSOLETE on PlanItemStatus + isTerminal()/isActive() as single source of truth; PlanItemFaultedEvent workerId→bindingName; PlanItemObsoleteEvent; 7 hardcoded checks eliminated; work-adapter bridge updated for FAULTED/OBSOLETE
+- engine#540 closed — SUSPENDED on PlanItemStatus (active state); markSuspended()/markResumed() on PlanItem; WorkItemLifecycleAdapter handles suspension/resume
+- engine#544 closed — CaseStartedEventHandler used currentPrincipal.tenancyId() instead of instance.tenancyId on Vert.x thread
+- engine#541 closed — AgentCapability 9th arg fix (eidos published)
+- engine#536 closed — already in codebase
+- engine#537 closed — blocking=true on CaseContextChangedEventHandler; resume test rewritten
+- engine#538 closed — OversightGateService SPI + ChainedReactive moved to api
+- engine#519 closed — bindingName through WorkerRetriesExhaustedEvent
+- engine#518 closed — auto-exhaust on failed tryProvision
 - engine#542 closed — duplicate of #537
-- PR #529 closed (stale fork), PR #526 merged (treblereel's tenancyId threading)
-- CI fix: resume test race condition root-caused and fixed
-- Protocol PP-20260620-ed1230 captured: lifecycle enum classification on enum
-- parent#289 filed: PLATFORM.md + lifecycle coherence protocol
+- engine#521 closed — no engine call sites
+- engine#500 closed — resolved by #530's tenancyId
+- PR #529 closed, PR #526 merged
+- Protocol PP-20260620-ed1230 captured
+- parent#289 filed
 
 ## Immediate Next Step
 
-Pick up new work. CI should be green after 60e47a64.
+Pick up new work. CI is green.
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #541 | AgentCapability test arity fix | XS | Low | Blocked — eidos not yet published with excludedDomains |
+| #543 | Migrate Worker primitives to casehub-worker-api | L | High | Major refactoring |
 | #527 | Add optional baseUrl to OpenAiChatModelProvider | S | Low | |
 | #525 | CaseDefinitionRegistry.findByIdentity() | S | Low | |
 | #523 | Add findByStatus()/findAll() to CaseInstanceRepository | S | Low | |
-| #521 | Update CaseRetriever call sites for PayloadFilter | XS | Low | Mechanical |
-| #500 | Add triggerTenancyId to ProvisionContext | XS | Low | |
-| #540 | PlanItemStatus SUSPENDED gap | M | Med | OBSOLETE note added |
