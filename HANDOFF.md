@@ -1,26 +1,33 @@
-# Handoff — 2026-06-18
+# Handoff — 2026-06-20
 
-**Branch:** `issue-530-provisioning-binding-enhancements` — CLOSED
+**Branch:** `issue-539-lifecycle-alignment-faulted-obsolete` — CLOSED
 
 ## What's Done
 
-- engine#530 closed — `ProvisionContext.tenancyId` added, populated from `CaseInstance.tenancyId` at construction site
-- engine#531 closed — `getCapabilities()` hard gate removed from `tryProvision()`, provisioner decides based on full context
-- engine#512 closed — `HumanTaskTarget.outcomes` propagated through to `WorkItemCreateRequest.permittedOutcomes` (inline) and `WorkItem.permittedOutcomes` (template)
-- engine#509 closed — `Binding.inputSchemaOverride` threaded through `WorkerScheduleEvent` and `tryProvision()`
-- engine#511 closed — `Binding.contextWrite` applied in `publishByTarget()` before dispatch
-- engine#508 closed — `ConflictResolver` utility extracted to `api` with `DEEP_MERGE`; `PlanItemCompletionApplier` now uses per-key resolution
-- engine#515 closed — `QhorusMessageSignalBridge` translates DECLINE/FAILURE → `WorkerOutcome` failure cascade
-- parent#283 filed (engine deep-dive doc update)
-- parent#541 filed (pre-existing `engine-ai` test failure — `AgentCapability` arity mismatch)
-- Pushed to casehubio/engine main
+- engine#539 closed — lifecycle alignment: OBSOLETE added to PlanItemStatus with isTerminal()/isActive() as single source of truth; PlanItemFaultedEvent workerId→bindingName; PlanItemObsoleteEvent added; 7 hardcoded checks migrated; work-adapter bridge updated for FAULTED/OBSOLETE
+- engine#536 closed — BlackboardEventCodecRegistrar idempotency (already in codebase)
+- engine#537 closed — CaseContextChangedEventHandler blocking=true; resume test rewritten (signal-while-suspended race fixed)
+- engine#538 closed — OversightGateService SPI + move ChainedReactive to api/classification
+- engine#519 closed — bindingName threaded through WorkerRetriesExhaustedEvent
+- engine#518 closed — auto-exhaust PlanItem when tryProvision fails
+- engine#542 closed — duplicate of #537
+- PR #529 closed (stale fork), PR #526 merged (treblereel's tenancyId threading)
+- CI fix: resume test race condition root-caused and fixed
+- Protocol PP-20260620-ed1230 captured: lifecycle enum classification on enum
+- parent#289 filed: PLATFORM.md + lifecycle coherence protocol
 
 ## Immediate Next Step
 
-Pick up new work. All seven issues from the failure cascade batch are closed.
+Pick up new work. CI should be green after 60e47a64.
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #541 | Fix SemanticAgentRoutingStrategyTest — AgentCapability constructor arity | XS | Low | Pre-existing, blocks engine-ai build |
+| #541 | AgentCapability test arity fix | XS | Low | Blocked — eidos not yet published with excludedDomains |
+| #527 | Add optional baseUrl to OpenAiChatModelProvider | S | Low | |
+| #525 | CaseDefinitionRegistry.findByIdentity() | S | Low | |
+| #523 | Add findByStatus()/findAll() to CaseInstanceRepository | S | Low | |
+| #521 | Update CaseRetriever call sites for PayloadFilter | XS | Low | Mechanical |
+| #500 | Add triggerTenancyId to ProvisionContext | XS | Low | |
+| #540 | PlanItemStatus SUSPENDED gap | M | Med | OBSOLETE note added |
