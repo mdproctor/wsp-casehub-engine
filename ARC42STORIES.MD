@@ -122,6 +122,18 @@ Per the Arc42Stories spec: only decisions not captured inline elsewhere. Should 
 
 🔲 Cross-cutting decisions — complete in dedicated session.
 
+### 2026-06-22 · Agent Mesh SPIs extracted to engine-api (parent#93, engine#550)
+
+New package `io.casehub.api.spi.mesh` added to `casehub-engine-api`. Previously these types lived in `claudony-casehub`, making them unavailable to other agent implementations without duplication. Extracted to Tier-1 engine-api so any agent (claudony, openclaw, future) shares canonical definitions.
+
+Types added: `CaseChannelLayout` SPI + `ChannelSpec` record + `named()` factory; `NormativeChannelLayout` (3-channel: work/observe/oversight per PP-20260604-a7ad99); `SimpleLayout` (2-channel: work/observe, no governance gate); `MeshParticipationStrategy` SPI + `MeshParticipation` enum + `named()` factory; `ActiveParticipationStrategy`, `ReactiveParticipationStrategy`, `SilentParticipationStrategy`.
+
+All types are pure Java (Tier-1 — no CDI, no JPA, no Quarkus). 446 tests green post-merge. Garden protocol `normative-channel-layout-single-source.md` promoted from openclaw repo-scope to platform-scope.
+
+*engine commit: ab406f8e — fix(#550): address code review findings*
+
+---
+
 ### 2026-06-04 · FlowWorker bridge — module boundary, SPI extraction, non-blocking dispatch
 
 `WorkOrchestrator` was a concrete `@ApplicationScoped` class in `runtime`. Extracted as an interface to `casehub-engine-common/spi/` — the same placement as `CaseInstanceRepository` and `EventLogRepository` — because it uses `CaseInstance` and placing it in `api/spi/` would create a circular dependency (`api` ← `common` ← `api`). The concrete `DefaultWorkOrchestrator` remains in `runtime`; CDI resolves the implementation at startup without flow needing a runtime compile dependency.
