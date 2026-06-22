@@ -1,20 +1,23 @@
-# Handoff — 2026-06-21
+# Handoff — 2026-06-22
 
 ## What's Done
 
-**S-scale batch: #527, #525, #523 — provider gap-fill, registry query, repository queries**
+**engine#550 — add io.casehub.api.spi.mesh (parent#93 extraction)**
 
-- engine#527 closed — wired all missing YAML-schema fields through ChatModelProviders: OpenAI (baseUrl, organizationId, frequencyPenalty, presencePenalty), Anthropic (baseUrl, version), Mistral (baseUrl). AgentConverter updated for all three.
-- engine#525 closed — CaseDefinitionRegistry.findByIdentity(namespace, name, version) → Optional<CaseMetaModel>. Default method per SPI evolution protocol. Enables casehub-ops drift detection without catching RuntimeException.
-- engine#523 closed — findByStatus/findAll/findByNamespaceAndName on CaseInstanceRepository. Default methods + InMemory + JPA implementations. Enables devtown/aml/clinical operational tooling.
-- CLAUDE.md, DESIGN.md updated. Blog entry published.
+New package `io.casehub.api.spi.mesh` in `casehub-engine-api`. Extracts normative agent mesh primitives from claudony so any agent implementation shares canonical definitions.
+
+Types added: `CaseChannelLayout` (SPI + `ChannelSpec` record + `named()` factory), `NormativeChannelLayout` (3-channel: work/observe/oversight per PP-20260604-a7ad99), `SimpleLayout` (2-channel: work/observe, no governance gate), `MeshParticipationStrategy` (SPI + `MeshParticipation` enum + `named()` factory), `ActiveParticipationStrategy`, `ReactiveParticipationStrategy`, `SilentParticipationStrategy`.
+
+46 new tests green. Code review fixes: null guards on `named(null)` → IAE, contract tests cover both layouts, `containsExactlyInAnyOrder` for Set assertions.
 
 ## Immediate Next Step
 
-Pick up new work. CI is green.
+Pick up new work. Branch stamped, merged to main, issue closed.
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
 | #543 | Migrate Worker primitives to casehub-worker-api | L | High | Major refactoring |
+| #554 | Minor test cleanup in mesh SPI tests | XS | Low | Tautological enum tests, shared constant |
+| #555 | Update ARC42STORIES.MD for io.casehub.api.spi.mesh | XS | Low | Document new package |
