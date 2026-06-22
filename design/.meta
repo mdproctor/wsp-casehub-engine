@@ -1,0 +1,9 @@
+branch: issue-543-migrate-worker-primitives
+project-sha: 179b1e71c6569a28822cebdbe45c1a21457e3386
+date: 2026-06-22
+issue: 543
+issue-repo: casehubio/engine
+covers: 543
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes: 
