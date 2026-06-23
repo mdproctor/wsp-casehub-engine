@@ -19,5 +19,5 @@ Pick up new work. Branch stamped, merged to main, issue closed.
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
 | #543 | Migrate Worker primitives to casehub-worker-api | L | High | Major refactoring |
-| #554 | Minor test cleanup in mesh SPI tests | XS | Low | Tautological enum tests, shared constant |
-| #555 | Update ARC42STORIES.MD for io.casehub.api.spi.mesh | XS | Low | Document new package |
+
+*Updated: #554, #555 closed — removed from backlog.*
