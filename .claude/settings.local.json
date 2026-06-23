@@ -188,7 +188,23 @@
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine/pom.xml test -pl flow -Dtest=\"CasehubDispatchTest,FlowExecutionRegistryTest,FlowWorkerExecutorTest\")",
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl scheduler-quartz -Dtest=QuartzRetryServiceTest)",
       "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl common -Dtest=WorkerExecutionConfigTest)",
-      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api,common,flow,blackboard,scheduler-quartz)"
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn -f /Users/mdproctor/claude/casehub/engine test -pl api,common,flow,blackboard,scheduler-quartz)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn install -f /Users/mdproctor/claude/casehub/engine/pom.xml --batch-mode -pl common,blackboard,work-adapter,runtime,scheduler-quartz,resilience -am)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl common -f /Users/mdproctor/claude/casehub/engine/pom.xml --batch-mode -Dtest=PlanItemStatusTest)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl blackboard -f /Users/mdproctor/claude/casehub/engine/pom.xml --batch-mode -Dtest=PlanItemTest)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl work-adapter -f /Users/mdproctor/claude/casehub/engine/pom.xml --batch-mode -Dtest=\"WorkItemLifecycleAdapterTest#workItemSuspended_marksPlanItemSuspended+workItemResumed_marksPlanItemDelegated\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl work-adapter -f /Users/mdproctor/claude/casehub/engine/pom.xml --batch-mode -Dtest=WorkItemLifecycleAdapterTest)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl common,blackboard,work-adapter -f /Users/mdproctor/claude/casehub/engine/pom.xml --batch-mode)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl runtime -f /Users/mdproctor/claude/casehub/engine/pom.xml --batch-mode)",
+      "Bash(casehub-resilience)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl api -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl api -f /Users/mdproctor/claude/casehub/engine/pom.xml -Dtest=\"OpenAiChatModelProviderTest,AnthropicChatModelProviderTest,MistralAiChatModelProviderTest,AgentConverterTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl runtime -f /Users/mdproctor/claude/casehub/engine/pom.xml -Dtest=\"DefaultCaseDefinitionRegistryTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl persistence-memory -f /Users/mdproctor/claude/casehub/engine/pom.xml -Dtest=\"InMemoryCaseInstanceRepositoryTest\")",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn test -pl api,persistence-memory -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "Bash(GIT_SEQUENCE_EDITOR=\"python3 /tmp/squash-editor.py\" GIT_EDITOR=\"python3 /tmp/squash-msg-editor.py\" git *)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true /opt/homebrew/bin/mvn install -f /Users/mdproctor/claude/casehub/engine/pom.xml)",
+      "mcp__intellij-index__ide_open_project"
     ]
   }
 }
