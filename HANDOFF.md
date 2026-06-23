@@ -1,23 +1,27 @@
-# Handoff — 2026-06-22
+# Handoff — 2026-06-23
 
 ## What's Done
 
-**engine#550 — add io.casehub.api.spi.mesh (parent#93 extraction)**
+**engine#561 — batch fix: all S/XS open issues**
 
-New package `io.casehub.api.spi.mesh` in `casehub-engine-api`. Extracts normative agent mesh primitives from claudony so any agent implementation shares canonical definitions.
+Closed 7 issues in one branch (6 fixed, 1 closed as not-applicable):
 
-Types added: `CaseChannelLayout` (SPI + `ChannelSpec` record + `named()` factory), `NormativeChannelLayout` (3-channel: work/observe/oversight per PP-20260604-a7ad99), `SimpleLayout` (2-channel: work/observe, no governance gate), `MeshParticipationStrategy` (SPI + `MeshParticipation` enum + `named()` factory), `ActiveParticipationStrategy`, `ReactiveParticipationStrategy`, `SilentParticipationStrategy`.
+- **#557** @PermitAll on ActorStateResource + ReactiveActorStateResource — unblocks devtown#90
+- **#553** Unit test for expression engine create() type-mismatch IllegalStateException
+- **#552** Null guard on evaluate(ExpressionEvaluator, JsonNode) for null asNode
+- **#551** Cache Instance<ExpressionEngine> into immutable Map at @PostConstruct
+- **#559** WorkerExecutionContext.set() in executeFlow() — unblocks aml#66
+- **#547** deepCopyMap() in WritablePanelImpl constructor — unblocks devtown#15
+- **#560** Closed as not-applicable — no CaseRetriever references in engine
 
-46 new tests green. Code review fixes: null guards on `named(null)` → IAE, contract tests cover both layouts, `containsExactlyInAnyOrder` for Set assertions.
+4 commits, 756 tests green. Code review passed, squashed, pushed to main.
 
 ## Immediate Next Step
 
-Pick up new work. Branch stamped, merged to main, issue closed.
+Pick up new work. All S/XS issues cleared.
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #543 | Migrate Worker primitives to casehub-worker-api | L | High | Major refactoring |
-
-*Updated: #554, #555 closed — removed from backlog.*
+| #543 | Migrate Worker primitives to casehub-worker-api | L | High | Paused at stack depth 1 |
