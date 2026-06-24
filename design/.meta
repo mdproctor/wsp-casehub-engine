@@ -1,0 +1,9 @@
+branch: issue-567-remove-serverlessworkflow-sdk
+project-sha: 37b2eea84fa60c61d010e089d81a6a08070197e6
+date: 2026-06-24
+issue: 567
+issue-repo: casehubio/engine
+covers: 567
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
