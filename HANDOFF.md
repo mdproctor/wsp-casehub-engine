@@ -1,3 +1,5 @@
+*Updated: claudony#157 closed — removed from backlog.*
+
 # Handoff — 2026-06-25
 
 ## What's Done
@@ -10,7 +12,7 @@ Also: engine artifacts now installed to local Maven repo — consumer migration 
 
 ## What's Left
 
-- Consumer repo import migration (aml#69, clinical#92, devtown#96, life#44, claudony#157) · M · Low each
+- Consumer repo import migration (aml#69, clinical#92, devtown#96, life#44) · M · Low each
 
 ## What's Next
 
@@ -21,4 +23,3 @@ Also: engine artifacts now installed to local Maven repo — consumer migration 
 | clinical#92 | Propagate worker-api imports to clinical | S | Low | Mechanical import swap |
 | devtown#96 | Propagate worker-api imports to devtown | S | Low | Mechanical import swap |
 | life#44 | Propagate worker-api imports to life | M | Low | 15 files |
-| claudony#157 | Propagate worker-api imports to claudony | M | Low | 19 files |
