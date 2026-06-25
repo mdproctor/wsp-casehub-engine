@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-06-25-mdp01-the-switch-statement-was-the-problem.md](2026-06-25-mdp01-the-switch-statement-was-the-problem.md) | 2026-06-25 | SDK type leak traced to hardcoded switch dispatch; pluggable handler model eliminates WorkflowExecutor SPI |
 | [2026-06-18-mdp03-seven-issues-one-branch.md](2026-06-18-mdp03-seven-issues-one-branch.md) | 2026-06-18 | Seven issues, one branch — provisioning through to Qhorus |
 | [2026-06-18-mdp02-where-does-a-timeout-belong.md](2026-06-18-mdp02-where-does-a-timeout-belong.md) | 2026-06-18 | Wiring WorkerOutcome.Expired through the failure cascade; timeout conversion at the SPI boundary; Mutiny TimeoutException class mismatch |
 | [2026-06-18-mdp01-the-bug-that-documented-itself-wrong.md](2026-06-18-mdp01-the-bug-that-documented-itself-wrong.md) | 2026-06-18 | Failure cascade follow-ups; failure goals producing COMPLETED not FAULTED; Vert.x codec registration crash in @QuarkusTest |
