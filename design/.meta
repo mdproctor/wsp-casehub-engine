@@ -1,0 +1,9 @@
+branch: issue-570-expression-engine-output-schema
+project-sha: bb1890fd1871d9a24b8cc9b191106a453f9173da
+date: 2026-06-25
+issue: 570
+issue-repo: casehubio/engine
+covers: 570
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
