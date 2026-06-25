@@ -2,20 +2,14 @@
 
 ## What's Done
 
-**engine#567 — Remove serverlessworkflow SDK from engine-api (CLOSED)**
+**engine#572 — Fix test compilation from upstream dependency changes (CLOSED)**
 
-Replaced hardcoded switch dispatch in DefaultWorkerExecutor with pluggable handler model. Two new SPIs: WorkerFunctionHandler (execution) and WorkerFunctionProvider (YAML construction). FlowWorkerFunction moved from api to flow module. WorkerFunction became marker interface. SDK removed from api, schema, common, runtime — only flow keeps it.
+Two upstream breaks on main: qhorus-api `MessageReceivedEvent` gained `Instant occurredAt` (7th param), and `casehub-work-testing` was renamed to `casehub-work-persistence-memory` (`io.casehub.work.memory`). Fixed 12 files across runtime, work-adapter, casehub-engine-inbound. CLAUDE.md updated. Build green, pushed to origin+upstream.
 
-3 commits on main:
-- `docs(#567): design spec — remove serverlessworkflow SDK via pluggable handler model`
-- `refactor(#567): remove serverlessworkflow SDK from engine-api, pluggable handler model`
-- `docs(#567): update CLAUDE.md for pluggable handler model`
-
-Filed: engine#570 (output schema evaluation should use ExpressionEngineRegistry).
+Also: engine artifacts now installed to local Maven repo — consumer migration can proceed.
 
 ## What's Left
 
-- engine#570 — output schema evaluation should use ExpressionEngineRegistry · S · Low
 - Consumer repo import migration (aml#69, clinical#92, devtown#96, life#44, claudony#157) · M · Low each
 
 ## What's Next
