@@ -1,27 +1,30 @@
-# Handoff — 2026-06-24
+# Handoff — 2026-06-25
 
 ## What's Done
 
-**engine#543 — Worker primitives migration (CLOSED)**
+**engine#567 — Remove serverlessworkflow SDK from engine-api (CLOSED)**
 
-Migrated 9 Worker type files from engine-api to casehub-worker-api and casehub-platform-api foundation dependencies. 128 files changed across all 15 modules. All tests pass.
+Replaced hardcoded switch dispatch in DefaultWorkerExecutor with pluggable handler model. Two new SPIs: WorkerFunctionHandler (execution) and WorkerFunctionProvider (YAML construction). FlowWorkerFunction moved from api to flow module. WorkerFunction became marker interface. SDK removed from api, schema, common, runtime — only flow keeps it.
 
-4 commits landed on main:
-- `docs(#543): worker primitives migration design spec`
-- `feat(#543): add AgentWorkerFunction, FlowWorkerFunction, ClassificationContext`
-- `feat(#543): add AgentDescriptor map to CaseDefinition`
-- `refactor(#543): migrate Worker primitives to casehub-worker-api`
+3 commits on main:
+- `docs(#567): design spec — remove serverlessworkflow SDK via pluggable handler model`
+- `refactor(#567): remove serverlessworkflow SDK from engine-api, pluggable handler model`
+- `docs(#567): update CLAUDE.md for pluggable handler model`
 
-Filed: engine#567 (remove serverlessworkflow SDK from engine-api). 3 garden entries submitted (lambda ambiguity, null schemas, RetryPolicy validation).
+Filed: engine#570 (output schema evaluation should use ExpressionEngineRegistry).
 
 ## What's Left
 
-- engine#562 — propagate worker-api imports to consumer repos · M · Low
-- engine#567 — remove serverlessworkflow SDK from engine-api · M · Med
+- engine#570 — output schema evaluation should use ExpressionEngineRegistry · S · Low
+- Consumer repo import migration (aml#69, clinical#92, devtown#96, life#44, claudony#157) · M · Low each
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #562 | Propagate worker-api imports to consumer repos | M | Low | Downstream of #543 |
-| #567 | Remove serverlessworkflow SDK from engine-api | M | Med | Requires mapper restructuring |
+| #570 | Output schema evaluation uses ExpressionEngineRegistry | S | Low | Surfaced during #567 design |
+| aml#69 | Propagate worker-api imports to aml | S | Low | Mechanical import swap |
+| clinical#92 | Propagate worker-api imports to clinical | S | Low | Mechanical import swap |
+| devtown#96 | Propagate worker-api imports to devtown | S | Low | Mechanical import swap |
+| life#44 | Propagate worker-api imports to life | M | Low | 15 files |
+| claudony#157 | Propagate worker-api imports to claudony | M | Low | 19 files |
