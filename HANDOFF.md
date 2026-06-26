@@ -1,24 +1,20 @@
-*Updated: claudony#157 closed — removed from backlog.*
-
-# Handoff — 2026-06-25
+# Handoff — 2026-06-26
 
 ## What's Done
 
-**engine#572 — Fix test compilation from upstream dependency changes (CLOSED)**
+**engine#570 — Use ExpressionEngineRegistry for output schema evaluation (CLOSED)**
 
-Two upstream breaks on main: qhorus-api `MessageReceivedEvent` gained `Instant occurredAt` (7th param), and `casehub-work-testing` was renamed to `casehub-work-persistence-memory` (`io.casehub.work.memory`). Fixed 12 files across runtime, work-adapter, casehub-engine-inbound. CLAUDE.md updated. Build green, pushed to origin+upstream.
-
-Also: engine artifacts now installed to local Maven repo — consumer migration can proceed.
+Added `transform()` to `ExpressionEngine` SPI and `ExpressionEngineRegistry`. Replaced hardcoded `JQEvaluator` in `DefaultWorkerExecutor` with the pluggable registry — same infrastructure as all other expression evaluation. 8 files, 181 insertions. All tests green.
 
 ## What's Left
 
 - Consumer repo import migration (aml#69, clinical#92, devtown#96, life#44) · M · Low each
+- work-adapter template-mode tests have 9 pre-existing failures (HumanTaskScheduleHandlerTest, HumanTaskPlannerIntegrationTest) — not introduced by this branch
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #570 | Output schema evaluation uses ExpressionEngineRegistry | S | Low | Surfaced during #567 design |
 | aml#69 | Propagate worker-api imports to aml | S | Low | Mechanical import swap |
 | clinical#92 | Propagate worker-api imports to clinical | S | Low | Mechanical import swap |
 | devtown#96 | Propagate worker-api imports to devtown | S | Low | Mechanical import swap |
