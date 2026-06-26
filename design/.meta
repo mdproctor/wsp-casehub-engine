@@ -1,0 +1,9 @@
+branch: issue-573-bounded-recursive-subcase
+project-sha: 5740f1c41dded61280e5db35d387d23f2e6d005d
+date: 2026-06-26
+issue: 573
+issue-repo: casehubio/engine
+covers: 573
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
