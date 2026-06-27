@@ -2,6 +2,7 @@
 
 | File | Date | Title |
 |------|------|-------|
+| [2026-06-27-mdp01-the-child-that-didnt-write-home.md](2026-06-27-mdp01-the-child-that-didnt-write-home.md) | 2026-06-27 | M-of-N sub-case groups exposed in YAML; per-child outputMapping fix — data flow decoupled from threshold control |
 | [2026-06-25-mdp01-the-switch-statement-was-the-problem.md](2026-06-25-mdp01-the-switch-statement-was-the-problem.md) | 2026-06-25 | SDK type leak traced to hardcoded switch dispatch; pluggable handler model eliminates WorkflowExecutor SPI |
 | [2026-06-18-mdp03-seven-issues-one-branch.md](2026-06-18-mdp03-seven-issues-one-branch.md) | 2026-06-18 | Seven issues, one branch — provisioning through to Qhorus |
 | [2026-06-18-mdp02-where-does-a-timeout-belong.md](2026-06-18-mdp02-where-does-a-timeout-belong.md) | 2026-06-18 | Wiring WorkerOutcome.Expired through the failure cascade; timeout conversion at the SPI boundary; Mutiny TimeoutException class mismatch |
