@@ -1,3 +1,5 @@
+*Updated: clinical#92, life#44 closed — removed from backlog.*
+
 # Handoff — 2026-06-27
 
 ## What's Done
@@ -10,7 +12,7 @@ Single-commit batch: PlanItemStatus Javadoc (#575), AgentBuilder.model public (#
 
 ## What's Left
 
-- Consumer repo import migration (aml#69, clinical#92, devtown#96, life#44) · M · Low each
+- Consumer repo import migration (aml#69, devtown#96) · S · Low each
 - engine#565: re-publish SNAPSHOT — resolves itself when CI runs on main (just pushed)
 
 ## What's Next
@@ -19,6 +21,4 @@ Single-commit batch: PlanItemStatus Javadoc (#575), AgentBuilder.model public (#
 |---|-------------|-------|------------|-------|
 | #574 | Expose M-of-N sub-case groups in YAML + fix per-child outputMapping | S | Med | Blocks devtown#11 |
 | aml#69 | Propagate worker-api imports to aml | S | Low | Mechanical import swap |
-| clinical#92 | Propagate worker-api imports to clinical | S | Low | Mechanical import swap |
 | devtown#96 | Propagate worker-api imports to devtown | S | Low | Mechanical import swap |
-| life#44 | Propagate worker-api imports to life | M | Low | 15 files |
