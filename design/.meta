@@ -1,0 +1,9 @@
+branch: issue-575-xs-s-batch-fixes
+project-sha: f2fcc4a286454b6db45a2024f65f054d69a9a854
+date: 2026-06-27
+issue: 575
+issue-repo: casehubio/engine
+covers: 575,569,576,568,563
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
