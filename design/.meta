@@ -1,0 +1,9 @@
+branch: issue-565-republish-snapshot
+project-sha: 2b026c0fd86031c97cf1ef077c360a2a305c2ce6
+date: 2026-06-27
+issue: 565
+issue-repo: casehubio/engine
+covers: 565
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
