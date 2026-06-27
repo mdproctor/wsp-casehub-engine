@@ -1,5 +1,5 @@
-# Branch Closed: issue-573-bounded-recursive-subcase
+# Branch Closed: issue-574-mofn-yaml-output-mapping
 
-**Date:** 2026-06-26
-**Issues:** 573
+**Date:** 2026-06-27
+**Issues:** 574
 **Status:** merged to main
