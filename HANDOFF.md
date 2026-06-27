@@ -1,17 +1,14 @@
-# Handoff — 2026-06-27
+# Handoff — 2026-06-28
 
 ## What's Done
 
-**#574: M-of-N sub-case groups in YAML + per-child outputMapping fix — CLOSED**
+**#565: re-publish casehub-engine-api SNAPSHOT — CLOSED**
 
-Added `groupId`, `totalInGroup`, `requiredCount`, `onThresholdReached` to SubCase YAML schema and mapper. Fixed silent data loss in `SubCaseCompletionService.handleGroupedCompletion()` — outputMapping now applies for every completing child, not just the threshold-triggering one. Unblocks devtown#11 bisection.
-
-**Known pre-existing:** work-adapter compilation fails against current casehub-work SNAPSHOT — `WorkItemStatus` and `WorkItemCreateRequest` moved packages upstream. Tracked as #565.
+Root cause was two-fold: (1) `casehub-worker` repo was private — its Maven packages were invisible to other repos' `GITHUB_TOKEN`, breaking CI dependency resolution since June 23; (2) `WorkItemStatus`/`WorkItemCreateRequest` moved packages in casehub-work#275, engine imports were stale. Also pushed unpushed `casehub-worker` commit making `WorkerFunction` a marker interface, and fixed pre-existing `HumanTaskPlannerIntegrationTest` failure (`TenantScopedPrincipal` @RequestScoped in @ConsumeEvent context). All casehubio repos now public. CI green, SNAPSHOT publishing on merge.
 
 ## What's Left
 
 - Consumer repo import migration (aml#69, devtown#96) · S · Low each
-- engine#565: re-publish SNAPSHOT · XS · Low
 
 ## What's Next
 
