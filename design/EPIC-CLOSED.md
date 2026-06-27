@@ -1,5 +1,5 @@
-# Branch Closed: issue-574-mofn-yaml-output-mapping
+# Branch Closed: issue-565-republish-snapshot
 
-**Date:** 2026-06-27
-**Issues:** 574
+**Date:** 2026-06-28
+**Issues:** 565
 **Status:** merged to main
