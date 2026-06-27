@@ -1,0 +1,9 @@
+branch: issue-574-mofn-yaml-output-mapping
+project-sha: bba1fc18e0d975edfe81b7748063f35dd800d97c
+date: 2026-06-27
+issue: 574
+issue-repo: casehubio/engine
+covers: 574
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
