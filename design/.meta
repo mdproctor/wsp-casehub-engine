@@ -1,0 +1,9 @@
+branch: issue-586-461-followups
+project-sha: d77ab510b208ba7269d39c823e8e539720220b58
+date: 2026-06-29
+issue: 586
+issue-repo: casehubio/engine
+covers: 586,587,588,589
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
