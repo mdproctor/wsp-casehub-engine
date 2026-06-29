@@ -2,22 +2,22 @@
 
 ## What's Done
 
-**#461: composite WorkerExecutionManager for multi-worker co-deployment — CLOSED**
+**#590: CallableDispatchRegistry — extensible workflow call dispatch — CLOSED**
 
-CDI ambiguity when co-deploying multiple WorkerExecutionManager backends is resolved. Added `@WorkerBackend` qualifier, `CompositeWorkerExecutionManager` (replaces `NoOpWorkerExecutionManager`), `WorkerExecutionRoutingStrategy` SPI with `FirstSupportedRoutingStrategy` default, and `supports()` abstract method on the interface. Quartz at `@Priority(0)` (catch-all), external backends at `@Priority(10)`. Design-reviewed (19 issues, all resolved, $12.47). Cross-repo: workers repo (5 backends migrated on main), claudony (1 backend + 4 injection sites on main).
+`CasehubCallableTaskBuilder` no longer hardcodes `casehub:dispatch`. A `CallableDispatchRegistry` CDI singleton maps call names to `CallableDispatcher` implementations. `CasehubDispatch` self-registers at `@PostConstruct`. First consumer: `casehub-desiredstate` for `desiredstate:dispatch`.
 
-**Also on this branch:** adapted to casehub-work SNAPSHOT changes — `WorkLifecycleEvent` removal (#278), `WorkloadProvider` SPI relocation (#276).
+**#586, #587, #588, #589: composite WEM follow-ups — ALL CLOSED**
 
-## Cross-Module
+`WorkerFunction.None` in `casehub-worker-api` models external workers. `canExecute(WorkerFunction)` additive SPI on `WorkerExecutionManager` — Quartz overrides with positive handler delegation, composite delegates to backends, routing strategy checks both `supports()` and `canExecute()`. Non-blocking recovery with `RecoveryStatus`. Trigger methods documented as planned API. Design-reviewed (9 rounds, 19 issues, 11 verified, $23.21).
 
-Workers repo has 2 commits on main for #461 (d2c23c4..d8f7e94). Claudony has 1 commit on main (ffa8e1b). Both need pushing to upstream when ready.
+Cross-repo: `casehub-worker-api` SNAPSHOT published with `None` record. Workers repo — no changes needed. `parent#326` filed for PLATFORM.md + engine deep-dive sync.
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
 | #582 | Generalize GoalBasedCompletion beyond success/failure | M | Med | Follow-on from #581 |
-| #586 | WorkerFunction.None marker type for external-only workers | S | Low | Deferred from #461 |
-| #587 | Precise Quartz routing via WorkerExecutor.supports() | S | Med | Deferred from #461 |
-| #588 | Startup recovery interaction with composite | M | Med | Deferred from #461 |
-| #589 | Quartz trigger scheduling methods — zero callers | S | Low | Deferred from #461 |
+| #592 | External-backend recovery gap | M | Med | Pre-existing gap documented in design review |
+| #593 | RecoveryStatus health check integration | S | Low | Wire to @Liveness or @Readiness |
+| #594 | QuartzWEM line 91 multi-JVM TODO cleanup | S | Low | Pre-existing design debt |
+| parent#326 | Sync PLATFORM.md + casehub-engine.md for None/canExecute | S | Low | Doc sync |
