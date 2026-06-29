@@ -1,0 +1,9 @@
+branch: issue-509-binding-inputschema-yaml-augment
+project-sha: 5ed985309b81e0018eae00410699c2bdddb46462
+date: 2026-06-29
+issue: 509
+issue-repo: casehubio/engine
+covers: 509,591
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
