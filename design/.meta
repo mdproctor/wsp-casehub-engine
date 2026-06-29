@@ -1,0 +1,9 @@
+branch: issue-578-work-adapter-spi-migration
+project-sha: e6cfcee88e03224ebaa7775ff29db2eb49f47b7e
+date: 2026-06-29
+issue: 578
+issue-repo: casehubio/engine
+covers: 578,579
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
