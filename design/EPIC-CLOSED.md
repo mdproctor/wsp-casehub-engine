@@ -1,5 +1,5 @@
-# Branch Closed: issue-574-mofn-yaml-output-mapping
+# Branch Closed: issue-461-composite-worker-execution-mgr
 
-**Date:** 2026-06-27
-**Issues:** 574
+**Date:** 2026-06-29
+**Issues:** 461
 **Status:** merged to main
