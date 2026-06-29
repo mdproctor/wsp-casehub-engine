@@ -1,1 +1,1 @@
-# Design Journal — issue-543-migrate-worker-primitives
+# Design Journal — issue-461-composite-worker-execution-mgr
