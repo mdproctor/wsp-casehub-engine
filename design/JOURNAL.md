@@ -1,1 +1,1 @@
-# Design Journal — issue-543-migrate-worker-primitives
+# Design Journal — issue-620-signal-retry-perf-audit

@@ -1,0 +1,9 @@
+branch: issue-620-signal-retry-perf-audit
+project-sha: 9131ce18e840ba88a7f2d7b80107ba51a7938fe4
+date: 2026-06-30
+issue: 620
+issue-repo: casehubio/engine
+covers: 620,621,622
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
