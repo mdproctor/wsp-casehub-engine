@@ -2,34 +2,44 @@
 
 ## What's Done
 
-**#585: WorkItemLifecycleAdapter observer migration — CLOSED**
+**#490 Epic: Hybrid Orchestration — CLOSED (with #483, #484, #485)**
 
-Observer was already migrated to `WorkItemEvent` in 386bb144. This session fixed stale Javadoc and CLAUDE.md references.
+Made the engine truly hybrid choreography+orchestration via a four-tier model:
 
-**#593: Recovery health check — CLOSED**
+- **Tier 1 — WorkerRuntime** (#485): Per-invocation handle letting workers call other functions and spawn sub-cases. `WorkerExecutionContext.currentRuntime()` access pattern. `WorkerRuntimeFactory` creates instances per invocation. `execute()` never throws (wraps in `WorkerResult.failed()`). Supports Sync and AgentWorkerFunction; FlowWorkerFunction excluded (Tier 3). `spawnCase()`/`awaitCase()` are TODO stubs.
 
-`WorkerRecoveryCoordinator` (runtime, `@Priority(22)`) extracts recovery initiation from `QuartzWorkerExecutionManager`. `@Liveness` health check at `/q/health/live` with configurable timeout (`casehub.engine.recovery.timeout`, default 60s). `quarkus-smallrye-health` added to runtime — first SmallRye Health infrastructure in the engine. Design-reviewed (3 rounds, 11 issues, $9.70).
+- **Tier 2 — SequentialPlanningStrategy** (#484): `PlanningStrategy` implementation (id="sequential") that selects one binding at a time. `PlanningStrategyLoopControl` changed from single injection to `Instance<PlanningStrategy>` with ID-based lookup. `CaseDefinition.planningStrategy` field added. Halts on non-COMPLETED terminal states.
 
-**#594: Stale TODO removal — CLOSED**
+- **signalAndAwait** (#483): Bulk `signal(UUID, Map)` for atomic multi-key context updates. `signalAndAwait()` with `SignalSettlementTracker` using generation-tagged signalId threading through 5 event types. Settlement resolves when expectedCount == completedCount AND fullyDispatched.
 
-Multi-JVM fan-out TODO removed from `QuartzWorkerExecutionManager`. Architecture uses RAM store and routes via `CompositeWorkerExecutionManager`.
+- **YAML support**: `planningStrategy:` and `sequence:` keys in CaseDefinitionYamlMapper. Sequence uses two-pass resolution.
+
+- **WorkerFunctions.sequence()**: Convenience combinator for linear step execution.
+
+Design-reviewed (10 rounds, 29 issues, $31.06). Code-reviewed (final whole-branch, 2 Critical fixed, 4 Important triaged, 4 Minor noted).
+
+## Follow-Up Issues Filed
+
+| # | Title | Context |
+|---|-------|---------|
+| #620 | Thread signalId through QuartzRetryService retry/exhaust path | Exception→retry path doesn't thread signalId — signalAndAwait hangs on worker exceptions that exhaust retries |
+| #621 | SequentialPlanningStrategy getAllPlanItems() copy per select() call | Perf concern for large plans — builds Map from defensive copy on every context change cycle |
+| #622 | Bulk signal event log should record updated keys | BulkSignalReceivedEvent stores only `{"type": "bulk_signal"}` — no audit of what was updated |
 
 ## Cross-Module
 
-**Consumer repos still need capabilityNames migration** (from previous session, all filed):
-- casehub-life#47 — 8 CaseHubs → `augment()` + `capabilityNames()`
-- casehub-aml#85 — 2 CaseHubs
-- casehub-devtown#117 — 2 CaseHubs (fixes race condition)
-- casehub-desiredstate#50 — `CaseTransitionExecutor` Worker builder call
-- casehubio/parent#328 — PLATFORM.md + casehub-engine.md doc sync
-
-**casehub-work#278 unblocked** — engine no longer references `WorkLifecycleEvent`
+**Consumer repos still need capabilityNames migration** (from prior session):
+- casehub-life#47, casehub-aml#85, casehub-devtown#117, casehub-desiredstate#50, casehubio/parent#328
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
+| #620 | signalId threading through retry/exhaust path | S | Med | Needed for signalAndAwait robustness with throwing workers |
+| #621 | SequentialPlanningStrategy perf optimization | XS | Low | Add CasePlanModel.getPlanItemByBindingName() |
+| #622 | Bulk signal event log audit keys | XS | Low | Record updated keys in event log payload |
 | #582 | Generalize GoalBasedCompletion beyond success/failure | M | Med | Follow-on from #581 |
-| #592 | External-backend recovery gap | M | Med | Pre-existing gap documented in design review |
-| — | HumanTaskRecoveryService health check | S | Low | Follow-up from #593 design review — different failure profile |
-| — | Integration tests for WorkerRecoveryCoordinator | S | Low | Follow-up from #593 final review — unit tests sufficient for now |
+| #592 | External-backend recovery gap | M | Med | Pre-existing gap |
+| — | WorkerRuntime.spawnCase()/awaitCase() full implementation | M | Med | Event bus listener for CASE_STATUS_CHANGED |
+| — | WorkflowPlanningStrategy (Tier 3) | L | High | SW-backed durable orchestration — future |
+| — | SequentialPlanningStrategy integration test fix | S | Med | Bindings fire concurrently in @QuarkusTest — unit tests pass |
