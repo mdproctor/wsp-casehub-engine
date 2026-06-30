@@ -2,28 +2,28 @@
 
 ## What's Done
 
-**#591: Worker.capabilityNames + YamlCaseHub.augment() — CLOSED**
+**#585: WorkItemLifecycleAdapter observer migration — CLOSED**
 
-Worker record changed from `List<Capability> capabilities` to `Set<String> capabilityNames` in casehub-worker-api. Workers declare support by name; the engine resolves authoritative `Capability` instances from `CaseDefinition.getCapabilities()`. `Set<String>` enables O(1) contains() and rejects duplicates. ~60 engine test files migrated.
+Observer was already migrated to `WorkItemEvent` in 386bb144. This session fixed stale Javadoc and CLAUDE.md references.
 
-`YamlCaseHub.getDefinition()` is `final`. Subclasses override `augment(CaseDefinition)` — called inside the DCL between YAML loading and caching. Replaces three inconsistent consumer patterns (life's DCL duplication, aml's `@PostConstruct` delegation, devtown's race-prone mutation).
+**#593: Recovery health check — CLOSED**
 
-`DeadLetterReplayService` resolves capability from EventLog metadata instead of `worker.capabilities().stream().findFirst()`.
+`WorkerRecoveryCoordinator` (runtime, `@Priority(22)`) extracts recovery initiation from `QuartzWorkerExecutionManager`. `@Liveness` health check at `/q/health/live` with configurable timeout (`casehub.engine.recovery.timeout`, default 60s). `quarkus-smallrye-health` added to runtime — first SmallRye Health infrastructure in the engine. Design-reviewed (3 rounds, 11 issues, $9.70).
 
-Design-reviewed (6 rounds, 18 issues, $20.10). casehub-worker-api SNAPSHOT published with `Worker.capabilityNames` + `WorkerFunction.None`.
+**#594: Stale TODO removal — CLOSED**
 
-**#509: Binding.inputSchemaOverride — already done, closed**
-
-Was fully implemented in a previous session (commit `373b4d75`). Closed during this session.
+Multi-JVM fan-out TODO removed from `QuartzWorkerExecutionManager`. Architecture uses RAM store and routes via `CompositeWorkerExecutionManager`.
 
 ## Cross-Module
 
-**Consumer repos need migration** (all filed, all blocked by engine SNAPSHOT):
+**Consumer repos still need capabilityNames migration** (from previous session, all filed):
 - casehub-life#47 — 8 CaseHubs → `augment()` + `capabilityNames()`
 - casehub-aml#85 — 2 CaseHubs
 - casehub-devtown#117 — 2 CaseHubs (fixes race condition)
 - casehub-desiredstate#50 — `CaseTransitionExecutor` Worker builder call
 - casehubio/parent#328 — PLATFORM.md + casehub-engine.md doc sync
+
+**casehub-work#278 unblocked** — engine no longer references `WorkLifecycleEvent`
 
 ## What's Next
 
@@ -31,5 +31,5 @@ Was fully implemented in a previous session (commit `373b4d75`). Closed during t
 |---|-------------|-------|------------|-------|
 | #582 | Generalize GoalBasedCompletion beyond success/failure | M | Med | Follow-on from #581 |
 | #592 | External-backend recovery gap | M | Med | Pre-existing gap documented in design review |
-| #593 | RecoveryStatus health check integration | S | Low | Wire to @Liveness or @Readiness |
-| #594 | QuartzWEM line 91 multi-JVM TODO cleanup | S | Low | Pre-existing design debt |
+| — | HumanTaskRecoveryService health check | S | Low | Follow-up from #593 design review — different failure profile |
+| — | Integration tests for WorkerRecoveryCoordinator | S | Low | Follow-up from #593 final review — unit tests sufficient for now |
