@@ -1,5 +1,5 @@
-# Branch Closed: issue-574-mofn-yaml-output-mapping
+# Branch Closed: issue-509-binding-inputschema-yaml-augment
 
-**Date:** 2026-06-27
-**Issues:** 574
+**Date:** 2026-06-30
+**Issues:** 509,591
 **Status:** merged to main
