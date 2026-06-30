@@ -1,16 +1,29 @@
-# Handoff — 2026-06-29
+# Handoff — 2026-06-30
 
 ## What's Done
 
-**#590: CallableDispatchRegistry — extensible workflow call dispatch — CLOSED**
+**#591: Worker.capabilityNames + YamlCaseHub.augment() — CLOSED**
 
-`CasehubCallableTaskBuilder` no longer hardcodes `casehub:dispatch`. A `CallableDispatchRegistry` CDI singleton maps call names to `CallableDispatcher` implementations. `CasehubDispatch` self-registers at `@PostConstruct`. First consumer: `casehub-desiredstate` for `desiredstate:dispatch`.
+Worker record changed from `List<Capability> capabilities` to `Set<String> capabilityNames` in casehub-worker-api. Workers declare support by name; the engine resolves authoritative `Capability` instances from `CaseDefinition.getCapabilities()`. `Set<String>` enables O(1) contains() and rejects duplicates. ~60 engine test files migrated.
 
-**#586, #587, #588, #589: composite WEM follow-ups — ALL CLOSED**
+`YamlCaseHub.getDefinition()` is `final`. Subclasses override `augment(CaseDefinition)` — called inside the DCL between YAML loading and caching. Replaces three inconsistent consumer patterns (life's DCL duplication, aml's `@PostConstruct` delegation, devtown's race-prone mutation).
 
-`WorkerFunction.None` in `casehub-worker-api` models external workers. `canExecute(WorkerFunction)` additive SPI on `WorkerExecutionManager` — Quartz overrides with positive handler delegation, composite delegates to backends, routing strategy checks both `supports()` and `canExecute()`. Non-blocking recovery with `RecoveryStatus`. Trigger methods documented as planned API. Design-reviewed (9 rounds, 19 issues, 11 verified, $23.21).
+`DeadLetterReplayService` resolves capability from EventLog metadata instead of `worker.capabilities().stream().findFirst()`.
 
-Cross-repo: `casehub-worker-api` SNAPSHOT published with `None` record. Workers repo — no changes needed. `parent#326` filed for PLATFORM.md + engine deep-dive sync.
+Design-reviewed (6 rounds, 18 issues, $20.10). casehub-worker-api SNAPSHOT published with `Worker.capabilityNames` + `WorkerFunction.None`.
+
+**#509: Binding.inputSchemaOverride — already done, closed**
+
+Was fully implemented in a previous session (commit `373b4d75`). Closed during this session.
+
+## Cross-Module
+
+**Consumer repos need migration** (all filed, all blocked by engine SNAPSHOT):
+- casehub-life#47 — 8 CaseHubs → `augment()` + `capabilityNames()`
+- casehub-aml#85 — 2 CaseHubs
+- casehub-devtown#117 — 2 CaseHubs (fixes race condition)
+- casehub-desiredstate#50 — `CaseTransitionExecutor` Worker builder call
+- casehubio/parent#328 — PLATFORM.md + casehub-engine.md doc sync
 
 ## What's Next
 
@@ -20,4 +33,3 @@ Cross-repo: `casehub-worker-api` SNAPSHOT published with `None` record. Workers 
 | #592 | External-backend recovery gap | M | Med | Pre-existing gap documented in design review |
 | #593 | RecoveryStatus health check integration | S | Low | Wire to @Liveness or @Readiness |
 | #594 | QuartzWEM line 91 multi-JVM TODO cleanup | S | Low | Pre-existing design debt |
-| parent#326 | Sync PLATFORM.md + casehub-engine.md for None/canExecute | S | Low | Doc sync |
