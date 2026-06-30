@@ -1,0 +1,9 @@
+branch: issue-490-engine-api-expansion
+project-sha: c6fd09fd7f3000f04ed229e5b96a923422870a3c
+date: 2026-06-30
+issue: 490
+issue-repo: casehubio/engine
+covers: 490,483,484,485
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
