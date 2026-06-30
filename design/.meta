@@ -1,0 +1,9 @@
+branch: issue-585-observer-health-quartz-cleanup
+project-sha: 43de09e7130fb5ebde77ad0206f3e5143172ea92
+date: 2026-06-30
+issue: 585
+issue-repo: casehubio/engine
+covers: 585,593,594
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
