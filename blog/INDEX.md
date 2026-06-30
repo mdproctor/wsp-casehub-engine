@@ -1,6 +1,7 @@
 # Blog Index
 
 | File | Date | Title |
+| [2026-06-30-mdp01-workers-never-needed-capabilities.md](2026-06-30-mdp01-workers-never-needed-capabilities.md) | 2026-06-30 | Workers Never Needed Capabilities — Worker carries Set<String> capabilityNames; YamlCaseHub.augment() template method |
 |------|------|-------|
 | [2026-06-27-mdp01-the-child-that-didnt-write-home.md](2026-06-27-mdp01-the-child-that-didnt-write-home.md) | 2026-06-27 | M-of-N sub-case groups exposed in YAML; per-child outputMapping fix — data flow decoupled from threshold control |
 | [2026-06-25-mdp01-the-switch-statement-was-the-problem.md](2026-06-25-mdp01-the-switch-statement-was-the-problem.md) | 2026-06-25 | SDK type leak traced to hardcoded switch dispatch; pluggable handler model eliminates WorkflowExecutor SPI |
