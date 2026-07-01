@@ -1,0 +1,9 @@
+branch: issue-624-groupstatus-isterminal
+project-sha: c350f283a45ed6af19445b5231deb600c51feadf
+date: 2026-07-01
+issue: 624
+issue-repo: casehubio/engine
+covers: 624
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
