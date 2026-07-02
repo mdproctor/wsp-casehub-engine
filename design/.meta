@@ -1,0 +1,9 @@
+branch: issue-609-agent-subsumption-matching
+project-sha: 6cc5422c5cc82a996279318cb8bec2c9dbb18416
+date: 2026-07-02
+issue: 609
+issue-repo: casehubio/engine
+covers: 609
+flyway-next-v: unknown
+design-repo: project
+design-section-hashes: 
