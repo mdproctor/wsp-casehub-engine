@@ -1,17 +1,11 @@
-# Handoff — 2026-07-01
+# Handoff — 2026-07-02
 
 ## What's Done
 
-**This session closed 6 issues across 4 branches:**
+**This session closed 2 issues:**
 
-- **#620, #621, #622** (branch `issue-620-signal-retry-perf-audit`): signalId retry threading, SequentialPlanningStrategy O(1) perf, bulk signal audit keys
-- **#625** (branch `issue-625-trust-impl-routing`): TrustWeightedImplementationRoutingStrategy with configurable fallback binding
-- **#549** (branch `issue-549-expires-at-expression`): expiresAtExpression — absolute deadline for humanTask WorkItems via ExpressionEngine.extractString()
-- **#624** (branch `issue-624-groupstatus-isterminal`): GroupStatus.isTerminal()/isActive() + WorkItemLifecycleAdapter refactor
-- **#627** (direct on main): neural-text → neocortex artifact/import rename in casehub-engine
-- **#628** (hortora/engine): neural-text → neocortex rename in hortora garden engine
-
-**Filed:** #629 — WorkerRecoveryHealthCheck should be @Readiness not @Liveness (flagged by trebreel — scaffold overlap)
+- **#609** (branch `issue-609-agent-subsumption-matching`): AgentCandidateFactory subsumption matching via VocabularyRegistry — CDI conversion, two-tier matching, NoOpVocabularyRegistry @DefaultBean
+- **#528** (closed as already resolved): WorkerFunction.Flow extraction — confirmed fully resolved by #567
 
 ## Cross-Module
 
