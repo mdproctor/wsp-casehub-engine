@@ -1,0 +1,9 @@
+branch: issue-634-universal-routing-strategy
+project-sha: fc6938fa864ac0b36c2bbc937bf6402850c92c5d
+date: 2026-07-02
+issue: 634
+issue-repo: casehubio/engine
+covers: 634
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
