@@ -1,6 +1,8 @@
 # Blog Index
 
 | File | Date | Title |
+| [2026-07-04-mdp02-six-issues-one-branch.md](2026-07-04-mdp02-six-issues-one-branch.md) | 2026-07-04 | Six Issues, One Branch — PlanItem CAS guard, WorkerRuntime.spawnCase/awaitCase, strategy resolver determinism, gate eval upstream |
+| [2026-07-04-mdp01-one-convention-not-seven.md](2026-07-04-mdp01-one-convention-not-seven.md) | 2026-07-04 | One Convention, Not Seven — universal routing strategy architecture |
 | [2026-06-30-mdp01-workers-never-needed-capabilities.md](2026-06-30-mdp01-workers-never-needed-capabilities.md) | 2026-06-30 | Workers Never Needed Capabilities — Worker carries Set<String> capabilityNames; YamlCaseHub.augment() template method |
 |------|------|-------|
 | [2026-06-27-mdp01-the-child-that-didnt-write-home.md](2026-06-27-mdp01-the-child-that-didnt-write-home.md) | 2026-06-27 | M-of-N sub-case groups exposed in YAML; per-child outputMapping fix — data flow decoupled from threshold control |
