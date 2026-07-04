@@ -1,0 +1,9 @@
+branch: issue-651-cross-repo-blocker-batch
+project-sha: da237135e8f4d832cc47ff8314b1cd8b8b229f11
+date: 2026-07-04
+issue: 651
+issue-repo: casehubio/engine
+covers: 651,650,583,644,640,626
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
