@@ -10,7 +10,7 @@
 
 Six issues block downstream consumers. Each is a gap in engine-api's boundary types or propagation:
 
-- Routing context missing tenantId (#651)
+- Routing context missing tenancyId (#651)
 - Routing result missing rationale (#650)
 - Repository SPIs missing blocking variants, naming inconsistent (#640)
 - Case lifecycle missing event write path for external consumers (#626)
@@ -19,20 +19,20 @@ Six issues block downstream consumers. Each is a gap in engine-api's boundary ty
 
 ## Changes
 
-### 1. AgentRoutingContext — add tenantId (#651)
+### 1. AgentRoutingContext — add tenancyId (#651)
 
-Add `String tenantId` as the 4th field:
+Add `String tenancyId` as the 4th field:
 
 ```java
 public record AgentRoutingContext(
-    UUID caseId, String capabilityName, JsonNode caseContext, String tenantId) {}
+    UUID caseId, String capabilityName, JsonNode caseContext, String tenancyId) {}
 ```
 
 **Production construction sites** (2):
 - `CaseContextChangedEventHandler.publishWorkerSchedule()` — pass `caseInstance.tenancyId`
 - `DefaultWorkOrchestrator.doSubmit()` — pass `instance.tenancyId`
 
-Strategy implementations receive tenantId via the context parameter. No signature changes to `AgentRoutingStrategy.select()`.
+Strategy implementations receive tenancyId via the context parameter. No signature changes to `AgentRoutingStrategy.select()`.
 
 ### 2. AgentAssignment — mandatory rationale (#650)
 
@@ -52,10 +52,22 @@ public sealed interface AgentAssignment ... {
 }
 ```
 
-**Strategy rationale strings:**
-- `LeastLoadedAgentStrategy`: `"selected %s: load %d (vs next: %s load %d)"`
-- `TrustWeightedAgentStrategy`: `"selected %s: trust %.2f (threshold %.2f)"`
-- `SemanticAgentRoutingStrategy`: `"selected %s: semantic %.2f, trust %.2f"`
+**Rationale propagation:** `TrustCandidateClassifier.ScoredCandidate` gains a `String rationale` field. Each strategy sets the rationale when constructing `ScoredCandidate`. `TrustCandidateClassifier.decide()` uses `best.rationale()` for `Assigned` outcomes and generates its own for non-Assigned outcomes.
+
+**Assigned rationale strings (per strategy, per phase):**
+- `LeastLoadedAgentStrategy`: `"selected %s: load %d (vs next: %s load %d)"` — 2+ candidates; `"selected %s: load %d (sole candidate)"` — 1 candidate
+- `TrustWeightedAgentStrategy` QUALIFIED: `"selected %s: trust %.2f, blended %.2f (threshold %.2f)"`
+- `TrustWeightedAgentStrategy` BOOTSTRAP: `"selected %s: availability %.2f (bootstrap)"`
+- `SemanticAgentRoutingStrategy` QUALIFIED: `"selected %s: semantic %.2f, trust %.2f, blended %.2f"`
+- `SemanticAgentRoutingStrategy` BOOTSTRAP: `"selected %s: availability %.2f (bootstrap)"`
+
+**Unresolvable rationale strings:**
+- Empty candidates (all strategies): `"no candidates available"`
+- All excluded — `TrustCandidateClassifier.decide()`: `"all candidates excluded for capability '%s'"`
+
+**EscalateToOversight rationale strings:**
+- Bootstrap guard — `TrustWeightedAgentStrategy`/`SemanticAgentRoutingStrategy`: `"bootstrap only — no qualified agents for capability '%s'"`
+- Borderline stalemate — `TrustCandidateClassifier.decide()`: `"all candidates borderline for capability '%s' — oversight required"`
 
 Callers log rationale at INFO level via `a.rationale()`.
 
@@ -103,7 +115,26 @@ public interface EventLogRepository {
 }
 ```
 
-**Blocking cross-tenant mirrors follow the same pattern.**
+**Blocking CrossTenantCaseInstanceRepository:**
+
+```java
+public interface CrossTenantCaseInstanceRepository {
+  CaseInstance findByUuid(UUID caseId);
+}
+```
+
+**Blocking CrossTenantEventLogRepository:**
+
+```java
+public interface CrossTenantEventLogRepository {
+  List<EventLog> findByTypes(Collection<CaseHubEventType> types);
+  List<EventLog> findByCaseAndTypes(UUID caseId, Collection<CaseHubEventType> types);
+  List<String> findSubmittedWorkWithoutCompletion();
+  List<EventLog> findByWorkerAndTypeAcrossTenants(String workerId, CaseHubEventType type);
+  EventLog findById(Long id);
+  List<EventLog> findByCaseAndWorkerAndType(UUID caseId, String workerId, CaseHubEventType type);
+}
+```
 
 **Implementations:**
 - `InMemoryCaseInstanceRepository` / `InMemoryEventLogRepository` — implement both blocking and reactive interfaces. Blocking methods are the canonical implementation; reactive methods delegate via `Uni.createFrom().item(() -> blockingMethod(...))`.
@@ -114,25 +145,39 @@ public interface EventLogRepository {
 
 ### 4. CaseEventRecorder — event write SPI (#626)
 
-New interface in `api/spi/`:
+**Request record** in `api/spi/`:
 
 ```java
-public interface CaseEventRecorder {
-  CompletionStage<Void> recordEvent(
-      UUID caseId, CaseHubEventType type, EventStreamType stream,
-      String workerId, String tenancyId, JsonNode payload, JsonNode metadata);
-
-  CompletionStage<Long> recordEventAndReturnId(
-      UUID caseId, CaseHubEventType type, EventStreamType stream,
-      String workerId, String tenancyId, JsonNode payload, JsonNode metadata);
-}
+public record CaseEventRequest(
+    UUID caseId, CaseHubEventType type, EventStreamType stream,
+    String workerId, String tenancyId, JsonNode payload, JsonNode metadata) {}
 ```
 
 tenancyId is explicit — consistent with every other SPI in the codebase (no implicit tenant from CDI scope).
 
-**Engine implementation:** `DefaultCaseEventRecorder` in `runtime/internal/engine/` (`@ApplicationScoped`). Injects `ReactiveEventLogRepository`. Constructs `EventLog` domain objects internally — consumers never import `EventLog`.
+**Blocking interface** in `api/spi/`:
 
-**No-op default:** `NoOpCaseEventRecorder` in `runtime/internal/worker/` (`@DefaultBean @ApplicationScoped`). Returns completed futures. Follows the established SPI no-op pattern.
+```java
+public interface CaseEventRecorder {
+  void record(CaseEventRequest request);
+  Long recordAndReturnId(CaseEventRequest request);
+}
+```
+
+**Reactive interface** in `api/spi/`:
+
+```java
+public interface ReactiveCaseEventRecorder {
+  Uni<Void> record(CaseEventRequest request);
+  Uni<Long> recordAndReturnId(CaseEventRequest request);
+}
+```
+
+Follows the `PlanItemStore` / `ReactivePlanItemStore` dual-stack convention: unqualified = blocking, `Reactive` prefix = Uni-based.
+
+**Engine implementation:** `DefaultReactiveCaseEventRecorder` in `runtime/internal/engine/` (`@ApplicationScoped`) — reactive is canonical. Injects `ReactiveEventLogRepository`. Constructs `EventLog` domain objects internally — consumers never import `EventLog`. `DefaultCaseEventRecorder` in `runtime/internal/engine/` — blocking delegates via `.await().indefinitely()`.
+
+**No-op defaults:** `NoOpCaseEventRecorder` and `NoOpReactiveCaseEventRecorder` in `api/` (`@DefaultBean @ApplicationScoped`). Active when `engine-runtime` is not on the classpath (e.g., standalone worker deployments). Follows the `NoOpPlanItemStore` / `NoOpReactivePlanItemStore` pattern — the no-ops live in a module that consumers always depend on, separate from the real implementations.
 
 **New orchestration event types** on `CaseHubEventType`:
 
@@ -145,6 +190,19 @@ AGENT_COMPLETED,
 AGENT_FAILED,
 ORCHESTRATION_ESCALATED,
 ```
+
+**Event type semantic layers** — AGENT_* and ORCHESTRATION_* operate at the routing/orchestration layer, distinct from existing WORKER_* events at the execution layer:
+
+| Layer | Events | Fires when |
+|-------|--------|------------|
+| Orchestration lifecycle | `ORCHESTRATION_STARTED`, `ORCHESTRATION_COMPLETED`, `ORCHESTRATION_ESCALATED` | WorkOrchestrator begins/ends an orchestration cycle, or escalates to human oversight |
+| Routing decision | `AGENT_ROUTED` | AgentRoutingStrategy selects an agent — captures strategy id, selected worker, rationale |
+| Agent dispatch | `AGENT_DISPATCHED`, `AGENT_COMPLETED`, `AGENT_FAILED` | Orchestration layer dispatches/acknowledges agent work — one dispatch may involve multiple worker retries |
+| Execution | `WORKER_SCHEDULED`, `WORKER_EXECUTION_*` | Engine Quartz layer creates/runs/completes a job — mechanical execution lifecycle |
+
+Key distinction: `AGENT_DISPATCHED` is the orchestration intent to assign work to a selected agent. `WORKER_SCHEDULED` is the mechanical Quartz job creation. One agent dispatch may produce multiple `WORKER_SCHEDULED` events (retries, re-scheduling). `AGENT_COMPLETED` fires when the orchestration layer acknowledges completion, regardless of how many worker attempts occurred.
+
+The event types are defined in engine-api so consumers can subscribe/filter. The firing code paths are in engine-runtime and will be wired into the orchestration handlers as part of the WorkOrchestrator implementation.
 
 **New stream type** on `EventStreamType`:
 
@@ -169,16 +227,21 @@ Two change types across 8 repos. All repos verified on `main` before any change.
 
 **B. ActionRiskClassifier — `List<String>` → `StaticSetStrategy.of(...)`:**
 
-Every `new RiskDecision.GateRequired(reason, reversible, List.of(...), expiresIn, scope)` becomes `new RiskDecision.GateRequired(reason, reversible, StaticSetStrategy.of(...), expiresIn, scope)`. Add `import io.casehub.api.spi.routing.StaticSetStrategy`.
+**Direct construction sites (devtown, clinical, life, soc, iot):** Every `new RiskDecision.GateRequired(reason, reversible, List.of(...), expiresIn, scope)` becomes `new RiskDecision.GateRequired(reason, reversible, StaticSetStrategy.of(...), expiresIn, scope)`. Add `import io.casehub.api.spi.routing.StaticSetStrategy`.
 
 | Repo | Class |
 |---|---|
 | devtown | `DevtownActionRiskClassifier` |
-| aml | `AmlActionRiskClassifier` |
 | clinical | `ClinicalActionRiskClassifier` |
 | life | `LifeActionRiskClassifier` |
 | soc | `SocActionRiskClassifier` |
 | iot | `IoTActionRiskClassifier` |
+
+**AML (indirect via enum):** AML delegates through `AmlActionType.candidateGroups()` — the `List.of(...)` values are in the `AmlActionType` enum, not in the classifier. Migration:
+1. `AmlActionType` enum field type: `List<String>` → `CandidateSetStrategy`
+2. All enum constants: `List.of(AmlGroups.MLRO)` → `StaticSetStrategy.of(AmlGroups.MLRO)`, etc.
+3. `candidateGroups()` return type: `List<String>` → `CandidateSetStrategy`
+4. `AmlActionRiskClassifier.gate()` and `missingContext()` — no change needed (already passes `type.candidateGroups()` to `GateRequired`)
 
 **C. AgentRoutingStrategy — add `id()` method:**
 
@@ -205,7 +268,7 @@ for repo in scaffold openclaw claudony workers aml devtown life blocks soc iot c
 ## Testing
 
 - Contract tests for `AgentRoutingContext` (4th field), `AgentAssignment` (rationale), `CaseEventRecorder`
-- Unit tests for all 3 strategy rationale strings
+- Unit tests for all strategy rationale strings (Assigned, Unresolvable, EscalateToOversight — all phases)
 - Blocking/reactive parity tests for `CaseInstanceRepository` and `EventLogRepository` (following `PlanItemStoreContractTest` pattern)
 - Existing test suites across consumer repos must compile and pass after migration
 
