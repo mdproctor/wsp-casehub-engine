@@ -60,13 +60,15 @@ public sealed interface AgentAssignment ... {
 - `TrustWeightedAgentStrategy` BOOTSTRAP: `"selected %s: availability %.2f (bootstrap)"`
 - `SemanticAgentRoutingStrategy` QUALIFIED: `"selected %s: semantic %.2f, trust %.2f, blended %.2f"`
 - `SemanticAgentRoutingStrategy` BOOTSTRAP: `"selected %s: availability %.2f (bootstrap)"`
+- `DispositionAwareRoutingStrategy` QUALIFIED: `"selected %s: trust %.2f, blended %.2f × disposition %.2f = %.2f"`
+- `DispositionAwareRoutingStrategy` BOOTSTRAP: `"selected %s: availability %.2f × disposition %.2f = %.2f"`
 
 **Unresolvable rationale strings:**
 - Empty candidates (all strategies): `"no candidates available"`
 - All excluded — `TrustCandidateClassifier.decide()`: `"all candidates excluded for capability '%s'"`
 
 **EscalateToOversight rationale strings:**
-- Bootstrap guard — `TrustWeightedAgentStrategy`/`SemanticAgentRoutingStrategy`: `"bootstrap only — no qualified agents for capability '%s'"`
+- Bootstrap guard — `TrustWeightedAgentStrategy`/`SemanticAgentRoutingStrategy`/`DispositionAwareRoutingStrategy`: `"bootstrap only — no qualified agents for capability '%s'"`
 - Borderline stalemate — `TrustCandidateClassifier.decide()`: `"all candidates borderline for capability '%s' — oversight required"`
 
 Callers log rationale at INFO level via `a.rationale()`.
@@ -136,10 +138,20 @@ public interface CrossTenantEventLogRepository {
 }
 ```
 
-**Implementations:**
-- `InMemoryCaseInstanceRepository` / `InMemoryEventLogRepository` — implement both blocking and reactive interfaces. Blocking methods are the canonical implementation; reactive methods delegate via `Uni.createFrom().item(() -> blockingMethod(...))`.
-- `JpaCaseInstanceRepository` / `JpaEventLogRepository` — reactive is canonical (Panache reactive); blocking delegates via `.await().indefinitely()`.
-- `TestCaseInstanceRepository` / `TestEventLogRepository` — implement both interfaces.
+**Implementations (two classes per persistence layer — a single class cannot implement both interfaces because methods differ only in return type):**
+
+| Module | Blocking class | Reactive class | Canonical |
+|--------|---------------|----------------|-----------|
+| persistence-memory | `InMemoryCaseInstanceRepository` | `InMemoryReactiveCaseInstanceRepository` | Blocking; reactive injects blocking delegate, wraps with `Uni.createFrom().item(...)` |
+| persistence-memory | `InMemoryEventLogRepository` | `InMemoryReactiveEventLogRepository` | Blocking; reactive injects blocking delegate |
+| persistence-memory | `InMemoryCrossTenantCaseInstanceRepository` | `InMemoryReactiveCrossTenantCaseInstanceRepository` | Blocking; reactive wraps |
+| persistence-memory | `InMemoryCrossTenantEventLogRepository` | `InMemoryReactiveCrossTenantEventLogRepository` | Blocking; reactive wraps |
+| persistence-jpa | `JpaCaseInstanceRepository` | `JpaReactiveCaseInstanceRepository` | Reactive (Panache); blocking injects reactive delegate, awaits via `.await().indefinitely()` |
+| persistence-jpa | `JpaEventLogRepository` | `JpaReactiveEventLogRepository` | Reactive (Panache); blocking injects reactive delegate |
+| persistence-jpa | `JpaCrossTenantCaseInstanceRepository` | `JpaReactiveCrossTenantCaseInstanceRepository` | Reactive (Panache); blocking awaits |
+| persistence-jpa | `JpaCrossTenantEventLogRepository` | `JpaReactiveCrossTenantEventLogRepository` | Reactive (Panache); blocking awaits |
+| testing | `TestCaseInstanceRepository` | `TestReactiveCaseInstanceRepository` | Blocking; reactive wraps |
+| testing | `TestEventLogRepository` | `TestReactiveEventLogRepository` | Blocking; reactive wraps |
 
 **Rename execution:** IntelliJ semantic refactoring across the open workspace (26 repos). All import sites, injection points, `quarkus.arc.selected-alternatives`, and `quarkus.arc.exclude-types` entries update automatically.
 
@@ -243,11 +255,21 @@ Two change types across 8 repos. All repos verified on `main` before any change.
 3. `candidateGroups()` return type: `List<String>` → `CandidateSetStrategy`
 4. `AmlActionRiskClassifier.gate()` and `missingContext()` — no change needed (already passes `type.candidateGroups()` to `GateRequired`)
 
-**C. AgentRoutingStrategy — add `id()` method:**
+**C. quarkmind `DispositionAwareRoutingStrategy` — full migration:**
+
+`id()` method:
 
 | Repo | Class | id() |
 |---|---|---|
 | quarkmind | `DispositionAwareRoutingStrategy` | `"quarkmind-disposition"` |
+
+`AgentAssignment` factory method signature changes (3 production sites):
+1. `AgentAssignment.unresolvable()` (line 77) → `AgentAssignment.unresolvable("no candidates available")`
+2. `AgentAssignment.escalate(capability, EscalationReason.NO_QUALIFIED_AGENT)` (line 91) → `AgentAssignment.escalate(capability, EscalationReason.NO_QUALIFIED_AGENT, "bootstrap only — no qualified agents for capability '%s'".formatted(capability))`
+3. `new ScoredCandidate(cc, trustScore * multiplier)` (line 110) → `new ScoredCandidate(cc, trustScore * multiplier, rationale)` — rationale per phase (see §2)
+
+`AgentRoutingContext` 4th field (test sites — 8+ constructors):
+All `new AgentRoutingContext(caseId, capability, context)` in `DispositionAwareRoutingStrategyTest` → `new AgentRoutingContext(caseId, capability, context, tenancyId)`
 
 ### 6. CI dispatch list (#583)
 
