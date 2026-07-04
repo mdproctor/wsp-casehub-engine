@@ -1,0 +1,9 @@
+branch: issue-636-worker-runtime-batch-fixes
+project-sha: 0001b5ac56cc578a2654d70d345d852d4ca859e9
+date: 2026-07-04
+issue: 636
+issue-repo: casehubio/engine
+covers: 629,636,637,641,642,643
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
