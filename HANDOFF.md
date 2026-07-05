@@ -8,15 +8,7 @@ Platform convention established: `types: Set<Path>` + `labels: Set<Path>` on eve
 
 Ledger import fix committed on main (`LedgerEntry` → `JpaLedgerEntry`, `LedgerEntryRepository` → `api.spi`). Refs casehubio/ledger#173.
 
-Consumer repo commits for #644 still **not pushed** — devtown, aml, clinical, life, ops, soc, iot.
-
 ## Cross-Module
-
-**Consumer repos need pushing** (local commits for #644 not yet on remote):
-- devtown, aml, clinical, life, ops, soc, iot · XS · Low
-
-**capabilityNames migration still open** (pre-existing):
-- life#47, aml#85, devtown#117, desiredstate#50, parent#328 · S · Low
 
 **desiredstate unblocked** by #652 — can now use `CaseDefinition.types` for response case classification.
 
