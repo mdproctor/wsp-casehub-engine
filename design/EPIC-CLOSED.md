@@ -1,5 +1,5 @@
-# Branch Closed: issue-585-observer-health-quartz-cleanup
+# Branch Closed: issue-652-cross-repo-blocker-batch
 
-**Date:** 2026-06-30
-**Issues:** 585,593,594
+**Date:** 2026-07-05
+**Issues:** 652,623,613,608,638
 **Status:** merged to main
