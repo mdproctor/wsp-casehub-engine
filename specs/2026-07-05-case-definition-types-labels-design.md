@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add `types: Set<Path>` and `labels: Set<Path>` to `CaseDefinition`, establishing a platform convention for classifying definable entities. Remove vestigial `tags` (object) and `metadata` (object) from the YAML schema — both are dead code from the original Serverless Workflow scaffold, never mapped to the Java API, never consumed by any code or consumer YAML definition.
+Add `types: Set<Path>` and `labels: Set<Path>` to `CaseDefinition`, establishing a platform convention for classifying definable entities. Remove vestigial `tags` (object) and `metadata` (object) from the YAML schema — both are dead code from the original Serverless Workflow scaffold, never mapped to the Java API, never consumed by any runtime code. (The bundled `document-processing.yaml` example uses `metadata` in a vestigial Kubernetes-style pattern — it is updated as part of this cleanup.)
 
 ## Motivation
 
@@ -51,7 +51,7 @@ types:
     minLength: 1
 ```
 
-**Rename `tags` → `labels`, change from object to array:**
+**Add `labels`** (new field — not a rename of `tags`, which was `type: object` with different semantics):
 
 ```yaml
 labels:
@@ -65,7 +65,9 @@ labels:
     minLength: 1
 ```
 
-**Remove `metadata`:** Dead weight — never consumed by any code or consumer.
+**Remove `tags`:** Dead code — `type: object` (key-value map), never mapped to the Java API, never consumed. Not a predecessor of `labels` (which is `type: array` of hierarchical path strings — different structure, different semantics).
+
+**Remove `metadata`:** Dead code — never consumed by any runtime code. Also remove from the top-level `required: [ apiVersion, metadata, version, spec ]` array. (`apiVersion` is also absent from the properties list but is pre-existing — separate cleanup.)
 
 ### Java API — `CaseDefinition`
 
@@ -158,15 +160,17 @@ Same pattern for `findByLabel`. `findByType(Path.of("situation-response"))` retu
 
 ## Cleanup
 
-- Remove `tags` property from YAML schema (replaced by `labels`)
+- Remove `tags` property from YAML schema (dead code — not a predecessor of `labels`)
 - Remove `metadata` property from YAML schema (dead code)
+- Remove `metadata` from top-level `required` array
+- Update `schema/src/main/resources/examples/document-processing.yaml` — remove vestigial Kubernetes-style fields (`apiVersion`, `kind`, `metadata`) and add required fields (`namespace`, `dsl`). This example uses dead schema fields and is likely non-functional today (mapper reads `schema.getName()` from top-level `name`, not `metadata.name`)
 - Generated schema model regenerates automatically on next build
 
 ## Issue Reconciliation
 
 Issue #652 lists `labels`, `tags`, and `categories`. This spec delivers `types` and `labels`:
 
-- **`tags`** (YAML schema: `type: object`) — dead code. Never mapped to the Java API, never consumed by any code or consumer YAML. Removed as cleanup.
+- **`tags`** (YAML schema: `type: object`) — dead code. Never mapped to the Java API, never consumed by any runtime code. Removed as cleanup. `labels` is a new field (`type: array` of hierarchical path strings) — not a rename or successor of `tags`.
 - **`categories`** — after analysis, the concept is captured by `types`: behavioral classification of what a case definition IS. The flat `tags` and vague `categories` from the issue are superseded by the typed `Path`-based `types` and `labels` distinction.
 - **`types`** — new concept not in the original issue. Represents behavioral contracts that affect engine routing, dispatch, and evaluation. This is the semantic gap the issue was trying to fill: "so the platform can categorize cases by purpose."
 
@@ -183,7 +187,8 @@ Issue #652 should be updated to reflect this design.
 
 | File | Change |
 |------|--------|
-| `schema/src/main/resources/schema/CaseDefinition.yaml` | Add `types`, rename `tags` → `labels` (object → array), remove `metadata` |
+| `schema/src/main/resources/schema/CaseDefinition.yaml` | Add `types` and `labels`, remove dead `tags` and `metadata`, remove `metadata` from `required` |
+| `schema/src/main/resources/examples/document-processing.yaml` | Remove vestigial `apiVersion`/`kind`/`metadata`, add required `namespace`/`dsl` |
 | `api/src/main/java/io/casehub/api/model/CaseDefinition.java` | Add `types`, `labels` fields + builder methods + accessors |
 | `api/src/main/java/io/casehub/api/model/converter/CaseDefinitionYamlMapper.java` | Parse `types` and `labels` via `Path.parse()` |
 | `common/src/main/java/io/casehub/engine/common/spi/CaseDefinitionRegistry.java` | Add `findByType(Path)`, `findByLabel(Path)` default methods |
