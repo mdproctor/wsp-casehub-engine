@@ -1,8 +1,10 @@
 # Handoff — 2026-07-05
 
+**CONTINUATION:** Branch `issue-651-cross-repo-blocker-batch` is **open and mid-work**. 5 of 10 tasks complete, 6 commits on the branch not yet merged to main. Run `/work` to resume — work-start will detect `.meta` and resume the branch (Detection state 2). Do NOT run work-end or create a new branch.
+
 ## What's Done
 
-**Branch `issue-651-cross-repo-blocker-batch`** — 6 cross-repo blocker issues, Tasks 1–5 of 10 complete:
+**Branch `issue-651-cross-repo-blocker-batch`** — 6 cross-repo blocker issues (#651, #650, #626, #640, #644, #583), Tasks 1–5 of 10 complete. **6 commits on the branch, not merged to main.** Issues #651, #650, #626, #640 are all still OPEN on GitHub — none have been closed yet.
 
 | Task | Issue | Commit | Status |
 |------|-------|--------|--------|
