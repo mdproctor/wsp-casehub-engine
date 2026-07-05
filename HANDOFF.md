@@ -1,4 +1,5 @@
 *Updated: #651, blocks#30 closed — removed from backlog.*
+*Cross-repo: 2 commits on `issue-652-cross-repo-blocker-batch` from ledger session — replaced 6 NoOp ledger copies with `casehub-ledger-testing` dependency (054dc5aa, 41957ab2). Refs casehubio/ledger#173.*
 
 # Handoff — 2026-07-05
 
