@@ -1,4 +1,4 @@
-*Updated: #651 closed — removed from backlog.*
+*Updated: #651, blocks#30 closed — removed from backlog.*
 
 # Handoff — 2026-07-05
 
@@ -30,4 +30,3 @@ quarkmind#226 filed — deferred migration until quarkmind returns to main.
 |---|-------------|-------|------------|-------|
 | #582 | Generalize GoalBasedCompletion beyond success/failure | M | Med | |
 | #592 | External-backend recovery gap | M | Med | |
-| blocks#30 | AI routing strategy implementations | M | Med | Unblocked by this batch |
