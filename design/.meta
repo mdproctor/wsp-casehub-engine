@@ -1,0 +1,9 @@
+branch: issue-658-yaml-schema-and-panel-rename
+project-sha: c9aec072ae38488e0e32598b1d5a5e3c990f4990
+date: 2026-07-05
+issue: 658
+issue-repo: casehubio/engine
+covers: 658,464
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 

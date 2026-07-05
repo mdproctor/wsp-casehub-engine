@@ -1,1 +1,1 @@
-# Design Journal — issue-543-migrate-worker-primitives
+# Design Journal — issue-658-yaml-schema-and-panel-rename
