@@ -1,8 +1,10 @@
+*Updated: #651 closed — removed from backlog.*
+
 # Handoff — 2026-07-05
 
 ## What's Done
 
-**#651 batch closed** — `69c90c67` on main. Six issues landed: #651 (AgentRoutingContext tenancyId), #650 (mandatory rationale), #640 (dual-stack blocking/reactive repos), #626 (CaseEventRecorder + orchestration events), #644 (7 consumer repos migrated), #583 (CI dispatch).
+Six issues landed on main (`69c90c67`): #651 (AgentRoutingContext tenancyId), #650 (mandatory rationale), #640 (dual-stack blocking/reactive repos), #626 (CaseEventRecorder + orchestration events), #644 (7 consumer repos migrated), #583 (CI dispatch).
 
 Consumer repo commits on their respective `main` branches but **not pushed** — devtown, aml, clinical, life, ops, soc, iot all have local-only commits for #644.
 
