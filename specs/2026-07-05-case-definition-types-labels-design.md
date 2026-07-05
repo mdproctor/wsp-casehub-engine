@@ -35,7 +35,7 @@ First adopter: `CaseDefinition` (this issue). Second adopter: `WorkItem`/`WorkIt
 
 ### YAML Schema Changes
 
-Three changes to `schema/src/main/resources/schema/CaseDefinition.yaml`:
+Changes to `schema/src/main/resources/schema/CaseDefinition.yaml`:
 
 **Add `types`:**
 
