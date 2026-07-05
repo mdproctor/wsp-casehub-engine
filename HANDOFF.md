@@ -1,27 +1,30 @@
-*Updated: #651, blocks#30 closed — removed from backlog.*
-
 # Handoff — 2026-07-05
 
 ## What's Done
 
-Six issues landed on main (`69c90c67`): #651 (AgentRoutingContext tenancyId), #650 (mandatory rationale), #640 (dual-stack blocking/reactive repos), #626 (CaseEventRecorder + orchestration events), #644 (7 consumer repos migrated), #583 (CI dispatch).
+**#652 batch closed** — `c9aec072` on main. Five issues landed: #652 (CaseDefinition types/labels — `Set<Path>` classification + registry queries), #638 (MatchDegree on AgentCandidate via MatchedWorker), #608 (qhorus Store SPI import migration), #623 (fsitrading CI dispatch), #613 (soc — already done, closed).
 
-Consumer repo commits on their respective `main` branches but **not pushed** — devtown, aml, clinical, life, ops, soc, iot all have local-only commits for #644.
+Platform convention established: `types: Set<Path>` + `labels: Set<Path>` on every definable entity. Added to PLATFORM.md (`6b31ec7d` on parent). Deferred issues filed: work#291 (WorkItem/Template types), #653-#656 (persistence, vocabulary, instance-level).
 
-quarkmind#226 filed — deferred migration until quarkmind returns to main.
+Ledger import fix committed on main (`LedgerEntry` → `JpaLedgerEntry`, `LedgerEntryRepository` → `api.spi`). Refs casehubio/ledger#173.
+
+Consumer repo commits for #644 still **not pushed** — devtown, aml, clinical, life, ops, soc, iot.
 
 ## Cross-Module
 
 **Consumer repos need pushing** (local commits for #644 not yet on remote):
 - devtown, aml, clinical, life, ops, soc, iot · XS · Low
 
-**capabilityNames migration still open** (pre-existing, not addressed this batch):
+**capabilityNames migration still open** (pre-existing):
 - life#47, aml#85, devtown#117, desiredstate#50, parent#328 · S · Low
+
+**desiredstate unblocked** by #652 — can now use `CaseDefinition.types` for response case classification.
 
 ## What's Left
 
 - #646 — per-case CONTEXT_CHANGED serialization (Option B) · M · Med
 - #649 — PlanItem multi-source-state CAS loops · S · Med
+- #658 — fix YAML schema required list (apiVersion vs dsl, missing namespace/name) · XS · Low
 - CaseMetaModelRepository + SubCaseGroupRepository naming cleanup — file issue · S · Low
 
 ## What's Next
@@ -30,3 +33,5 @@ quarkmind#226 filed — deferred migration until quarkmind returns to main.
 |---|-------------|-------|------------|-------|
 | #582 | Generalize GoalBasedCompletion beyond success/failure | M | Med | |
 | #592 | External-backend recovery gap | M | Med | |
+| #654 | Populate CaseMetaModel definition column during registration | S | Low | |
+| #655 | Vocabulary validation for types/labels | M | Med | |
