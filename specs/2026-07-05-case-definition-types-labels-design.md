@@ -12,19 +12,19 @@ Add `types: Set<Path>` and `labels: Set<Path>` to `CaseDefinition`, establishing
 
 `CaseDefinition` has identity (`namespace/name/version`) but no classification. casehub-desiredstate#59 needs to label response cases semantically — "this case is a situation-response of type replan" — so the platform can filter cases by purpose without requiring a new `CaseHub` subclass per type.
 
-casehub-work already uses `Path`-based labels on WorkItems (`WorkItemLabel.path`, `LabelDefinition.path`). CaseDefinition should use the same platform primitive for classification, establishing a consistent pattern.
+casehub-work already uses `Path`-based classification at the definition layer — `LabelDefinition.path` is typed `io.casehub.platform.api.path.Path` with a JPA `PathAttributeConverter`. The runtime instance layer (`WorkItemLabel.path`) stores a plain `String` for JPA embeddability. CaseDefinition is a definition-layer entity, so using typed `Path` is consistent with this layering: `Path` at definition time, string serialization at persistence/instance time.
 
 ## Platform Convention
 
-New platform boundary rule:
+Platform convention (validated by CaseDefinition as first adopter; #653 tracks second adopter validation):
 
-> Every definable entity carries `types: Set<Path>` (what it IS — behavioral contracts that affect engine routing, dispatch, and evaluation) and `labels: Set<Path>` (how it's organized — operational classification that affects queues, dashboards, and analytics). Both use `Path` from `casehub-platform-api`.
+> Every definable entity carries `types: Set<Path>` (what it IS — classification that may affect engine behavior such as routing, dispatch, and evaluation) and `labels: Set<Path>` (how it's organized — operational classification for queues, dashboards, and analytics). Both use `io.casehub.platform.api.path.Path` from `casehub-platform-api`.
 
 | | `types` | `labels` |
 |---|---|---|
 | Answers | "What contracts does this implement?" | "How is this organized?" |
 | Affects | Engine behavior — routing, dispatch, completion | Operations — queues, dashboards, analytics |
-| Set by | Definition author at design time | Definition author or engine at runtime |
+| Set by | Definition author at design time | Definition author at design time (instance-level runtime labels deferred — #656) |
 | Example | `situation-response/replan`, `compliance/auditable` | `priority/high`, `team/infrastructure` |
 
 Types use `implements` semantics (multi-valued) — a case definition can implement multiple behavioral contracts across orthogonal dimensions. Each `Path` provides vertical hierarchy (sub-typing via `isAncestorOf`); the set provides horizontal breadth.
@@ -69,11 +69,31 @@ labels:
 
 ### Java API — `CaseDefinition`
 
-New fields (immutable, builder-constructed):
+`CaseDefinition` currently uses a mutable pattern: constructor + setters + mutable `ArrayList` fields, with a builder that delegates to the same setters. The YAML mapper (`CaseDefinitionYamlMapper`) constructs via `new CaseDefinition(...)` and setters, not the builder. New fields follow this existing pattern for mapper compatibility.
+
+New fields:
 
 ```java
-private Set<Path> types;    // unmodifiable, never null, empty if none
-private Set<Path> labels;   // unmodifiable, never null, empty if none
+private Set<Path> types = Set.of();    // never null, empty if none
+private Set<Path> labels = Set.of();   // never null, empty if none
+```
+
+Setters (store unmodifiable copies, matching `setAgentDescriptors` pattern):
+
+```java
+public void setTypes(Set<Path> types) {
+    this.types = types != null ? Set.copyOf(types) : Set.of();
+}
+public void setLabels(Set<Path> labels) {
+    this.labels = labels != null ? Set.copyOf(labels) : Set.of();
+}
+```
+
+Getters:
+
+```java
+public Set<Path> getTypes()   // returns unmodifiable set, never null
+public Set<Path> getLabels()  // returns unmodifiable set, never null
 ```
 
 Builder methods:
@@ -86,25 +106,22 @@ Builder methods:
 .labels(Set.of(Path.of("priority", "high")))
 ```
 
-Accessors:
-
-```java
-public Set<Path> getTypes()   // unmodifiable, never null
-public Set<Path> getLabels()  // unmodifiable, never null
-```
-
-No setters — builder-only, consistent with `capabilities`, `workers`, `bindings`.
+Builder `build()` calls `setTypes()` / `setLabels()`, consistent with other fields.
 
 ### CaseDefinitionYamlMapper
 
-Parses both fields from the generated schema model via `Path.parse()`:
+Parses both fields from the generated schema model via `Path.parse()`, using the setter pattern consistent with the mapper's existing construction style:
 
 ```java
 if (schemaModel.getTypes() != null) {
-    schemaModel.getTypes().forEach(t -> builder.type(Path.parse(t)));
+    def.setTypes(schemaModel.getTypes().stream()
+        .map(Path::parse)
+        .collect(Collectors.toCollection(LinkedHashSet::new)));
 }
 if (schemaModel.getLabels() != null) {
-    schemaModel.getLabels().forEach(l -> builder.label(Path.parse(l)));
+    def.setLabels(schemaModel.getLabels().stream()
+        .map(Path::parse)
+        .collect(Collectors.toCollection(LinkedHashSet::new)));
 }
 ```
 
@@ -124,12 +141,13 @@ default List<CaseDefinition> findByLabel(Path label) {
 }
 ```
 
-`DefaultCaseDefinitionRegistry` implementation — ancestor matching via `Path.isAncestorOf()`:
+`DefaultCaseDefinitionRegistry` implementation — ancestor matching via `Path.isAncestorOf()`. Iterates the internal `Map<CaseKey, RegistryEntry> registry` (private `ConcurrentHashMap`):
 
 ```java
 @Override
 public List<CaseDefinition> findByType(Path type) {
-    return registeredDefinitions().stream()
+    return registry.values().stream()
+        .map(RegistryEntry::definition)
         .filter(def -> def.getTypes().stream()
             .anyMatch(t -> t.equals(type) || type.isAncestorOf(t)))
         .toList();
@@ -144,12 +162,22 @@ Same pattern for `findByLabel`. `findByType(Path.of("situation-response"))` retu
 - Remove `metadata` property from YAML schema (dead code)
 - Generated schema model regenerates automatically on next build
 
+## Issue Reconciliation
+
+Issue #652 lists `labels`, `tags`, and `categories`. This spec delivers `types` and `labels`:
+
+- **`tags`** (YAML schema: `type: object`) — dead code. Never mapped to the Java API, never consumed by any code or consumer YAML. Removed as cleanup.
+- **`categories`** — after analysis, the concept is captured by `types`: behavioral classification of what a case definition IS. The flat `tags` and vague `categories` from the issue are superseded by the typed `Path`-based `types` and `labels` distinction.
+- **`types`** — new concept not in the original issue. Represents behavioral contracts that affect engine routing, dispatch, and evaluation. This is the semantic gap the issue was trying to fill: "so the platform can categorize cases by purpose."
+
+Issue #652 should be updated to reflect this design.
+
 ## Deferred
 
-- **casehub-work:** Add `types: Set<Path>` to `WorkItemTemplate` and `WorkItem` — second adopter of the platform convention. Separate issue.
-- **CaseMetaModel persistence:** Types/labels are persisted implicitly in the `definition` JsonNode column. Explicit columns for direct DB-level querying deferred until needed.
-- **Vocabulary validation:** Types and labels are free-form `Path` values. Vocabulary enforcement against `LabelVocabulary` is a separate concern if needed later.
-- **Runtime mutation:** Types and labels are design-time on `CaseDefinition`, not instance-level on `CaseInstance`.
+- **casehub-work types/labels adoption (#653):** Add `types: Set<Path>` to `WorkItemTemplate` and `WorkItem` — second adopter of the platform convention.
+- **CaseMetaModel persistence (#654):** The `CaseMetaModel` entity has a `JsonNode definition` column, but `DefaultCaseDefinitionRegistry.registerCaseDefinition()` never populates it — it is always null. Types and labels exist only in the in-memory `CaseDefinition` held in the registry's `ConcurrentHashMap`, rebuilt from YAML on every application restart. Populating the `definition` column during registration (for DB-level querying) is a separate concern.
+- **Vocabulary validation (#655):** Types and labels are free-form `Path` values. Vocabulary enforcement against `LabelVocabulary` or an engine-level `TypeVocabulary` is a separate concern.
+- **Instance-level types and labels (#656):** Types and labels on `CaseDefinition` are design-time only. Instance-level labels on `CaseInstance` (e.g. engine-assigned at runtime) are a separate concern, analogous to `WorkItemLabel` on `WorkItem`.
 
 ## Files Changed
 
@@ -167,7 +195,7 @@ Same pattern for `findByLabel`. `findByType(Path.of("situation-response"))` retu
 
 ## Platform Coherence
 
-- Uses `Path` from `casehub-platform-api` — the existing platform classification primitive
-- Aligns with casehub-work's `WorkItemLabel` model (also `Path`-based)
+- Uses `io.casehub.platform.api.path.Path` from `casehub-platform-api` — the existing platform classification primitive
+- Aligns with casehub-work's definition-layer `LabelDefinition` model (typed `Path` with `PathAttributeConverter`)
 - Removes parallel scope/classification types per platform boundary rule
 - Removes dead schema fields that were never consumed
