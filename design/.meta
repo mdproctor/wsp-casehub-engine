@@ -1,0 +1,9 @@
+branch: issue-649-planitem-cas-and-naming
+project-sha: bdfb86757b513036e641c86a802f3aafc4d06e9d
+date: 2026-07-06
+issue: 649
+issue-repo: casehubio/engine
+covers: 649,662
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
