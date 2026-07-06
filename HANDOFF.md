@@ -1,12 +1,8 @@
-# Handoff — 2026-07-05
+# Handoff — 2026-07-06
 
 ## What's Done
 
-**#652 batch closed** — `c9aec072` on main. Five issues landed: #652 (CaseDefinition types/labels — `Set<Path>` classification + registry queries), #638 (MatchDegree on AgentCandidate via MatchedWorker), #608 (qhorus Store SPI import migration), #623 (fsitrading CI dispatch), #613 (soc — already done, closed).
-
-Platform convention established: `types: Set<Path>` + `labels: Set<Path>` on every definable entity. Added to PLATFORM.md (`6b31ec7d` on parent). Deferred issues filed: work#291 (WorkItem/Template types), #653-#656 (persistence, vocabulary, instance-level).
-
-Ledger import fix committed on main (`LedgerEntry` → `JpaLedgerEntry`, `LedgerEntryRepository` → `api.spi`). Refs casehubio/ledger#173.
+**#658, #464, #659 closed** — `bdfb8675` on main. Three commits landed: #658 (YAML schema required list fix — apiVersion→dsl, add namespace/name), #464 (panel→layer rename across 48 files on CaseContext API), #659 (flaky test root causes — PlanItem re-creation, handler ordering, settlement race). Also fixed pre-existing test issues: stale ScoreType import, missing reactive repo alternatives in memory profile.
 
 ## Cross-Module
 
@@ -16,7 +12,6 @@ Ledger import fix committed on main (`LedgerEntry` → `JpaLedgerEntry`, `Ledger
 
 - #646 — per-case CONTEXT_CHANGED serialization (Option B) · M · Med
 - #649 — PlanItem multi-source-state CAS loops · S · Med
-- #658 — fix YAML schema required list (apiVersion vs dsl, missing namespace/name) · XS · Low
 - CaseMetaModelRepository + SubCaseGroupRepository naming cleanup — file issue · S · Low
 
 ## What's Next
