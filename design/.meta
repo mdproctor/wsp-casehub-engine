@@ -1,0 +1,9 @@
+branch: issue-478-case-retriever-routing-bridge
+project-sha: 09d693940443978fd9bb89b94d7fad6cabc449b0
+date: 2026-07-06
+issue: 478
+issue-repo: casehubio/engine
+covers: 478
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
