@@ -1,0 +1,9 @@
+branch: issue-654-populate-definition-column
+project-sha: 09d693940443978fd9bb89b94d7fad6cabc449b0
+date: 2026-07-06
+issue: 654
+issue-repo: casehubio/engine
+covers: 654
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
