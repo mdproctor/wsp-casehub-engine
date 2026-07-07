@@ -1,3 +1,5 @@
+*Updated: #667, #678 closed — removed from backlog.*
+
 # Handoff — 2026-07-07
 
 ## What's Done
@@ -25,4 +27,3 @@ Key new API surface: `ExecutionOrigin`, `RetryState`, `CaseContext.onChange()`/`
 | #672 | Feature-level similarity in RetrievedExperience | S | Med | Cross-repo (neocortex API first), scoped |
 | #582 | Generalize GoalBasedCompletion beyond success/failure | M | Med | |
 | #592 | External-backend recovery gap | M | Med | |
-| #667 | Devtown cross-repo rename propagation | S | Low | |
