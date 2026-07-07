@@ -1,0 +1,9 @@
+branch: issue-678-sx-backlog-sweep
+project-sha: a295e3fbfd56783fc39cfbab0b083f0c44df09dd
+date: 2026-07-07
+issue: 678
+issue-repo: casehubio/engine
+covers: 678,664,665,673,654,663,666,635,618,655,661,671,672,648,619,617,616
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes: 
