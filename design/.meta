@@ -1,0 +1,9 @@
+branch: issue-582-generalize-goal-completion
+project-sha: 772b3d62ece3bf5931819009476c73e37ba69e42
+date: 2026-07-07
+issue: 582
+issue-repo: casehubio/engine
+covers: 582
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
