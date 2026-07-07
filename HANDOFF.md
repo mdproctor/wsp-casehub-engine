@@ -1,10 +1,8 @@
-# Handoff — 2026-07-06
+# Handoff — 2026-07-07
 
 ## What's Done
 
-**#478 implementation complete** on branch `issue-478-case-retriever-routing-bridge` (20 commits). CBR Retrieve→Reuse bridge: sealed `FeatureExtractor` (JQ/lambda), `CbrConfig` on `CaseDefinition`, `RetrievedExperience`/`ExperiencePlanStep` engine-owned types, routing context enrichment (`tenancyId` gap fix + `experiences` field on all 3 contexts), `CbrRetrievalService` with failure recovery, YAML `cbr:` schema + mapper, wired into `CaseContextChangedEventHandler` + `DefaultWorkOrchestrator`. Design review (4 rounds, 16 issues, all resolved). 47+ tests pass. Full suite green (1 pre-existing flaky in work-adapter — set ordering, unrelated).
-
-**Blocker:** 2 integration tests `@Disabled` pending #675 — `BlockingToReactiveCbrBridge` (`@DefaultBean`) resolves delegate to `NoOpCbrCaseMemoryStore` instead of `InMemoryCbrCaseMemoryStore`. Root cause: Quarkus ARC resolves `@DefaultBean` injection points at build time before `@Alternative` activation. Fix designed: switch `CbrRetrievalService` to blocking `CbrCaseMemoryStore` + `runSubscriptionOn()`, use `getEnabledAlternatives()` with full alternative re-declaration. Garden entry: GE-20260706-abaddc.
+**#478, #675, #663, #668 all landed on main** via branch `issue-478-case-retriever-routing-bridge` (16 squashed commits). CBR Retrieve→Reuse bridge complete: `CbrRetrievalService`, sealed `FeatureExtractor`, `CbrConfig` on `CaseDefinition`, routing context enrichment (`experiences` field on all 3 contexts), YAML `cbr:` schema, 15 tests. #675 fixed (blocking store bypasses `@DefaultBean` bridge). #663 fixed (interface-based delegation for all 5 reactive in-memory repos). #668 `TrustGatedAttestationPolicy` in engine-ledger. Garden entry GE-20260707-f3bece captures the delegate injection gotcha.
 
 ## Cross-Module
 
@@ -12,7 +10,6 @@
 
 ## What's Left
 
-- #675 — fix CBR integration tests (blocking store + getEnabledAlternatives) · S · Med — **gates merge of #478**
 - #654 — populate CaseMetaModel definition column (paused on stack) · S · Low
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
 - #666 — consolidate WorkerRetryExhaustionHandler + PlanItemFaultHandler · S · Med
