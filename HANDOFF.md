@@ -2,7 +2,9 @@
 
 ## What's Done
 
-**#478, #675, #663, #668 all landed on main** via branch `issue-478-case-retriever-routing-bridge` (16 squashed commits). CBR Retrieve→Reuse bridge complete: `CbrRetrievalService`, sealed `FeatureExtractor`, `CbrConfig` on `CaseDefinition`, routing context enrichment (`experiences` field on all 3 contexts), YAML `cbr:` schema, 15 tests. #675 fixed (blocking store bypasses `@DefaultBean` bridge). #663 fixed (interface-based delegation for all 5 reactive in-memory repos). #668 `TrustGatedAttestationPolicy` in engine-ledger. Garden entry GE-20260707-f3bece captures the delegate injection gotcha.
+**S/XS backlog sweep (#678) landed on main** — 12 issues closed in one branch. Main divergence from previous session reconciled (cherry-picked 9 commits onto origin/main, rescued `ab60f7b8` #18 submit overload from orphaned branch). #669 flaky test root-caused and fixed (non-deterministic event bus delivery order — garden entry GE-20260707-ee0718). CI green.
+
+Key new API surface: `ExecutionOrigin`, `RetryState`, `CaseContext.onChange()`/`onAnyChange()`, `Binding.producedKeys`, `CbrRetrievalTiming`, QhorusMessageSignalBridge STATUS routing. CLAUDE.md synced. Design spec adversarially reviewed (3 rounds, 16 issues, all resolved).
 
 ## Cross-Module
 
@@ -10,19 +12,17 @@
 
 ## What's Left
 
-- #654 — populate CaseMetaModel definition column (paused on stack) · S · Low
+- #681 — code review findings from sweep (CBR cache bound, listener lifecycle, VocabularyRegistry instanceof) · S · Low
+- #680 — thread tenancyId through event bus messages (deeper fix for #663) · M · Med
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
-- #666 — consolidate WorkerRetryExhaustionHandler + PlanItemFaultHandler · S · Med
-- #669 — SubCaseMofNOutputMappingTest suite interaction · S · Med
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #671 | Case-lifetime CBR caching for high-frequency ticks | S | Med | QuarkMind blocked until this ships |
-| #672 | Feature-level similarity breakdown in RetrievedExperience | S | Med | |
-| #673 | CbrConfig validation at registration time | XS | Low | |
+| #635 | Rename io.casehub.api → io.casehub.engine.api | L | Low | Cross-repo (14+ repos), scoped and documented |
+| #648 | OutcomeRecorder.addAttestation | S | Med | Cross-repo (casehub-ledger SPI first), scoped |
+| #672 | Feature-level similarity in RetrievedExperience | S | Med | Cross-repo (neocortex API first), scoped |
 | #582 | Generalize GoalBasedCompletion beyond success/failure | M | Med | |
 | #592 | External-backend recovery gap | M | Med | |
-| #655 | Vocabulary validation for types/labels | M | Med | |
 | #667 | Devtown cross-repo rename propagation | S | Low | |
