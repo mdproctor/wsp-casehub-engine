@@ -1,1 +1,1 @@
-# Design Journal — issue-543-migrate-worker-primitives
+# Design Journal — issue-203-context-bridge-protocol

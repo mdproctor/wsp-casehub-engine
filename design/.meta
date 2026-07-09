@@ -1,0 +1,9 @@
+branch: issue-203-context-bridge-protocol
+project-sha: 4381de895a86ce2521a68378654bebe78fd9c350
+date: 2026-07-09
+issue: 203
+issue-repo: casehubio/engine
+covers: 203
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
