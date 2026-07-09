@@ -1,3 +1,5 @@
+*Updated: #681 closed — removed from backlog.*
+
 # Handoff — 2026-07-09
 
 ## What's Done
@@ -13,7 +15,6 @@ Resume implementation on branch `issue-203-context-bridge-protocol`. Run `/work`
 ## What's Left
 
 - #203 implementation — 8 tasks in plan, 0 completed · L · Med
-- #681 — code review findings (CBR cache, listener lifecycle, VocabularyRegistry) · S · Low
 - #680 — thread tenancyId through event bus messages · M · Med
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
 
