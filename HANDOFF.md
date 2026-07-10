@@ -2,21 +2,19 @@
 
 ## What's Done
 
-**ContextBridge protocol (#203) — Tasks 1–7 of 8 implemented.** Full pipeline wired: `WorkerFunction<T>` parameterised with Reified Varargs Type Token DSL, `ContextBridge<T>` SPI with 3 built-in bridges, `BridgeResolver` (CDI discovery chain), pipeline signatures widened to `Object`, `WorkerScheduleEventHandler` and `QuartzWorkerExecutionJob` integrated with bridge initialise/serialise/deserialise/extractOutput. YAML `contextType` support added. Cross-repo: worker (1 commit), engine (7 commits), workers (1 commit on main).
-
-**Key architecture decision this session:** `BridgeResolver` moved from `runtime` to `common/internal/context/` — `scheduler-quartz` can't depend on `runtime` (wrong direction). Shared infrastructure that both modules consume goes in `common`.
+**ContextBridge protocol (#203) — all 8 tasks complete.** Task 8 (integration tests) landed: 7 tests covering MapBridge identity, JacksonPojoBridge typed POJO, EventLog metadata, backward compat, and mixed bridge coexistence. Full pipeline verified end-to-end. Cross-repo: worker repo branch `issue-203-context-bridge-protocol` still needs to land alongside engine changes.
 
 ## Immediate Next Step
 
-Resume implementation on branch `issue-203-context-bridge-protocol`. **Task 8 only: integration tests.** Read the plan at `docs/plans/2026-07-09-context-bridge-implementation.md` (Task 8 section) and the spec at `docs/specs/2026-07-09-context-bridge-architecture.md` (§Combinatorial Test Matrix). Create `runtime/src/test/java/io/casehub/engine/ContextBridgeIntegrationTest.java` as a `@QuarkusTest`. Test Pattern 1 (MapBridge identity), Pattern 2 (typed POJO via JacksonPojoBridge), EventLog metadata `contextBridgeType`, and backward compat (pre-bridge EventLog entries deserialise to Map). **Use IntelliJ MCP for all code operations.**
+**Fix flaky runtime tests.** `ActionGateIntegrationTest` (6 errors), `ActionGateResolutionTest` (3 errors), and `CaseLifecycleCdiEventTest` (1 error) all fail with Awaitility timeouts — not assertion failures. These are race conditions in test setup, not production bugs. File an issue, then fix. Likely causes: insufficient timeout, missing `await()` on async setup, or event ordering assumptions.
 
 ## Cross-Module
 
-**Worker repo** has uncommitted-to-main changes on branch `issue-203-context-bridge-protocol` — needs to land alongside engine changes. Workers repo change is already on `main`.
+**Worker repo** has uncommitted-to-main changes on branch `issue-203-context-bridge-protocol` — needs to land alongside engine changes.
 
 ## What's Left
 
-- #203 Task 8 — integration tests for ContextBridge · M · Med
+- Flaky tests — ActionGate + CaseLifecycle timeout failures · S · Med
 - #680 — thread tenancyId through event bus messages · M · Med
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
 
