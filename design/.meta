@@ -1,0 +1,9 @@
+branch: issue-700-unify-orchestration-model
+project-sha: a08e3e579b72cf79f9e29642e9e9ba69fb55ea0b
+date: 2026-07-10
+issue: 700
+issue-repo: casehubio/engine
+covers: 700
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes: 
