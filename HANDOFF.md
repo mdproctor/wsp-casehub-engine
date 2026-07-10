@@ -1,29 +1,48 @@
-# Handoff — 2026-07-10
+# HANDOFF — engine#700 orchestration unification
 
-## What's Done
+**Branch:** `issue-700-unify-orchestration-model`
+**Issue:** casehubio/engine#700
+**Status:** Phase 1 production code ~80% complete, uncommitted
 
-**ContextBridge protocol (#203) — all 8 tasks complete.** Task 8 (integration tests) landed: 7 tests covering MapBridge identity, JacksonPojoBridge typed POJO, EventLog metadata, backward compat, and mixed bridge coexistence. Full pipeline verified end-to-end. Cross-repo: worker repo branch `issue-203-context-bridge-protocol` still needs to land alongside engine changes.
+## What Was Done
+
+Designed and began implementing the shared orchestration type foundation for engine#700 — unifying engine's blackboard model with blocks' agentic patterns. Full gap analysis of engine#101 (superseded), engine#694-698 (fold into #700). Cross-repo blocker analysis written to `docs/cross-repo-blockers.md`.
+
+**New shared types created (engine-api, uncommitted):**
+- `OutcomeKind` — shared outcome taxonomy (SUCCESS/DECLINED/FAILED/EXPIRED/ESCALATED) + tests
+- `ExecutorRef` / `SimpleExecutorRef` — shared executor identity interface + tests
+- `RoutingResult` / `Assignment` — unified routing result replacing `AgentAssignment`
+
+**Production code updated (uncommitted):**
+- `PlanItem` — gained `description` field, threaded through `PlanItemRecord`, `PlanItemSaveRequest`, all persistence stores, `PlanItemRestorer`
+- `AgentRoutingStrategy.select()` — return type changed from `Uni<AgentAssignment>` to `Uni<RoutingResult>`
+- All 6 `AgentRoutingStrategy` implementations migrated
+- All production callers migrated: `CaseContextChangedEventHandler`, `DefaultWorkOrchestrator`, `TrustWeightedImplementationRoutingStrategy`, `TrustCandidateClassifier`
+- Blocks `RoutingSupport.TrustFilterOutcome.Decided` — now carries `RoutingResult`
+
+**Production compiles clean.** 0 production errors, 26 test errors (mechanical `AgentAssignment` → `RoutingResult` migration).
 
 ## Immediate Next Step
 
-**Fix flaky runtime tests.** `ActionGateIntegrationTest` (6 errors), `ActionGateResolutionTest` (3 errors), and `CaseLifecycleCdiEventTest` (1 error) all fail with Awaitility timeouts — not assertion failures. These are race conditions in test setup, not production bugs. File an issue, then fix. Likely causes: insufficient timeout, missing `await()` on async setup, or event ordering assumptions.
+Migrate remaining test files from `AgentAssignment` to `RoutingResult` (~8 test files, mechanical). Then commit, continue with Phase 1E (FailurePolicy) and Phase 2 (async BlackboardPlanConfigurer).
 
-## Cross-Module
+## What's Left (this branch)
 
-**Worker repo** has uncommitted-to-main changes on branch `issue-203-context-bridge-protocol` — needs to land alongside engine changes.
-
-## What's Left
-
-- Flaky tests — ActionGate + CaseLifecycle timeout failures · S · Med
-- #680 — thread tenancyId through event bus messages · M · Med
-- #646 — per-case CONTEXT_CHANGED serialization · M · Med
+- Test migration for RoutingResult · S · Low
+- Delete `AgentAssignment.java` · XS · Low
+- Phase 1E: Unified FailurePolicy · M · Med
+- Phase 1F: Remove duplicated types · S · Low
+- Phase 2: Async BlackboardPlanConfigurer · S · Med
+- Phase 5: Issue management · S · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #689 | WorkItems boundary — typed payload/resolution | M | Med | Design projection in spec |
-| #690 | SubCase boundary — typed context passing | S | Med | Design projection in spec |
-| #691 | Signals boundary — typed signal overload | S | Med | Design projection in spec |
-| #692 | Connectors boundary — typed inbound payloads | S | Med | Design projection in spec |
-| #635 | Rename io.casehub.api → io.casehub.engine.api | L | Low | Cross-repo |
+| — | Phase 3: Blocks-side alignment | L | Med | Separate blocks branch |
+| — | Phase 4: Peer architecture | XL | High | Depends on Phase 3 |
+
+## References
+
+- Plan: `~/.claude/plans/proud-dancing-hartmanis.md`
+- Cross-repo blockers: `docs/cross-repo-blockers.md`
