@@ -1,0 +1,9 @@
+branch: issue-706-cbr-routing-pipeline
+project-sha: 5369ef97c01cd5c17270fb7b6832fc49002d8ef0
+date: 2026-07-11
+issue: 706
+issue-repo: casehubio/engine
+covers: 706,703,505,705
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
