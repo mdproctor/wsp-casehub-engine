@@ -1,5 +1,5 @@
-# Branch Closed: issue-585-observer-health-quartz-cleanup
+# Branch Closed: issue-700-unify-orchestration-model
 
-**Date:** 2026-06-30
-**Issues:** 585,593,594
+**Date:** 2026-07-11
+**Issues:** 700
 **Status:** merged to main
