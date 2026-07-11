@@ -2,6 +2,9 @@
 title: "Seven tasks, one session: ContextBridge implementation day"
 date: 2026-07-10
 type: diary
+entry_type: note
+subtype: diary
+projects: [casehub-engine]
 tags: [contextbridge, generics, pipeline, cross-repo]
 ---
 
