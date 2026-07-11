@@ -1,48 +1,36 @@
-# HANDOFF — engine#700 orchestration unification
+# Handoff — 2026-07-11
 
-**Branch:** `issue-700-unify-orchestration-model`
-**Issue:** casehubio/engine#700
-**Status:** Phase 1 production code ~80% complete, uncommitted
+## What's Done
 
-## What Was Done
-
-Designed and began implementing the shared orchestration type foundation for engine#700 — unifying engine's blackboard model with blocks' agentic patterns. Full gap analysis of engine#101 (superseded), engine#694-698 (fold into #700). Cross-repo blocker analysis written to `docs/cross-repo-blockers.md`.
-
-**New shared types created (engine-api, uncommitted):**
-- `OutcomeKind` — shared outcome taxonomy (SUCCESS/DECLINED/FAILED/EXPIRED/ESCALATED) + tests
-- `ExecutorRef` / `SimpleExecutorRef` — shared executor identity interface + tests
-- `RoutingResult` / `Assignment` — unified routing result replacing `AgentAssignment`
-
-**Production code updated (uncommitted):**
-- `PlanItem` — gained `description` field, threaded through `PlanItemRecord`, `PlanItemSaveRequest`, all persistence stores, `PlanItemRestorer`
-- `AgentRoutingStrategy.select()` — return type changed from `Uni<AgentAssignment>` to `Uni<RoutingResult>`
-- All 6 `AgentRoutingStrategy` implementations migrated
-- All production callers migrated: `CaseContextChangedEventHandler`, `DefaultWorkOrchestrator`, `TrustWeightedImplementationRoutingStrategy`, `TrustCandidateClassifier`
-- Blocks `RoutingSupport.TrustFilterOutcome.Decided` — now carries `RoutingResult`
-
-**Production compiles clean.** 0 production errors, 26 test errors (mechanical `AgentAssignment` → `RoutingResult` migration).
+**Unified orchestration model (#700) — landed on main.** Introduced shared types: TaskStatus (replaces PlanItemStatus), TaskDescriptor (behavioral interface, PlanItem implements it), TaskSnapshot (read model), RoutingResult (replaces AgentAssignment), ExecutorRef on PlanItem (replaces workerName), Assignment, OutcomeKind. Adversarial design review (3 rounds, 15 issues). Four deferred issues filed for blocks adoption (blocks#50-52, engine#702).
 
 ## Immediate Next Step
 
-Migrate remaining test files from `AgentAssignment` to `RoutingResult` (~8 test files, mechanical). Then commit, continue with Phase 1E (FailurePolicy) and Phase 2 (async BlackboardPlanConfigurer).
+**Fix flaky runtime tests.** `ActionGateIntegrationTest` (6 errors), `ActionGateResolutionTest` (3 errors), `CaseLifecycleCdiEventTest` (1 error) — Awaitility timeouts, not assertion failures. Pre-existing, not caused by #700.
 
-## What's Left (this branch)
+## Cross-Module
 
-- Test migration for RoutingResult · S · Low
-- Delete `AgentAssignment.java` · XS · Low
-- Phase 1E: Unified FailurePolicy · M · Med
-- Phase 1F: Remove duplicated types · S · Low
-- Phase 2: Async BlackboardPlanConfigurer · S · Med
-- Phase 5: Issue management · S · Low
+**Worker repo** has branch `issue-203-context-bridge-protocol` that needs to land alongside engine changes.
+
+**Blocks adoption** — four issues filed:
+- blocks#50 — `AgentRef extends ExecutorRef`
+- blocks#51 — `PlannedTask implements TaskDescriptor`
+- blocks#52 — `SubTaskStatus` → `TaskStatus`
+
+## What's Left
+
+- Flaky tests — ActionGate + CaseLifecycle timeout failures · S · Med
+- #680 — thread tenancyId through event bus messages · M · Med
+- #646 — per-case CONTEXT_CHANGED serialization · M · Med
+- #702 — event/handler ExecutorRef migration · M · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| — | Phase 3: Blocks-side alignment | L | Med | Separate blocks branch |
-| — | Phase 4: Peer architecture | XL | High | Depends on Phase 3 |
-
-## References
-
-- Plan: `~/.claude/plans/proud-dancing-hartmanis.md`
-- Cross-repo blockers: `docs/cross-repo-blockers.md`
+| #694 | DAG plan structure | L | High | Natural vehicle for shared Plan type |
+| #689 | WorkItems boundary — typed payload/resolution | M | Med | |
+| #690 | SubCase boundary — typed context passing | S | Med | |
+| #691 | Signals boundary — typed signal overload | S | Med | |
+| #692 | Connectors boundary — typed inbound payloads | S | Med | |
+| #635 | Rename io.casehub.api → io.casehub.engine.api | L | Low | Cross-repo |
