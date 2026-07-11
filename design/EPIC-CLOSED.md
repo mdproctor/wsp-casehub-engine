@@ -1,5 +1,5 @@
-# Branch Closed: issue-585-observer-health-quartz-cleanup
+# Branch Closed: issue-683-promote-routing-prompt-section
 
-**Date:** 2026-06-30
-**Issues:** 585,593,594
+**Date:** 2026-07-11
+**Issues:** 683
 **Status:** merged to main
