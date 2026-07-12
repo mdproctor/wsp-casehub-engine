@@ -1,0 +1,9 @@
+branch: issue-704-cbr-generalize-dag-plan
+project-sha: 2325fab774bf151ddb8fb2dfd22431bd8f9ceb76
+date: 2026-07-12
+issue: 704
+issue-repo: casehubio/engine
+covers: 704,672,694
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
