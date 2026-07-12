@@ -1,0 +1,9 @@
+branch: issue-712-sx-cleanup-batch
+project-sha: 735a7c2c0f5ea69cee6dec2e2ac33320ddc1bf3e
+date: 2026-07-12
+issue: 712
+issue-repo: casehubio/engine
+covers: 712,709,677,676,711,669,707,653,710,648
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
