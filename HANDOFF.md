@@ -1,14 +1,19 @@
 # Handoff — 2026-07-12
 
-*Updated: cross-module corrected, CBR + DAG/planning issues added.*
-
 ## What's Done
 
-**CBR routing pipeline (#706) — landed on main.** Three child issues closed: #703 (CbrCaseRetainObserver stores PlanCbrCase on case close), #505 (strategies consume context.experiences(), dead code removed), #705 (superseded — RoutingFeatureExtractor deleted instead of promoted). Design review (4 rounds, 18 issues, all resolved).
+**CBR generalization + feature similarity + DAG plan (#704, #672, #694) — landed on main.** Three issues closed across three repos:
+- engine#704: CbrRetrievalService generalized beyond PlanCbrCase — cbrType config, CbrCaseTypeRegistration CDI SPI, generic retrieve() overload
+- engine#672: Feature-level similarity breakdown — RetrievedExperience.featureSimilarities, CbrSimilarityScorer.scoreDetailed() (neocortex upstream), ScoredCbrCase.featureSimilarities
+- engine#694: ExecutionPlan DAG type in blocks — factory methods, validation, topological sort, DecompositionStrategy returns ExecutionPlan
+
+Design review (5 rounds, 28 issues, all resolved). Spec at `docs/specs/2026-07-12-cbr-generalize-similarity-dag-plan-design.md`.
 
 ## Immediate Next Step
 
-**Fix flaky runtime tests.** ActionGateIntegrationTest (6 errors), ActionGateResolutionTest (3 errors), CaseLifecycleCdiEventTest (1 error) — pre-existing Awaitility timeouts, not caused by #706.
+**Push to fork.** The squash completed locally but the fork push was blocked by a divergence hook. Run `git push --force fork main` from the engine project. Then deliver to blessed repo (push or PR).
+
+Also push neocortex (`issue-672-feature-similarity-breakdown` branch) and blocks (`issue-694-dag-plan-structure` branch).
 
 ## Cross-Module
 
@@ -19,19 +24,21 @@ Shipped (engine-side done):
 - PlanItem implements TaskDescriptor with ExecutorRef
 - ContextBridge protocol (engine#203)
 - RoutingResult adopted — blocks already migrated
+- **ExecutionPlan DAG type — blocks#694 landed**
 
 Blocks adoption (blocks-side, consumes shipped types):
-- blocks#52 — SubTaskStatus → TaskStatus · S · Low (independent, do first)
+- blocks#52 — SubTaskStatus → TaskStatus · S · Low
 - blocks#50 — AgentRef extends ExecutorRef · S · Med
-- blocks#51 — PlannedTask implements TaskDescriptor · M · Med (depends on #50)
+- blocks#51 — PlannedTask implements TaskDescriptor · M · Med (depends on #50; prerequisite for promoting ExecutionPlan to shared type)
 
-Engine Phase 2 (blocks also waiting on these):
-- engine#694 — DAG plan structure · L · High
-- engine#695 — DAG-aware parallel execution driver · L · High (depends on #694)
+Engine Phase 2 (blocks waiting on these):
+- engine#695 — DAG-aware parallel execution driver · L · High (depends on #694, now unblocked)
 
 ## What's Left
 
-- Flaky tests — ActionGate + CaseLifecycle timeout failures · S · Med
+- Fork push pending (squash hook blocked it)
+- Neocortex branch push pending
+- Blocks branch push pending
 - #680 — thread tenancyId through event bus messages · M · Med
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
 - #702 — event/handler ExecutorRef migration · M · Low
@@ -40,27 +47,16 @@ Engine Phase 2 (blocks also waiting on these):
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| **CBR follow-on** | | | | |
-| #704 | CbrRetrievalService — generalize beyond PlanCbrCase | S | Low | |
-| #672 | Feature-level similarity breakdown in RetrievedExperience | S | Med | |
-| **DAG/Planning cluster** | | | | **blocks#44 waiting on #694** |
-| #694 | DAG plan structure — ExecutionPlan with dependency edges | L | High | Blocks #695, #697, #698 |
-| #695 | DAG-aware parallel execution driver | L | High | Depends on #694 |
-| #697 | Plan versioning — immutable plan snapshots | M | Med | Depends on #694 |
-| #696 | Multi-level recovery protocol | M | High | Depends on #694 + #697 |
-| #698 | Context isolation per task | M | Med | Depends on #694 |
-| **HTN** | | | | |
+| #695 | DAG-aware parallel execution driver | L | High | **Now unblocked** by #694 |
+| #704 | CbrRetrievalService generalize | — | — | **Done** |
+| #672 | Feature-level similarity breakdown | — | — | **Done** |
+| #694 | DAG plan structure | — | — | **Done** |
 | #600 | HTN — hierarchical task decomposition | L | High | Under #595 epic |
-| **Boundaries** | | | | |
-| #689 | WorkItems boundary — typed payload/resolution | M | Med | |
-| #690 | SubCase boundary — typed context passing | S | Med | |
-| #691 | Signals boundary — typed signal overload | S | Med | |
-| #692 | Connectors boundary — typed inbound payloads | S | Med | |
-| **Other** | | | | |
+| #689 | WorkItems boundary — typed payload | M | Med | |
 | #635 | Rename io.casehub.api → io.casehub.engine.api | L | Low | Cross-repo |
 
 ## References
 
-- Spec: `docs/specs/2026-07-11-cbr-routing-pipeline-design.md`
-- Design review: `~/adr/casehub-engine/cbr-routing-pipeline-20260711-190819/`
-- Garden: GE-20260712-626e51 (@DefaultBean in external module not discovered via index-dependency)
+- Spec: `docs/specs/2026-07-12-cbr-generalize-similarity-dag-plan-design.md`
+- Design review: `~/adr/casehub-engine/cbr-generalize-similarity-dag-plan-20260712-021338/`
+- Garden: GE-20260712-1a696a (ide_replace_text_in_file duplication bug)
