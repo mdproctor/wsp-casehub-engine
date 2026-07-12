@@ -2,44 +2,24 @@
 
 ## What's Done
 
-**CBR generalization + feature similarity + DAG plan (#704, #672, #694) — landed on main.** Three issues closed across three repos:
-- engine#704: CbrRetrievalService generalized beyond PlanCbrCase — cbrType config, CbrCaseTypeRegistration CDI SPI, generic retrieve() overload
-- engine#672: Feature-level similarity breakdown — RetrievedExperience.featureSimilarities, CbrSimilarityScorer.scoreDetailed() (neocortex upstream), ScoredCbrCase.featureSimilarities
-- engine#694: ExecutionPlan DAG type in blocks — factory methods, validation, topological sort, DecompositionStrategy returns ExecutionPlan
+**TenancyId threading (#680) — landed on main.** Root fix: `TenantAwareRepository.withTenantTransaction()` parameterized with explicit tenancyId — removes ambient `CurrentPrincipal` dependency. 10 event records gain tenancyId. PlanItemStore SPI evolved (updateStatus tenancyId overload, findDelegatedCrossTenant rename). Test workarounds removed. Design review (3 rounds, 12 issues, all resolved). Spec at `docs/specs/2026-07-12-thread-tenancyid-event-bus-design.md`.
 
-Design review (5 rounds, 28 issues, all resolved). Spec at `docs/specs/2026-07-12-cbr-generalize-similarity-dag-plan-design.md`.
+**CBR generalization (#704, #672, #694) — landed on main.** All three repos pushed and delivered.
 
 ## Immediate Next Step
 
-**Push to fork.** The squash completed locally but the fork push was blocked by a divergence hook. Run `git push --force fork main` from the engine project. Then deliver to blessed repo (push or PR).
-
-Also push neocortex (`issue-672-feature-similarity-breakdown` branch) and blocks (`issue-694-dag-plan-structure` branch).
+All pushed. No pending deliveries. Pick next work from What's Next.
 
 ## Cross-Module
 
-**Blocking blocks — orchestration model convergence (engine#700 → blocks#44):**
+*Unchanged — `git show HEAD~1:HANDOFF.md`*
 
-Shipped (engine-side done):
-- TaskDescriptor, TaskStatus, ExecutorRef, RoutingResult — all in engine-api
-- PlanItem implements TaskDescriptor with ExecutorRef
-- ContextBridge protocol (engine#203)
-- RoutingResult adopted — blocks already migrated
-- **ExecutionPlan DAG type — blocks#694 landed**
-
-Blocks adoption (blocks-side, consumes shipped types):
-- blocks#52 — SubTaskStatus → TaskStatus · S · Low
-- blocks#50 — AgentRef extends ExecutorRef · S · Med
-- blocks#51 — PlannedTask implements TaskDescriptor · M · Med (depends on #50; prerequisite for promoting ExecutionPlan to shared type)
-
-Engine Phase 2 (blocks waiting on these):
-- engine#695 — DAG-aware parallel execution driver · L · High (depends on #694, now unblocked)
+New: engine#710 — work-adapter must populate tenancyId in ActionGate completion events (cross-repo follow-up from #680).
 
 ## What's Left
 
-- Fork push pending (squash hook blocked it)
-- Neocortex branch push pending
-- Blocks branch push pending
-- #680 — thread tenancyId through event bus messages · M · Med
+- #710 — work-adapter: populate tenancyId in ActionGate completion events · S · Low (cross-repo)
+- #709 — SubCaseGroupLifecycleEvent tenancyId (CDI event consistency) · XS · Low
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
 - #702 — event/handler ExecutorRef migration · M · Low
 
@@ -47,16 +27,13 @@ Engine Phase 2 (blocks waiting on these):
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #695 | DAG-aware parallel execution driver | L | High | **Now unblocked** by #694 |
-| #704 | CbrRetrievalService generalize | — | — | **Done** |
-| #672 | Feature-level similarity breakdown | — | — | **Done** |
-| #694 | DAG plan structure | — | — | **Done** |
+| #695 | DAG-aware parallel execution driver | L | High | Unblocked by #694 |
 | #600 | HTN — hierarchical task decomposition | L | High | Under #595 epic |
 | #689 | WorkItems boundary — typed payload | M | Med | |
 | #635 | Rename io.casehub.api → io.casehub.engine.api | L | Low | Cross-repo |
 
 ## References
 
-- Spec: `docs/specs/2026-07-12-cbr-generalize-similarity-dag-plan-design.md`
-- Design review: `~/adr/casehub-engine/cbr-generalize-similarity-dag-plan-20260712-021338/`
-- Garden: GE-20260712-1a696a (ide_replace_text_in_file duplication bug)
+- Spec: `docs/specs/2026-07-12-thread-tenancyid-event-bus-design.md`
+- Design review: `~/adr/casehub-engine/thread-tenancyid-event-bus-20260712-185729/`
+- Garden: GE-20260712-1a82c4 (ide_edit_member truncation), GE-20260712-4a8a3c (record field reorder silent bug)
