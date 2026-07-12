@@ -1,0 +1,9 @@
+branch: issue-680-thread-tenancyid-event-bus
+project-sha: 3fc0a4dec290965986a20575f4a32d12541f5061
+date: 2026-07-12
+issue: 680
+issue-repo: casehubio/engine
+covers: 680
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
