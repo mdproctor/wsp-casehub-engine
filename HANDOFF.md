@@ -12,7 +12,22 @@
 
 ## Cross-Module
 
-**We're blocking blocks:** #694 (DAG plan structure) gates blocks#44 (agentic planning architecture epic) · L · High
+**Blocking blocks — orchestration model convergence (engine#700 → blocks#44):**
+
+Shipped (engine-side done):
+- TaskDescriptor, TaskStatus, ExecutorRef, RoutingResult — all in engine-api
+- PlanItem implements TaskDescriptor with ExecutorRef
+- ContextBridge protocol (engine#203)
+- RoutingResult adopted — blocks already migrated
+
+Blocks adoption (blocks-side, consumes shipped types):
+- blocks#52 — SubTaskStatus → TaskStatus · S · Low (independent, do first)
+- blocks#50 — AgentRef extends ExecutorRef · S · Med
+- blocks#51 — PlannedTask implements TaskDescriptor · M · Med (depends on #50)
+
+Engine Phase 2 (blocks also waiting on these):
+- engine#694 — DAG plan structure · L · High
+- engine#695 — DAG-aware parallel execution driver · L · High (depends on #694)
 
 ## What's Left
 
