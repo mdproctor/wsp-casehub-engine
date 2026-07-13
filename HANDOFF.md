@@ -2,12 +2,13 @@
 
 ## What's Done
 
-Issue triage + cross-repo artifact migration session.
+CBR experience analyser + trust-weighted routing landed. Issue triage + cross-repo artifact migration session.
 
+- Landed #728 (88b1e1ce) — ExperienceAnalyser, TrustRoutingPolicy.cbrWeight, TrustWeightedAgentStrategy CBR scoring. Closes devtown#133
 - Closed #719, #720 (PlanItemStatus shim deleted — zero engine refs), #724 (EngineStrategyResolver catch-all + work#304 fixed Jandex)
 - Confirmed #700 epic complete — shared type foundation landed. #702 verified as genuinely unfinished
 - Migrated 4 consumers from old `casehub-engine-work-adapter` → `casehub-work-engine-adapter`: AML, Clinical (10 files — imports + hibernate packages), DevTown (7 files), SOC. All pushed
-- Engine pushed (415de3d1). Old `casehub-engine-work-adapter` package deleted from GitHub Packages
+- Engine pushed (88b1e1ce). Old `casehub-engine-work-adapter` package deleted from GitHub Packages
 - Parent POM already serves as the ecosystem BOM — no new module needed
 
 **Pre-existing consumer build failures** (not caused by migration):
