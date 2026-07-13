@@ -1,27 +1,25 @@
-# Handoff — 2026-07-12
+# Handoff — 2026-07-13
 
 ## What's Done
 
-**TenancyId threading (#680) — landed on main.** Root fix: `TenantAwareRepository.withTenantTransaction()` parameterized with explicit tenancyId — removes ambient `CurrentPrincipal` dependency. 10 event records gain tenancyId. PlanItemStore SPI evolved (updateStatus tenancyId overload, findDelegatedCrossTenant rename). Test workarounds removed. Design review (3 rounds, 12 issues, all resolved). Spec at `docs/specs/2026-07-12-thread-tenancyid-event-bus-design.md`.
-
-**CBR generalization (#704, #672, #694) — landed on main.** All three repos pushed and delivered.
+**S/XS cleanup batch (#712) — landed on main as 8495680d.** 7 engine issues closed, 2 cross-repo follow-ups completed. Key changes: tenancyId on SubCaseGroupLifecycleEvent (#709), outputSchema→outputProjection rename (#677), bindingName threading through submit() (#676), TrustPhase enum + evidentialCheckPhases (#711), CBR experiences flow to WorkerContext (#707). Test suite failure #669 resolved by tenant threading. Types/labels #653 confirmed already done. Work-adapter tenancyId #710 committed to casehub-work. FeatureValue.of()/toFeatureMap() added to neocortex memory-api (branch issue-137-approx-dtw-typed-cbr).
 
 ## Immediate Next Step
 
-All pushed. No pending deliveries. Pick next work from What's Next.
+All pushed. Pick next work from What's Next. Pre-existing ledger test failure (CommitmentContext constructor mismatch in TrustGatedAttestationPolicyTest) blocks full `mvn install` — fix before next ledger work.
 
 ## Cross-Module
 
-*Unchanged — `git show HEAD~1:HANDOFF.md`*
-
-New: engine#710 — work-adapter must populate tenancyId in ActionGate completion events (cross-repo follow-up from #680).
+- casehub-work: engine-adapter commit for #710 landed on branch issue-287-retrofit-work-spis-namedstrategy (not main)
+- casehub-ops: TrustRoutingPolicy constructor update committed to ops main
+- casehub-neocortex: FeatureValue.of()/toFeatureMap() on branch issue-137-approx-dtw-typed-cbr (not main)
 
 ## What's Left
 
-- #710 — work-adapter: populate tenancyId in ActionGate completion events · S · Low (cross-repo)
-- #709 — SubCaseGroupLifecycleEvent tenancyId (CDI event consistency) · XS · Low
+- #648 — OutcomeRecorder.addAttestation — deferred to dedicated ledger session · S · Med (cross-repo)
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
 - #702 — event/handler ExecutorRef migration · M · Low
+- Pre-existing: ledger CommitmentContext test mismatch (qhorus-api constructor change) · XS · Low
 
 ## What's Next
 
@@ -34,6 +32,4 @@ New: engine#710 — work-adapter must populate tenancyId in ActionGate completio
 
 ## References
 
-- Spec: `docs/specs/2026-07-12-thread-tenancyid-event-bus-design.md`
-- Design review: `~/adr/casehub-engine/thread-tenancyid-event-bus-20260712-185729/`
-- Garden: GE-20260712-1a82c4 (ide_edit_member truncation), GE-20260712-4a8a3c (record field reorder silent bug)
+- Garden: GE-20260713-905e2e (ide_create_file VFS-only persistence gotcha)
