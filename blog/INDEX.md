@@ -1,6 +1,7 @@
 # Blog Index
 
 | File | Date | Title |
+| [2026-07-13-mdp02-the-shim-that-wasnt-dead.md](2026-07-13-mdp02-the-shim-that-wasnt-dead.md) | 2026-07-13 | Zero references in engine, live consumer via SNAPSHOT — PlanItemStatus deletion breaks AML |
 | [2026-07-05-mdp01-two-canonicals-one-convention.md](2026-07-05-mdp01-two-canonicals-one-convention.md) | 2026-07-05 | Two Canonicals, One Convention — dual-stack blocking/reactive repositories; IntelliJ rename propagation gotcha; cross-repo enum migration |
 | [2026-06-30-mdp01-workers-never-needed-capabilities.md](2026-06-30-mdp01-workers-never-needed-capabilities.md) | 2026-06-30 | Workers Never Needed Capabilities — Worker carries Set<String> capabilityNames; YamlCaseHub.augment() template method |
 |------|------|-------|
