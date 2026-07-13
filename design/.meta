@@ -1,0 +1,9 @@
+branch: issue-419-case-context-provider-spi
+project-sha: 4c53ed55d2f2a808abc5b96b6e4e53ee3027f28f
+date: 2026-07-13
+issue: 419
+issue-repo: casehubio/engine
+covers: 419
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
