@@ -2,21 +2,29 @@
 
 ## What's Done
 
-Issue triage session. Closed #719, #720 (PlanItemStatus shim deleted — zero engine refs), #724 (EngineStrategyResolver catch-all + work#304 fixed Jandex). Confirmed #700 epic complete — shared type foundation landed. #702 (ExecutorRef event migration) verified as genuinely unfinished.
+Issue triage + cross-repo artifact migration session.
 
-**⚠️ SNAPSHOT breakage:** Deleting PlanItemStatus broke AML — old `casehub-engine-work-adapter` SNAPSHOT still references it. Either restore the shim or publish a new work-adapter SNAPSHOT from the work repo. Address before pushing engine to origin.
+- Closed #719, #720 (PlanItemStatus shim deleted — zero engine refs), #724 (EngineStrategyResolver catch-all + work#304 fixed Jandex)
+- Confirmed #700 epic complete — shared type foundation landed. #702 verified as genuinely unfinished
+- Migrated 4 consumers from old `casehub-engine-work-adapter` → `casehub-work-engine-adapter`: AML, Clinical (10 files — imports + hibernate packages), DevTown (7 files), SOC. All pushed
+- Engine pushed (415de3d1). Old `casehub-engine-work-adapter` package deleted from GitHub Packages
+- Parent POM already serves as the ecosystem BOM — no new module needed
+
+**Pre-existing consumer build failures** (not caused by migration):
+- AML: missing blocks import (`RoutingFeatureExtractor`)
+- SOC: missing routing types (`CandidateSetStrategy`/`StaticSetStrategy`)
+- Clinical: CDI Clock ambiguity (`ClinicalClockProducer` vs `qhorus ClockProducer`)
 
 ## Immediate Next Step
 
-Fix the PlanItemStatus SNAPSHOT breakage before pushing 415de3d1 to origin. Options: (1) revert the deletion and reopen #719/#720, (2) publish a new work-adapter SNAPSHOT from the work repo without the reference. Option 2 is the clean fix.
+Pick next work from What's Next. Build is clean on engine main.
 
 ## Cross-Module
 
-*Unchanged — `git show HEAD~1:HANDOFF.md`*
+- casehub-blocks: TrustRoutingPolicy constructor (added Set<TrustPhase>) needs propagating to 3 test files · XS · Low
 
 ## What's Left
 
-- **⚠️ PlanItemStatus SNAPSHOT breakage** — fix before pushing engine · XS · Low
 - #702 — event/handler ExecutorRef migration · M · Low
 - #648 — OutcomeRecorder.addAttestation — deferred to dedicated ledger session · S · Med (cross-repo)
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
@@ -24,6 +32,7 @@ Fix the PlanItemStatus SNAPSHOT breakage before pushing 415de3d1 to origin. Opti
 - #723 — RoutingSignalAssembler unit tests · S · Low
 - #725 — wire CaseContextStoreFactory through CaseHubRuntimeImpl · S · Low
 - casehub-blocks: TrustRoutingPolicy 8th param propagation (3 test files) · XS · Low
+- Pre-existing build failures in AML, SOC, Clinical (see above) · S–M · varies
 
 ## What's Next
 
