@@ -2,24 +2,27 @@
 
 ## What's Done
 
-**CaseContextStore SPI (#419) — landed on main as 274c6dd2.** Pluggable context storage below CaseContextImpl. Three new SPI types (CaseContextStore, CaseContextStoreFactory, MutableCaseContext). WritableLayerImpl delegates to store. All 8 instanceof CaseContextImpl eliminated. Store lifecycle on case terminal status. Example module with AuditingCaseContextStore + 21-test contract suite. Design spec adversarially reviewed (5 rounds, 18 issues verified). Follow-up: #725 (wire factory resolution through CaseHubRuntimeImpl).
+Issue triage session. Closed #719, #720 (PlanItemStatus shim deleted — zero engine refs), #724 (EngineStrategyResolver catch-all + work#304 fixed Jandex). Confirmed #700 epic complete — shared type foundation landed. #702 (ExecutorRef event migration) verified as genuinely unfinished.
+
+**⚠️ SNAPSHOT breakage:** Deleting PlanItemStatus broke AML — old `casehub-engine-work-adapter` SNAPSHOT still references it. Either restore the shim or publish a new work-adapter SNAPSHOT from the work repo. Address before pushing engine to origin.
 
 ## Immediate Next Step
 
-Pick next work from What's Next. Build is clean — `mvn install -DskipTests` passes.
+Fix the PlanItemStatus SNAPSHOT breakage before pushing 415de3d1 to origin. Options: (1) revert the deletion and reopen #719/#720, (2) publish a new work-adapter SNAPSHOT from the work repo without the reference. Option 2 is the clean fix.
 
 ## Cross-Module
 
-- casehub-blocks: TrustRoutingPolicy constructor (added Set<TrustPhase>) needs propagating to 3 test files (RoutingSupportTest, CbrAgentRoutingStrategyTest, LlmAgentRoutingStrategyTest)
+*Unchanged — `git show HEAD~1:HANDOFF.md`*
 
 ## What's Left
 
-- #725 — wire CaseContextStoreFactory resolution through CaseHubRuntimeImpl · S · Low
+- **⚠️ PlanItemStatus SNAPSHOT breakage** — fix before pushing engine · XS · Low
+- #702 — event/handler ExecutorRef migration · M · Low
 - #648 — OutcomeRecorder.addAttestation — deferred to dedicated ledger session · S · Med (cross-repo)
 - #646 — per-case CONTEXT_CHANGED serialization · M · Med
-- #702 — event/handler ExecutorRef migration · M · Low
-- #716 — cross-repo consumer updates for #571/#548 (clinical, aml, life, devtown) · M · Low
+- #716 — cross-repo consumer updates for #571/#548 · M · Low
 - #723 — RoutingSignalAssembler unit tests · S · Low
+- #725 — wire CaseContextStoreFactory through CaseHubRuntimeImpl · S · Low
 - casehub-blocks: TrustRoutingPolicy 8th param propagation (3 test files) · XS · Low
 
 ## What's Next
