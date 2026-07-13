@@ -1,6 +1,7 @@
 # Blog Index
 
 | File | Date | Title |
+| [2026-07-13-mdp01-sealing-goal-composition.md](2026-07-13-mdp01-sealing-goal-composition.md) | 2026-07-13 | Sealed recursive GoalExpression tree with nested anyOf/allOf composition; CaseLifecycleEvent enriched with case identity and context snapshot |
 | [2026-07-05-mdp01-two-canonicals-one-convention.md](2026-07-05-mdp01-two-canonicals-one-convention.md) | 2026-07-05 | Two Canonicals, One Convention — dual-stack blocking/reactive repositories; IntelliJ rename propagation gotcha; cross-repo enum migration |
 | [2026-06-30-mdp01-workers-never-needed-capabilities.md](2026-06-30-mdp01-workers-never-needed-capabilities.md) | 2026-06-30 | Workers Never Needed Capabilities — Worker carries Set<String> capabilityNames; YamlCaseHub.augment() template method |
 |------|------|-------|
