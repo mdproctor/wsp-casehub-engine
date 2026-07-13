@@ -1,0 +1,9 @@
+branch: issue-691-typed-context-signal-subcase
+project-sha: 88b1e1ce6a8bb99bbb27aefbdfc894f4cc03c10a
+date: 2026-07-14
+issue: 691
+issue-repo: casehubio/engine
+covers: 691,690
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
