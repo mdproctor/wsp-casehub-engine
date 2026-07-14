@@ -1,5 +1,5 @@
-# Branch Closed: issue-585-observer-health-quartz-cleanup
+# Branch Closed: issue-725-context-store-and-dag-driver
 
-**Date:** 2026-06-30
-**Issues:** 585,593,594
+**Date:** 2026-07-14
+**Issues:** 725,695
 **Status:** merged to main
