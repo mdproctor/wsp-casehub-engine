@@ -1,0 +1,9 @@
+branch: issue-734-fix-yaml-test-assertions
+project-sha: fedde75a7fdbbe29a35e0e2dd2eb6a74898b4819
+date: 2026-07-15
+issue: 734
+issue-repo: casehubio/engine
+covers: 734
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
