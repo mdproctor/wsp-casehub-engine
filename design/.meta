@@ -1,0 +1,9 @@
+branch: issue-735-goal-completion-race
+project-sha: b059b0acd46ab5db5ca981eac88765b15b621fb9
+date: 2026-07-15
+issue: 735
+issue-repo: casehubio/engine
+covers: 735
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
