@@ -1,0 +1,9 @@
+branch: issue-718-plan-trace-priorities
+project-sha: 819f9f30d9796f9354127ed9c1a4a7c55c2cc378
+date: 2026-07-15
+issue: 718
+issue-repo: casehubio/engine
+covers: 718
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
