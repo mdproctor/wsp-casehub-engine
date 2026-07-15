@@ -11,7 +11,15 @@ CI green. AML diagnostic complete. Unified execution model spec drafted.
 
 ## Immediate Next Step
 
-Revisit `docs/specs/2026-07-15-unified-execution-model-design.md` — resolve contradictions (choreography listed both as dispatch mode AND strategy name), incorporate LangChain4j GoalOrientedPlanner mapping, verify coverage against engine#101 sub-issues.
+Revisit `docs/specs/2026-07-15-unified-execution-model-design.md` — resolve contradictions and reach a universal execution model that is richer and stronger than LangChain4j's.
+
+**Where we exceed LangChain4j — preserve these advantages:**
+- Two orthogonal dispatch dimensions (choreography + orchestration) composable per-node — LangChain4j has neither orthogonality nor per-node composition
+- Compound PlanItems with nested strategies — arbitrary depth, each level can use a different algorithm
+- Plan graph as model, CaseInstance as runtime — clean separation (their AgenticScope mixes both)
+- Planning algorithms as peers (Sequential, Flow, HTN, GoalOriented) producing a universal output format (`DagPlan<T>`) — they have separate Planner implementations with no shared plan representation
+
+**What to fix:** Spec has contradictions (Section 10: C1-C4) and open questions (Q1-Q7). Start with C1 (choreography as mode vs strategy name) — it's the root confusion. Then verify against engine#101 sub-issues.
 
 ## Cross-Module
 
