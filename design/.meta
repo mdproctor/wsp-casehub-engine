@@ -1,0 +1,9 @@
+branch: issue-439-dynamic-humantask-fields
+project-sha: 52d1ae7b9166a9bb8e8bcd5ceeaa13bed1434682
+date: 2026-07-16
+issue: 439
+issue-repo: casehubio/engine
+covers: 439
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
