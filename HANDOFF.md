@@ -1,41 +1,38 @@
-# Handoff — 2026-07-14
+# Handoff — 2026-07-15
 
 ## What's Done
 
-CaseContextStoreFactory wiring (#725) + DAG parallel execution driver (#695) landed. Follow-up issue #732 filed for recovery path.
+CI green. AML diagnostic complete. Unified execution model spec drafted.
 
-- Landed 6be93db6 — single squashed commit on main. Closes #725, #695
-- #725: CaseHubRuntimeImpl resolves factory via StrategyResolver, generates UUID early, threads through reactor. YAML `context.storeFactory`. Durable factory guard until #732
-- #695: `io.casehub.engine.plan` package in engine-common. DagPlan, DagNode, JoinType, NodeState, DagDriver (STREAMING + BARRIER), DagEventListener, DagResult. 42 tests. Pure java.util.concurrent
-- 2 garden entries submitted: @DefaultBean CDI precedence (GE-20260714-e97b0a), diamond type inference (GE-20260714-aa950f)
-- CLAUDE.md updated with both features
+- 10 commits landed on main (d7e79017..a6df47c4): SNAPSHOT drift fixes, null inputData NPE, binding re-dispatch loop, test profile contamination, Flyway migration, recovery test timing, YAML mapper fixes
+- AML tenant mismatch: reproduced, diagnosed (package relocation CDI exclusion + null inputData + binding re-dispatch). Diagnostic sent. Consumer reproduction test added.
+- Unified execution model spec at `docs/specs/2026-07-15-unified-execution-model-design.md` — has contradictions from iterative design discussion that need cleaning up before sharing with trebleel
+- 4 stranded blog entries promoted to workspace main, 1 published to mdproctor.github.io
 
 ## Immediate Next Step
 
-Pick next work from What's Next. Build is clean on engine main.
+Revisit `docs/specs/2026-07-15-unified-execution-model-design.md` — resolve contradictions (choreography listed both as dispatch mode AND strategy name), incorporate LangChain4j GoalOrientedPlanner mapping, verify coverage against engine#101 sub-issues.
 
 ## Cross-Module
 
-- casehub-blocks: TrustRoutingPolicy 8th param (Set\<TrustPhase\>) needs propagating to 3 test files · XS · Low
+- AML — rebuild against latest engine SNAPSHOT (binding re-dispatch fix b1e9a4c3 + null inputData fix 55a602e6). Gate issue is CDI exclusion of relocated work-engine-adapter classes.
+- casehub-work — engine SNAPSHOTs now published to GitHub Packages. CI should resolve.
+- casehub-blocks — DAG unification (Phase 0: retire ExecutionPlan, adopt DagPlan) is first convergence step. Requires sequentialMerge() on DagPlan.
 
 ## What's Left
 
-- #732 — recovery path factory wiring (filed this session, blocks durable factories) · M · Med
-- #702 — event/handler ExecutorRef migration · M · Low
-- #648 — OutcomeRecorder.addAttestation · S · Med (cross-repo)
-- #646 — per-case CONTEXT_CHANGED serialization · M · Med
-- #716 — cross-repo consumer updates for #571/#548 · M · Low
-- #723 — RoutingSignalAssembler unit tests · S · Low
+- Spec contradictions: choreography appears as both a dispatch archetype and a planning strategy name in the tables · S · Med
+- engine#101 sub-issues: verify unified model covers all LangChain4j patterns (Sequential, Supervisor, GoalOriented, P2P, Loop, Conditional) · M · Med
+- 202 local engine branches + 90 workspace branches stamped/closed — bulk deletion approved but not executed · XS · Low
 - casehub-blocks: TrustRoutingPolicy 8th param propagation (3 test files) · XS · Low
-- Pre-existing build failures in AML, SOC, Clinical · S–M · varies
-- Pre-existing SNAPSHOT drift: QhorusMessageSignalBridge + CbrCaseRetainObserver test compilation errors · S · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #732 | Wire CaseContextStoreFactory through recovery path | M | Med | Filed this session, blocks durable factories |
-| #600 | HTN — hierarchical task decomposition | L | High | Under #595 epic |
+| — | Rewrite spec: clean model (two dispatch modes, planning algorithms under orchestration, DagPlan as output format) | M | Med | Coordinate with trebleel before implementing |
+| — | Phase 0: sequentialMerge() on DagPlan | S | Low | Prerequisite for blocks ExecutionPlan retirement |
+| — | Phase 1: Retire ChoreographyLoopControl | M | Med | PlanningStrategyLoopControl becomes sole LoopControl |
+| #732 | Wire CaseContextStoreFactory through recovery path | M | Med | Blocks durable factories |
+| #600 | HTN — hierarchical task decomposition | L | High | Under #595 epic — spec informs design |
 | #689 | WorkItems boundary — typed payload | M | Med | ContextBridge arc |
-| #692 | Connector boundary — typed context via ContextBridge | M | Med | ContextBridge arc |
-| #635 | Rename io.casehub.api → io.casehub.engine.api | L | Low | Cross-repo |
