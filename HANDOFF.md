@@ -65,6 +65,31 @@ Key insight: Sequential stays simple (ordered list). Need loops? Use Flow. Don't
 
 ReAct is NOT a separate algorithm — it's the native CONTEXT_CHANGED evaluation loop. Every cycle: strategy evaluates state (Thought) → dispatches worker (Action) → context changes from output (Observation) → repeat.
 
+**The YAGNI challenge — steelman against our model:**
+
+LangChain4j's `Planner` has three methods: `init`, `firstAction`, `nextAction`. Every pattern is just an impl. They DO have composition (agent nesting), DO have hybrid dispatch (Supervisor picks per-step), DO have orthogonality (LLM is the composition mechanism). "CaseHub is building a type system for something an LLM handles naturally."
+
+Where the YAGNI argument holds: LLM-first, low-volume systems — simplicity wins. Agent nesting IS composition. Our sealed hierarchies, compound PlanItems, strategy resolvers — real complexity cost.
+
+Where it breaks — our case:
+
+| Concern | LangChain4j | CaseHub |
+|---|---|---|
+| Determinism | Every decision = LLM call | Static plans execute without LLM |
+| Cost at scale | LLM call per decision × thousands of cases | LLM for decomposition ONCE, then deterministic |
+| Auditability | Plan unfolds opaquely via nextAction() | DagPlan inspectable BEFORE execution (compliance) |
+| Non-AI cases | Assumes LLM/Planner involvement | Full spectrum: zero-AI → full-AI |
+| Recovery | In-memory state, restart = re-run | Plan reconstructable from EventLog |
+| Shared state | Bag of key-value pairs | Typed layers, change listeners, JQ evaluation |
+
+**The bar we must clear:** Complexity must be layered and never leak.
+
+- Hello World case with one worker: no ceremony, no compound PlanItems, no strategy resolvers visible. Just `planningStrategy: sequential` in YAML or nothing at all (choreography default).
+- Complex case with HTN + mixed strategies: the full model is available but only surfaces when you declare it.
+- A developer who only needs Sequential should never encounter the word "CompoundPlanItem" in their API surface, logs, or error messages.
+
+If simple cases force users to understand the full type system, the YAGNI argument wins and LangChain4j's simplicity is the better design. Our model wins ONLY if it's as simple as theirs for simple cases AND richer for complex ones. Complexity that leaks is worse than complexity that doesn't exist.
+
 **What to fix:** Spec has contradictions (Section 10: C1-C4) and open questions (Q1-Q7). Start with C1 (choreography as mode vs strategy name) — it's the root confusion. Then verify against engine#101 sub-issues.
 
 ## Cross-Module
