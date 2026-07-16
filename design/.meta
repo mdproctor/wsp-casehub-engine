@@ -1,0 +1,9 @@
+branch: issue-689-workitem-typed-context
+project-sha: ecaae1db86c1deca9d6f4da5c8436599a433c9bc
+date: 2026-07-16
+issue: 689
+issue-repo: casehubio/engine
+covers: 689
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
