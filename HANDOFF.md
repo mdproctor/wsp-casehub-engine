@@ -5,6 +5,7 @@
 - Typed context for WorkItem boundary (#689) — implemented, reviewed, squashed, PRed.
 - CbrConfig temporalDecayHalfLifeDays (#733) — implemented, reviewed, squashed, PRed.
 - Both landed on fork main; PR #744 updated to cover both.
+- fix(#745): backward compat for inputSchema/outputSchema YAML keys — the JSON schema rename (8495680d) silently dropped output projections in downstream YAML definitions using old field names. Mapper now reads raw YAML nodes as fallback. Pushed to fork main; added to PR #744.
 
 ## Immediate Next Step
 
@@ -13,6 +14,7 @@ Merge PR #744 after CI passes. Then open companion work repo PR for the typed Wo
 ## Cross-Module
 
 - Work repo: branch `issue-689-workitem-typed-context` has companion changes for #689 (pushed to fork). Needs a PR to casehubio/work.
+- Life repo: HomeMaintenanceIntegrationTest and TravelPlanIntegrationTest should pass again once PR #744 lands (engine SNAPSHOT includes #745 fix). Recommend migrating life YAML from `inputSchema`/`outputSchema` to `inputProjection`/`outputProjection` to clear deprecation warnings.
 - IoT: can now set `temporalDecayHalfLifeDays` in the `cbr:` YAML block (iot#64).
 
 ## What's Left
@@ -21,6 +23,7 @@ Merge PR #744 after CI passes. Then open companion work repo PR for the typed Wo
 - Work repo companion PR needs creation and merge · XS · Low
 - engine#742: ActionGate resolutionTypeName threading · S · Low
 - engine#740: linked data reference protocol (platform-wide) · L · High
+- Life/AML/clinical/devtown YAML migration from inputSchema to inputProjection · XS · Low (non-urgent, deprecation warnings guide it)
 
 ## What's Next
 
