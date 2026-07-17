@@ -1,0 +1,9 @@
+branch: issue-733-cbr-temporal-decay
+project-sha: 543500722539be3df9fb09456a3614ff40e99515
+date: 2026-07-17
+issue: 733
+issue-repo: casehubio/engine
+covers: 733
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
