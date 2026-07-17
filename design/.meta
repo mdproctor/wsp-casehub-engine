@@ -1,0 +1,9 @@
+branch: issue-738-wire-planadapter-cbr
+project-sha: 60b197b1d2cb6e43cbc5180c9618d4b68d4b50ed
+date: 2026-07-17
+issue: 738
+issue-repo: casehubio/engine
+covers: 738
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes: 
