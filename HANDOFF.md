@@ -2,21 +2,18 @@
 
 ## What's Done
 
-Typed context for WorkItem boundary (#689) — implemented, reviewed, squashed, PRed.
-
-- Engine: HumanTaskTarget gains payloadType/resolutionType. Bridge validation on input (initialise) and output (deserialise). BridgeResolver.resolveByTypeNameStrict(). HumanTaskScheduleEvent carries type names. Design spec with 3-round adversarial review. CLAUDE.md updated.
-- Work repo: WorkItemRef, WorkItemCreateRequest, WorkItem entity gain type name fields. Flyway V10. HumanTaskScheduleHandler passes type names through. PlanItemCompletionApplier validates resolution before PlanItem completion, writes workItemValidationFailed signal on failure.
-- Engine PR: casehubio/engine/pull/744
-- Follow-up issues filed: engine#740 (linked data reference protocol), engine#742 (ActionGate resolutionTypeName)
+- Typed context for WorkItem boundary (#689) — implemented, reviewed, squashed, PRed.
+- CbrConfig temporalDecayHalfLifeDays (#733) — implemented, reviewed, squashed, PRed.
+- Both landed on fork main; PR #744 updated to cover both.
 
 ## Immediate Next Step
 
-Merge engine PR #744 after CI passes. Then open companion work repo PR for the typed WorkItem boundary.
+Merge PR #744 after CI passes. Then open companion work repo PR for the typed WorkItem boundary (#689 work repo changes on branch `issue-689-workitem-typed-context`).
 
 ## Cross-Module
 
-- Work repo: branch `issue-689-workitem-typed-context` has companion changes (pushed to fork). Needs a PR to casehubio/work.
-- AML, clinical, devtown: can now declare payloadType/resolutionType on HumanTask bindings for compile-time safety.
+- Work repo: branch `issue-689-workitem-typed-context` has companion changes for #689 (pushed to fork). Needs a PR to casehubio/work.
+- IoT: can now set `temporalDecayHalfLifeDays` in the `cbr:` YAML block (iot#64).
 
 ## What's Left
 
