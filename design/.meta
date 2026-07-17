@@ -1,0 +1,9 @@
+branch: issue-745-worker-output-propagation
+project-sha: acf5a389d1d557567055229f0fa5e82ef35e7fe7
+date: 2026-07-17
+issue: 745
+issue-repo: casehubio/engine
+covers: 745
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
