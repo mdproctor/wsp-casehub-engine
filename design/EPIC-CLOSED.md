@@ -1,5 +1,5 @@
-# Branch Closed: issue-585-observer-health-quartz-cleanup
+# Branch Closed: issue-733-cbr-temporal-decay
 
-**Date:** 2026-06-30
-**Issues:** 585,593,594
+**Date:** 2026-07-17
+**Issues:** 733
 **Status:** merged to main
