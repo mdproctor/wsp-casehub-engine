@@ -1,0 +1,9 @@
+branch: issue-741-humantask-cbr-routing
+project-sha: cbd6dadd0e8a4958fd7b67eb5895aafdc4ecf447
+date: 2026-07-18
+issue: 741
+issue-repo: casehubio/engine
+covers: 741
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
