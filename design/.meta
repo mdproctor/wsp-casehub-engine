@@ -1,0 +1,9 @@
+branch: issue-752-adaptation-aware-cbr
+project-sha: 6752ab1baf2686da68f579c1bfbcb8f00972da25
+date: 2026-07-18
+issue: 752
+issue-repo: casehubio/engine
+covers: 752
+flyway-next-v: none
+design-repo: workspace
+design-section-hashes: 
