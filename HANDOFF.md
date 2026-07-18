@@ -1,36 +1,28 @@
-# Handoff — 2026-07-17
+# Handoff — 2026-07-18
 
 ## What's Done
 
-- Typed context for WorkItem boundary (#689) — implemented, reviewed, squashed, PRed.
-- CbrConfig temporalDecayHalfLifeDays (#733) — implemented, reviewed, squashed, PRed.
-- Both landed on fork main; PR #744 updated to cover both.
-- fix(#745): backward compat for inputSchema/outputSchema YAML keys — the JSON schema rename (8495680d) silently dropped output projections in downstream YAML definitions using old field names. Mapper now reads raw YAML nodes as fallback. Pushed to fork main; added to PR #744.
+- **engine#738**: Wire PlanAdapter into CbrRetrievalService pipeline — delivered.
+  - `ExperiencePlanStep` enriched with `adaptationAction` and `adaptationReason` (nullable Strings, engine-api owned)
+  - `ExperienceAnalyser.workerSuccessRates()` filters ADDED steps (adapter recommendations excluded from statistics)
+  - `CbrRetrievalService` injects `PlanAdapter` (blocking SPI, same pattern as `CbrCaseMemoryStore`)
+  - For `PlanCbrCase` results, calls `adapt()` inside `mapScoredCase()` — REMOVED steps filtered, adapter failure falls back to raw mapping
+  - Depends on neocortex#161 (caseType parameter on PlanAdapter — delivered separately)
+  - Design spec: `docs/specs/2026-07-18-planadapter-cbr-wiring-design.md` (5-round adversarial review, $12.59)
+  - Squashed to single commit `6752ab1b`, pushed to upstream/main
+
+## Deferred Items
+
+- `ExperienceAnalyser`: handle SUBSTITUTED steps — outcome misattributed to substituted worker (wsp-casehub-engine#1)
+- `CbrRoutingPromptSection`: annotate adapted steps in LLM routing prompt (wsp-casehub-engine#2)
+- Downstream consumers (`TrustWeightedAgentStrategy`, `CbrAgentRoutingStrategy`) don't yet interpret adaptation fields
 
 ## Immediate Next Step
 
-Merge PR #744 after CI passes. Then open companion work repo PR for the typed WorkItem boundary (#689 work repo changes on branch `issue-689-workitem-typed-context`).
+- casehub-life can remove manual `PlanAdapter` call from `LifeCaseService.startCase()` — the engine now handles it automatically
+- engine#730 (case queue implementation) is blocked by platform#175 (generic queue toolkit)
 
-## Cross-Module
+## Session Context
 
-- Work repo: branch `issue-689-workitem-typed-context` has companion changes for #689 (pushed to fork). Needs a PR to casehubio/work.
-- Life repo: HomeMaintenanceIntegrationTest and TravelPlanIntegrationTest should pass again once PR #744 lands (engine SNAPSHOT includes #745 fix). Recommend migrating life YAML from `inputSchema`/`outputSchema` to `inputProjection`/`outputProjection` to clear deprecation warnings.
-- IoT: can now set `temporalDecayHalfLifeDays` in the `cbr:` YAML block (iot#64).
-
-## What's Left
-
-- Engine PR #744 needs merge · XS · Low
-- Work repo companion PR needs creation and merge · XS · Low
-- engine#742: ActionGate resolutionTypeName threading · S · Low
-- engine#740: linked data reference protocol (platform-wide) · L · High
-- Life/AML/clinical/devtown YAML migration from inputSchema to inputProjection · XS · Low (non-urgent, deprecation warnings guide it)
-
-## What's Next
-
-| # | Description | Scale | Complexity | Notes |
-|---|-------------|-------|------------|-------|
-| — | Rewrite unified execution model spec (resolve contradictions) | M | Med | From prior session |
-| — | Phase 0: sequentialMerge() on DagPlan | S | Low | Blocks ExecutionPlan retirement |
-| #732 | Wire CaseContextStoreFactory through recovery path | M | Med | Blocks durable factories |
-| #740 | Linked data reference protocol | L | High | Platform-wide, ContextBridge arc |
-| #600 | HTN — hierarchical task decomposition | L | High | Under #595 epic |
+- neocortex 0.2-SNAPSHOT with #161 must be installed in local maven for engine to compile
+- Pre-existing `eraseByScope` compilation errors in recording test stubs fixed as part of this branch
