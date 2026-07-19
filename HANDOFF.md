@@ -1,25 +1,27 @@
-# Handoff — 2026-07-18
+# Handoff — 2026-07-19
 
 ## What's Done
 
-- **engine#752**: Adaptation-aware CBR scoring and prompt rendering — delivered.
-  - `ExperienceAnalyser.workerSuccessRates()` now skips SUBSTITUTED steps alongside ADDED
-  - `CbrRoutingPromptSection` annotates non-RETAINED adapted steps (`[ACTION: reason]`), excludes ADDED/SUBSTITUTED from outcome aggregates
-  - `CbrAgentRoutingStrategy.analyseExperiences()` consolidated to delegate to `ExperienceAnalyser` — eliminates 35 lines of duplicated scoring logic
-  - Companion commit in casehub-blocks (`e37e638`)
-  - PR: casehubio/engine#753 (open)
+- **engine#741**: HumanTaskRoutingStrategy SPI — CBR routing enrichment for humanTask bindings. Delivered and merged.
+  - New SPI: `HumanTaskRoutingStrategy`, `HumanTaskRoutingContext`, `HumanTaskCandidates`, `HumanTaskRoutingResult` (sealed: Enriched | Unchanged | Escalated)
+  - `ExperienceAnalyser` generalised with `Predicate<ExperiencePlanStep>` overload
+  - `CbrCaseRetainObserver` includes humanTask PlanItems in plan traces (capabilityName nullable)
+  - Handler plumbing threads experiences through humanTask dispatch, calls strategy
+  - Cross-repo: neocortex `PlanTrace`/`AdaptedStep` capabilityName nullable (companion commit)
+  - Design-reviewed (4 rounds, 15 issues, all resolved)
+  - PR: casehubio/engine#753 (updated — now covers #741 + #752)
 
 ## Deferred Items
 
-- `ExperienceAnalyser`: handle SUBSTITUTED step attribution properly when `originalWorkerName` is available — currently skipped entirely (wsp-casehub-engine#1, still relevant)
-- casehub-life can remove manual `PlanAdapter` call from `LifeCaseService.startCase()` — engine now handles adaptation automatically
-- engine#730 (case queue implementation) blocked by platform#175 (generic queue toolkit)
+- `ExperienceAnalyser`: handle SUBSTITUTED step attribution properly when `originalWorkerName` is available (wsp-casehub-engine#1)
+- engine#730 (case queue implementation) blocked by platform#175
 
 ## Immediate Next Step
 
-- Merge PR casehubio/engine#753 when CI passes
-- Push blocks commit (`e37e638`) to upstream if blocks has a fork model
+- Merge PR casehubio/engine#753 when CI passes (covers both #741 and #752)
+- Push neocortex companion commit to upstream
 
 ## Session Context
 
-- neocortex 0.2-SNAPSHOT with #161 must be installed in local maven for engine to compile
+- neocortex 0.2-SNAPSHOT with nullable capabilityName must be installed in local maven for engine to compile
+- Four follow-on issues filed: engine#754 (CBR impl), #755 (constraint impl), #756 (work repo consumption), #757 (group scoring)
