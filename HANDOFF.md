@@ -2,26 +2,25 @@
 
 ## What's Done
 
-- **engine#741**: HumanTaskRoutingStrategy SPI — CBR routing enrichment for humanTask bindings. Delivered and merged.
-  - New SPI: `HumanTaskRoutingStrategy`, `HumanTaskRoutingContext`, `HumanTaskCandidates`, `HumanTaskRoutingResult` (sealed: Enriched | Unchanged | Escalated)
-  - `ExperienceAnalyser` generalised with `Predicate<ExperiencePlanStep>` overload
-  - `CbrCaseRetainObserver` includes humanTask PlanItems in plan traces (capabilityName nullable)
-  - Handler plumbing threads experiences through humanTask dispatch, calls strategy
-  - Cross-repo: neocortex `PlanTrace`/`AdaptedStep` capabilityName nullable (companion commit)
-  - Design-reviewed (4 rounds, 15 issues, all resolved)
-  - PR: casehubio/engine#753 (updated — now covers #741 + #752)
+- **engine#741**: HumanTaskRoutingStrategy SPI — delivered, merged to main, PR casehubio/engine#753 updated (covers #741 + #752)
+- **engine#730**: Case queue — brainstormed, discovered platform dependency, filed platform#187, branch paused
+
+## Cross-Module
+
+**Blocked by:**
+- `platform` — generic labelling infrastructure (platform#187) gates engine#730 · L · High
 
 ## Deferred Items
 
-- `ExperienceAnalyser`: handle SUBSTITUTED step attribution properly when `originalWorkerName` is available (wsp-casehub-engine#1)
-- engine#730 (case queue implementation) blocked by platform#175
+*Unchanged — `git show HEAD~1:HANDOFF.md`*
 
 ## Immediate Next Step
 
-- Merge PR casehubio/engine#753 when CI passes (covers both #741 and #752)
-- Push neocortex companion commit to upstream
+- Check if engine PR casehubio/engine#753 CI is green (depends on neocortex publish completing)
+- Pick up smaller engine issues while waiting for platform#187
 
 ## Session Context
 
-- neocortex 0.2-SNAPSHOT with nullable capabilityName must be installed in local maven for engine to compile
-- Four follow-on issues filed: engine#754 (CBR impl), #755 (constraint impl), #756 (work repo consumption), #757 (group scoring)
+- neocortex nullability commit cherry-picked to main and pushed to casehubio/neocortex — engine CI should pass once neocortex publishes
+- Engine#730 branch `issue-730-case-queue` is in the pause stack (depth 1)
+- Four follow-on issues from #741: engine#754-757
