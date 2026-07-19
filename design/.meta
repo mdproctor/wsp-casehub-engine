@@ -1,0 +1,9 @@
+branch: issue-730-case-queue
+project-sha: 896f51fdc14f49c571e50ff0d4716f8c63d560a1
+date: 2026-07-19
+issue: 730
+issue-repo: casehubio/engine
+covers: 730
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
