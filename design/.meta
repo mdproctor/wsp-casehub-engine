@@ -1,0 +1,9 @@
+branch: issue-692-context-bridge-completion
+project-sha: 47c35ad99755f3ebb19dd305974a38ab8c88d461
+date: 2026-07-20
+issue: 692
+issue-repo: casehubio/engine
+covers: 692,740,742
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
