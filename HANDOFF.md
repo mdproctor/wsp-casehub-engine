@@ -2,26 +2,29 @@
 
 ## What's Done
 
-- **engine#730**: Case queue — delivered, merged to main, pushed to upstream
-  - New `casehub-engine-queue` module (optional, classpath-activated)
-  - CaseInstance.labels + CaseDefinition.labelRules with YAML/Java DSL
-  - CaseLabelEvaluator, CaseQueueEntryManager, CaseQueueService, CaseLabelReconciler
-  - Design-reviewed (4 rounds, 23 issues, all resolved, $21)
-  - 48 tests across 8 test classes
-- **engine#761**: Wired CbrRetrievalService into case startup — inject experiences into CaseContext (on main)
-
-## Cross-Module
-
-**Blocked by:**
-- `platform` — generic labelling infrastructure (platform#187) — CLOSED, no longer blocking
+- **engine#742**: ActionGate resolutionType threading — GateRequired → PendingActionGate → events → handler validation
+- **engine#692**: Connector boundary wiring — InboundSignalBridge, InboundSignalMapping, CaseCorrelationResolver, signal auto-activation, YAML parsing. casehub-connectors wired to engine.
+- **engine#740**: DataRef<T> linked data references — DataRefResolver SPI, DataRefRegistry, BridgeResolver deferred resolution
+- Design-reviewed (3 rounds, 15 issues, $14), code-reviewed, squashed, pushed to upstream
 
 ## Immediate Next Step
 
-- Pick up follow-on issues from #741: engine#754 (HumanTask CBR impl), #755 (constraint impl), #756 (work repo consumption), #757 (group scoring)
-- Or pick up engine backlog items
+- Pick up #741 follow-on issues (#754-757) for HumanTask CBR routing
+- Or engine#764 (update architecture spec §5 Connectors to reflect inboundMappings)
 
-## Session Context
+## What's Left
 
-- PR casehubio/engine#753 CI still failing (build conclusion: FAILURE) — may need investigation
-- engine#730 branch `issue-730-case-queue` is stamped closed
-- Four follow-on issues from #741: engine#754-757
+- engine#764: update architecture spec §5 Connectors — follow-on from design review · S · Low
+- Work repo DataRef support — follow-on from #740 (not yet filed) · M · Med
+- 2 unrecovered specs on closed workspace branches (hygiene scan finding) · XS · Low
+- actor-state pre-existing compile failure (CommitmentStore.findOpenByChannelId) · S · Low
+
+## What's Next
+
+| # | Description | Scale | Complexity | Notes |
+|---|-------------|-------|------------|-------|
+| #754 | HumanTask CBR routing implementation | M | Med | Follow-on from #741 |
+| #755 | HumanTask routing constraint impl | M | Med | Follow-on from #741 |
+| #756 | Work repo consumption of HumanTask routing | M | Med | Follow-on from #741 |
+| #757 | Group scoring for HumanTask routing | S | Med | Follow-on from #741 |
+| #764 | Update architecture spec §5 Connectors | S | Low | Superseded by inboundMappings |
