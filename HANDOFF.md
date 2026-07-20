@@ -6,6 +6,7 @@
 - **engine#692**: Connector boundary wiring — InboundSignalBridge, InboundSignalMapping, CaseCorrelationResolver, signal auto-activation, YAML parsing. casehub-connectors wired to engine.
 - **engine#740**: DataRef<T> linked data references — DataRefResolver SPI, DataRefRegistry, BridgeResolver deferred resolution
 - Design-reviewed (3 rounds, 15 issues, $14), code-reviewed, squashed, pushed to upstream
+- **CI green** — fixed 5 pre-existing failures: CaseChannelProvider contract tests (missing target param), case_instance_label Flyway migration, InboundSignalBridge Instance<> for optional deps, CommitmentStore.findOpenByChannelId test stub, SubjectViewOrchestrator.deleteView return type drift
 
 ## Immediate Next Step
 
@@ -17,7 +18,6 @@
 - engine#764: update architecture spec §5 Connectors — follow-on from design review · S · Low
 - Work repo DataRef support — follow-on from #740 (not yet filed) · M · Med
 - 2 unrecovered specs on closed workspace branches (hygiene scan finding) · XS · Low
-- actor-state pre-existing compile failure (CommitmentStore.findOpenByChannelId) · S · Low
 
 ## What's Next
 
