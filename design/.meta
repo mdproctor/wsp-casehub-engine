@@ -1,0 +1,9 @@
+branch: issue-693-typed-inprocess-composition
+project-sha: 056d7ab49f2784d69abbd84bc72c9466207fee21
+date: 2026-07-21
+issue: 693
+issue-repo: casehubio/engine
+covers: 693,698
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
