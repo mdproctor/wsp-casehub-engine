@@ -1,16 +1,15 @@
 # Handoff — 2026-07-23
 
+*Updated: #693, #698 closed (PR#769 merged) — removed from backlog.*
+
 ## What's Done
 
-- **engine#693**: Typed in-process composition — WorkerFunction<T,R>, WorkerResult<R>, WorkerScope, TypedOutputBuilder, three-level DSL ceremony
-- **engine#698**: Context isolation — _diagnostics namespace replaces _outcomes, zero ThreadLocal
-- Code reviewed, squashed (18→7), pushed to fork, PR#769 to upstream
+- PR#769 merged to upstream — typed composition and context isolation landed on main
 - 2 blog entries published, 1 forage entry submitted (Maven worktree SNAPSHOT resolution)
 
 ## Immediate Next Step
 
-- Review and merge PR#769 on casehubio/engine
-- Or pick up HumanTask CBR routing (#754-757)
+- Pick up HumanTask CBR routing (#754-757)
 
 ## What's Left
 
