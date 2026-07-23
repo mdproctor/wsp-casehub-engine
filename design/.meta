@@ -1,0 +1,9 @@
+branch: issue-381-virtual-thread-migration
+project-sha: 4377821ceb58d45d261d49e7606de25774b5278b
+date: 2026-07-23
+issue: 381
+issue-repo: casehubio/parent
+covers: 381
+flyway-next-v: unknown
+design-repo: project
+design-section-hashes: 
