@@ -1,0 +1,9 @@
+branch: issue-780-cbr-trust-wiring
+project-sha: 99fd6c79a797c962c73fae9a00b02a96df956a26
+date: 2026-07-26
+issue: 780
+issue-repo: casehubio/engine
+covers: 780,781
+flyway-next-v: unknown
+design-repo: project
+design-section-hashes: 
