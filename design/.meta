@@ -1,0 +1,9 @@
+branch: issue-787-registry-null-consumer
+project-sha: 1571cebdce404d03407cc9981fc4bfc3feb04561
+date: 2026-07-27
+issue: 787
+issue-repo: casehubio/engine
+covers: 787
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
