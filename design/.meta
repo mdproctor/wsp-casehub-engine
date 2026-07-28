@@ -1,0 +1,9 @@
+branch: issue-798-cdi-event-dispatch
+project-sha: 65d52fcf11a285db969ae23b22e2b25ed4e0f4d0
+date: 2026-07-28
+issue: 798
+issue-repo: casehubio/engine
+covers: 798
+flyway-next-v: unknown
+design-repo: project
+design-section-hashes: 
