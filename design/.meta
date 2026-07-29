@@ -1,0 +1,9 @@
+branch: issue-810-multi-approver-oversight-gate
+project-sha: de63549337c3afab67ca6a8a22ba44125b2fbc0b
+date: 2026-07-29
+issue: 810
+issue-repo: casehubio/engine
+covers: 810
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
