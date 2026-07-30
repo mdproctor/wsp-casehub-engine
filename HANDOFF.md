@@ -1,18 +1,19 @@
-# Handoff — 2026-07-23
-
-*Updated: #693, #698 closed (PR#769 merged) — removed from backlog.*
+# Handoff — 2026-07-30
 
 ## What's Done
 
-- PR#769 merged to upstream — typed composition and context isolation landed on main
-- 2 blog entries published, 1 forage entry submitted (Maven worktree SNAPSHOT resolution)
+- PR landed on upstream — multi-approver oversight gate (#810) + epic #820 (4/5 issues closed)
+- Work repo: createMultiInstance SPI, adapter bridge, cancellation cascade, approvedBy aggregation, resolutionTypeName threading
+- Design-reviewed spec (10 rounds, $30.80), 1 blog entry published
+- Slot 54 created for engine#813 (alternative scheduler SPI)
 
 ## Immediate Next Step
 
-- Pick up HumanTask CBR routing (#754-757)
+- Pick up #817 (YAML schema for QuorumConfig) — needs design brainstorm before implementation
 
 ## What's Left
 
+- engine#817: YAML schema for QuorumConfig — needs design brainstorm (Med complexity) · S · Med
 - engine#764: update architecture spec §5 Connectors · S · Low
 - Work repo DataRef support — follow-on from #740 (not yet filed) · M · Med
 
@@ -20,8 +21,6 @@
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #754 | HumanTask CBR routing implementation | M | Med | Follow-on from #741 |
-| #755 | HumanTask routing constraint impl | M | Med | Follow-on from #741 |
-| #756 | Work repo consumption of HumanTask routing | M | Med | Follow-on from #741 |
-| #757 | Group scoring for HumanTask routing | S | Med | Follow-on from #741 |
+| #813 | Alternative scheduler SPI | L | Med | Slot 54 created |
+| #817 | YAML schema for QuorumConfig | S | Med | Deferred from #820 epic |
 | #764 | Update architecture spec §5 Connectors | S | Low | |
