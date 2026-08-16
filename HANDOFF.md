@@ -1,26 +1,39 @@
-# Handoff — 2026-07-30
+# HANDOFF — 2026-08-12
 
-## What's Done
+## Last Session
 
-- PR landed on upstream — multi-approver oversight gate (#810) + epic #820 (4/5 issues closed)
-- Work repo: createMultiInstance SPI, adapter bridge, cancellation cascade, approvedBy aggregation, resolutionTypeName threading
-- Design-reviewed spec (10 rounds, $30.80), 1 blog entry published
-- Slot 54 created for engine#813 (alternative scheduler SPI)
+Full audit of all 131 open engine issues against the codebase. Dispatched 10 parallel agents to check each issue for completion, obsolescence, or redundancy.
+
+**Results:**
+- **22 issues closed as DONE** — work was fully implemented but issues never closed (#110, #247, #431, #501, #507, #596-#602, #611, #612, #632, #646, #657, #727, #861, #871, #879, #896)
+- **15 issues closed as OBSOLETE/EFFECTIVELY-DONE** — superseded by different architecture or scope completed (#2, #9, #23, #82, #103, #115, #202, #208, #383, #448, #449, #454, #458, #639, #771)
+- **14 issues remain PARTIALLY DONE** — documented in completion plan
+- **~80 issues confirmed OPEN** — genuine future work
+
+Also created `examples/composable-routing/` — a complete example module demonstrating composable signal routing as a Contract Net alternative. Includes README, Java DSL, YAML definition, custom signal provider, and pom.xml (added to reactor, compiles clean).
 
 ## Immediate Next Step
 
-- Pick up #817 (YAML schema for QuorumConfig) — needs design brainstorm before implementation
+Work through the partially-done completion plan at `plans/2026-08-12-partially-done-completion.md`. Recommended order:
 
-## What's Left
+1. **#656** (add `types` field to CaseInstance) — XS effort, mechanical
+2. **#833/#855** (list metadata leak with ACL) — S effort, correctness fix
+3. **#670/#645** (delegation/escalation compliance) — S effort, extends existing recorder
+4. **#22/#510** (case-level SLA) — M effort, new timer trigger capability
+5. Tracker epic description updates — batch in one session
 
-- engine#817: YAML schema for QuorumConfig — needs design brainstorm (Med complexity) · S · Med
-- engine#764: update architecture spec §5 Connectors · S · Low
-- Work repo DataRef support — follow-on from #740 (not yet filed) · M · Med
+The Tier 1 items (#656, #855, #645) are all S-effort and could be knocked out in a single focused session. Each is a straightforward extension of existing infrastructure.
 
-## What's Next
+## Open Items
 
-| # | Description | Scale | Complexity | Notes |
-|---|-------------|-------|------------|-------|
-| #813 | Alternative scheduler SPI | L | Med | Slot 54 created |
-| #817 | YAML schema for QuorumConfig | S | Med | Deferred from #820 epic |
-| #764 | Update architecture spec §5 Connectors | S | Low | |
+- `examples/composable-routing/` is on the current branch (main) — needs commit
+- 14 partially-done issues documented in completion plan with remaining work, file pointers, and effort estimates
+- ~80 genuinely open issues remain (future work, not actionable now)
+
+## References
+
+| Doc | Path |
+|-----|------|
+| Completion plan | `plans/2026-08-12-partially-done-completion.md` |
+| Composable routing example | `proj/examples/composable-routing/` |
+| Issue audit (this session) | conversation context only |
