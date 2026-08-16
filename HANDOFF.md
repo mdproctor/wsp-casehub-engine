@@ -6,7 +6,7 @@ Landed three issues from the partially-done completion plan: #510 (SignalTarget 
 
 ## Immediate Next Step
 
-Run `work start #645` — branch `issue-645-delegation-escalation-compliance` already exists on the project repo. Needs design for delegation eligibility and escalation trigger policies in `BehavioralComplianceRecorder`. Check `BehavioralExpectations.delegationExpected()` and `escalationExpected()` from eidos-api before designing. Not a quick-fix — requires brainstorming for the policy definitions.
+Check out `issue-645-delegation-escalation-compliance` and run `work continue` — branch already exists on the project repo. Needs design for delegation eligibility and escalation trigger policies in `BehavioralComplianceRecorder`. Check `BehavioralExpectations.delegationExpected()` and `escalationExpected()` from eidos-api before designing. Not a quick-fix — requires brainstorming for the policy definitions.
 
 ## Cross-Module
 
