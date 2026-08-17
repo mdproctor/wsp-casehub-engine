@@ -1,21 +1,17 @@
-# HANDOFF — 2026-08-16
+# HANDOFF — 2026-08-17
 
 ## Last Session
 
-Landed three issues from the partially-done completion plan: #510 (SignalTarget — new sealed BindingTarget permit for engine-internal context mutations, ScheduleTrigger YAML parity, full dispatch pipeline with integration test), #656 (instance-level types field on CaseInstance), #855 (ACL filtering on list endpoints). Closed #22 (ancient SLA epic, remainder tracked in new #911). Fixed workspace symlink `wksp` which was pointing to casehub-work project subdirectory instead of actual workspace.
-
-## Immediate Next Step
-
-Check out `issue-645-delegation-escalation-compliance` and run `work continue` — branch already exists on the project repo. Needs design for delegation eligibility and escalation trigger policies in `BehavioralComplianceRecorder`. Check `BehavioralExpectations.delegationExpected()` and `escalationExpected()` from eidos-api before designing. Not a quick-fix — requires brainstorming for the policy definitions.
+Landed #645 — delegation and escalation compliance observation in `BehavioralComplianceRecorder`. Two new dimensions (DELEGATION, ESCALATION) follow a two-gate model: eidos disposition gate + engine structural gate. Delegation uses `PlanItemStore` compound children as evidence (case-level, known v1 limitation). Escalation uses `PlannedAction` presence and `Declined` outcome for COMPLIANT, autonomous success for VIOLATED. Cross-dimension: Declined is VIOLATED for attestation + COMPLIANT for escalation (deliberate). Also fixed 3 pre-existing `AgentDescriptor` test compilation errors from upstream eidos-api record change.
 
 ## Cross-Module
 
-**Enabled:**
-- casehub-work — `PlanItemCompletionApplier` updated with `case SignalTarget` branch (31f0d564), coordinated same day
+No cross-module changes this session.
 
 ## References
 
 | Doc | Path |
 |-----|------|
-| Completion plan | `plans/2026-08-12-partially-done-completion.md` (in slots) |
-| Garden entries | GE-20260816-082f92, GE-20260816-8b9589, GE-20260816-739630 |
+| Design spec | `docs/specs/issue-645-delegation-escalation-compliance/2026-08-17-delegation-escalation-compliance-design.md` |
+| Decisions | `docs/specs/issue-645-delegation-escalation-compliance/decisions.md` |
+| Diary entry | `docs/blog/2026-08-17-mdp01-two-gate-compliance.md` |
