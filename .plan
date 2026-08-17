@@ -1,15 +1,21 @@
-# Work Plan — issue-645-delegation-escalation-compliance
+# Work Plan — issue-910-execution-state-endpoint
 
 ## State
-branch: issue-645-delegation-escalation-compliance
+branch: issue-910-execution-state-endpoint
 state: scaffolded
-project-sha: 58aa12b3ac4d5a1a9af829ad62749d30a1254ebc
+project-sha: 8a8204f2a97c4fcc3b16a04d87e6eb9b55533132
 date: 2026-08-17
 issue-repo: casehubio/engine
-covers: 645
+covers: 910,913,914,915,916,917,918
 design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
 ## Queue
-- [ ] #645 — Issue #645 ← active
+- [x] #910 — Issue #910
+- [x] #913 — Enrich AgendaItemSnapshot with binding target type
+- [x] #914 — Distinguish TIMEOUT from FAILURE in execution state snapshot
+- [x] #915 — Track per-agent duration in execution snapshots
+- [x] #916 — Populate ExecutionModel strategy fields
+- [x] #917 — Map DELEGATED/SUSPENDED to WAITING_FOR_AGENT/EVENT states
+- [ ] #918 — Surface compound iteration count in execution state snapshot
