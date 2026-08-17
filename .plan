@@ -6,10 +6,16 @@ state: scaffolded
 project-sha: 8a8204f2a97c4fcc3b16a04d87e6eb9b55533132
 date: 2026-08-17
 issue-repo: casehubio/engine
-covers: 910
+covers: 910,913,914,915,916,917,918
 design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
 ## Queue
-- [ ] #910 — Issue #910 ← active
+- [x] #910 — Issue #910
+- [x] #913 — Enrich AgendaItemSnapshot with binding target type
+- [x] #914 — Distinguish TIMEOUT from FAILURE in execution state snapshot
+- [x] #915 — Track per-agent duration in execution snapshots
+- [x] #916 — Populate ExecutionModel strategy fields
+- [x] #917 — Map DELEGATED/SUSPENDED to WAITING_FOR_AGENT/EVENT states
+- [ ] #918 — Surface compound iteration count in execution state snapshot
