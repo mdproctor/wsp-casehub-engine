@@ -1,0 +1,15 @@
+# Work Plan — issue-645-delegation-escalation-compliance
+
+## State
+branch: issue-645-delegation-escalation-compliance
+state: scaffolded
+project-sha: 58aa12b3ac4d5a1a9af829ad62749d30a1254ebc
+date: 2026-08-17
+issue-repo: casehubio/engine
+covers: 645
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] #645 — Issue #645 ← active
