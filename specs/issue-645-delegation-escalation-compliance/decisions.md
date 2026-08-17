@@ -44,3 +44,27 @@
 **Sources:** BehavioralComplianceRecorder.java (existing pattern), BehavioralComplianceRecorderTest.java (existing test pattern)
 **Exploration:** quick
 **Status:** captured
+
+## D5: Delegation evidence detection
+
+**Choice:** Query PlanItemStore at completion time — check if `PlanItemStore.findByCaseId(caseId, tenancyId)` contains items with `parentCompoundId != null`. Any compound children existing means the case's decomposition structure was exercised. This is case-level evidence, not per-execution.
+**Alternatives:**
+- EventLog query for SUBCASE_STARTED events — more specific to worker-initiated delegation but requires EventLog query at completion time, crossing module boundaries.
+- WorkerRuntime flag — track delegation via a boolean set when `execute()` or `spawnCase()` is called. Per-execution accuracy but requires changes to WorkerRuntime, event threading, and handler.
+**Rationale:** PlanItemStore is already available as an SPI. The query is simple and deterministic. Case-level granularity is acceptable for v1 — the TTL + threshold model in eidos absorbs noise from repeated signals.
+**Trade-offs:** Every worker completion in the same case records the same delegation state. Pre-execution decomposition (GoalDecomposer at case start) counts as delegation even though the system decomposed, not the agent. Acceptable because goal decomposition is driven by the agent's goal profile.
+**Sources:** PlanItemRecord.java:40 (parentCompoundId field), PlanItemStore.java:41 (findByCaseId method)
+**Exploration:** quick
+**Status:** captured
+
+## D6: Escalation signal semantics
+
+**Choice:** PlannedAction presence = COMPLIANT, WorkerOutcome.Declined = COMPLIANT, no PlannedAction on success = no observation. Two COMPLIANT paths, no VIOLATED path in v1.
+**Alternatives:**
+- Record VIOLATED when no PlannedAction on any success outcome — too noisy, most tasks don't warrant escalation even for supervised agents.
+- Deferred VIOLATED via WorkerRuntime instrumentation — future enhancement, out of scope for v1.
+**Rationale:** We can detect escalation behavior (flagging, declining) but cannot detect absence of warranted escalation. Recording only COMPLIANT is honest — it tells the trust system "this agent does escalate" without falsely claiming "this agent fails to escalate." The asymmetry with delegation (which CAN record VIOLATED) is acceptable.
+**Trade-offs:** Escalation compliance dimension only contributes positive signals in v1. Agents that never escalate simply have no escalation signals rather than VIOLATED signals. Trust maturity model treats absence of signals as bootstrap phase.
+**Sources:** WorkerOutcome.java (Success.plannedAction(), Declined), BehavioralSignal.java (COMPLIANT/VIOLATED)
+**Exploration:** quick
+**Status:** captured
