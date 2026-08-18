@@ -1,0 +1,15 @@
+# Work Plan — issue-696-multi-level-recovery
+
+## State
+branch: issue-696-multi-level-recovery
+state: scaffolded
+project-sha: bd9f67d0df5ea9b0ab8ab0e462429ec191062718
+date: 2026-08-18
+issue-repo: casehubio/engine
+covers: 696,697
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] #696 — Issue #696 ← active
