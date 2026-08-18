@@ -1,0 +1,15 @@
+# Work Plan — issue-919-add-createdat-caseinstance
+
+## State
+branch: issue-919-add-createdat-caseinstance
+state: scaffolded
+project-sha: b0e6de692f9db93d91ff96550e8e338cc07276a3
+date: 2026-08-18
+issue-repo: casehubio/engine
+covers: 919
+design-repo: project
+design-section-hashes: 
+flyway-next-v: V1.10.0
+
+## Queue
+- [ ] #919 — Issue #919 ← active
