@@ -27,6 +27,25 @@ Replace all `evalJqAsJsonNode`/`evalJqAsMap` calls with `registry.transform()`.
 - `JQ_ONLY` fallback in `CaseDefinitionYamlMapper` must NOT reference `runtime` classes (api→runtime dependency violation)
 - Error handling preserved: projection failures produce `LOG.warnf` + graceful fallback, never crash the case
 - `resolveExpression()` already exists at `CaseDefinitionYamlMapper:1039` — reuse for all projection fields
+- `WorkerExecutor.execute()` takes `String outputProjection` — must change to `ExpressionEvaluator`
+- `DefaultWorkerExecutor.applyOutputSchema()` hardcodes JQ type — must use evaluator directly
+- Planning module (`SubCaseExecutionHandler`, `SubCaseCompletionService`) has JQ-hardcoded call sites
+- EventLog metadata for SubCase mappings must store evaluator type alongside expression
+- `JqOnlyExpressionEngineRegistry` test helper needs `transform()` support alongside `JQ_ONLY`
+
+## Revised Batch Structure (post-review R1-01 fix)
+
+The original 3-batch plan creates uncompilable intermediate states (model type changes
+in Batch 1, callers updated in Batch 3). Revised to 2 batches where each type change
+is atomic with all its callers:
+
+- **Batch 1:** All model type changes + YAML mapper + AgentConverter + ALL runtime callers.
+  One atomic pass: type migration top-to-bottom. Tasks follow the original ordering but
+  compile fixes cascade into the same commit.
+- **Batch 2:** Cleanup — remove dead evalJq methods, verify clean build.
+
+During execution, Tasks 1-7 are done as a single compilable unit. Each task's steps
+are guidance, not independent compilation gates.
 
 ---
 
