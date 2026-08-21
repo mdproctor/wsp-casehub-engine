@@ -1,0 +1,15 @@
+# Work Plan — issue-943-per-expression-transform-override
+
+## State
+branch: issue-943-per-expression-transform-override
+state: scaffolded
+project-sha: d3dd4ddaa325d1a08e97bdc4818fa14485c3eb2f
+date: 2026-08-21
+issue-repo: casehubio/engine
+covers: 943
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] #943 — Issue #943 ← active
