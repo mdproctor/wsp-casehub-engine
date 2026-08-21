@@ -183,8 +183,9 @@ the expression engine. `AgentBuilder.inputProjection(String)` remains for Java D
 (JQ-only convenience).
 
 The no-CDI `JQ_ONLY` fallback in `CaseDefinitionYamlMapper` handles the registry-less path
-for unit tests that call `load(is)` directly. Its `transform()` delegates to
-`JQExpressionEngine.transform()`.
+for unit tests that call `load(is)` directly. Its `transform()` delegates to `JQEvaluator`
+(in `common`) directly — NOT `JQExpressionEngine` (in `runtime`), which would create an
+upward api→runtime dependency.
 
 ---
 
@@ -203,6 +204,27 @@ Full enumeration:
 | 6 | `DefaultPersistentScope:89` | `jqEvaluator.eval(inputProjection, snapshot)` | Receives `ExpressionEvaluator`, calls `registry.transform(evaluator, snapshot)` |
 | 7 | `PersistentWorkerFunctionHandler:101` | `binding.effectiveInputProjection(cap)` → String | `binding.effectiveInputProjection(capTarget)` → `ExpressionEvaluator` |
 | 8 | `AgentBuilder:157-162` | `new JqTransformer(inputProjection)::apply` | Already handled by section 6 (converter wraps) |
+| 9 | `CaseContextChangedEventHandler.tryProvision()` | inline `evalJqAsMap(ctx, effectiveProjection)` | `transformAsMap(evaluator, ctx)` using binding's `effectiveInputProjection(capTarget)` |
+| 10 | `DefaultPersistentScope.emit()` | `jqEvaluator.eval(outputSchema, outputNode)` | Receives `ExpressionEvaluator` for output, calls `registry.transform(evaluator, outputNode)` |
+| 11 | `PersistentWorkerFunctionHandler` output | `ct.capability().outputSchema()` → String | `capTarget.outputProjection()` → ExpressionEvaluator, threaded to `DefaultPersistentScope` |
+| 12 | `QuartzWorkerExecutionJob:218` output | `capability.outputSchema()` → String | Resolved from `CapabilityTarget.outputProjection()` via EventLog metadata, passed to executor |
+
+**DefaultWorkOrchestrator access to CapabilityTarget:** `doSubmitWork()` receives `CaseDefinition`
+and looks up `Capability` by name — it has no Binding or CapabilityTarget. Solution: look up
+the binding from `CaseDefinition.getBindings()` by capability name, get the CapabilityTarget
+from the binding's target, and use `capTarget.inputProjection()`. If no binding matches (direct
+capability submission), fall back to wrapping `capability.inputSchema()` in `JQExpressionEvaluator`.
+
+**Output projection threading:** `PersistentWorkerFunctionHandler` and `QuartzWorkerExecutionJob`
+currently read `capability.outputSchema()` as a String. After this change, they read
+`capTarget.outputProjection()` as an `ExpressionEvaluator`. For `QuartzWorkerExecutionJob`, the
+evaluator type is stored in EventLog metadata alongside the expression (same pattern as
+`contextBridgeType` for ContextBridge). `PersistentWorkerFunctionHandler` receives the evaluator
+from the binding's CapabilityTarget directly.
+
+**Deferred:** `exchangeProjectionExpression` on Binding — this is part of the Exchange/DataChannel
+subsystem (engine#633) with its own `ExchangeProjectionStrategy` dispatch mechanism. Converting
+it to ExpressionEvaluator is a separate concern. Filed as a follow-up issue.
 
 **Helper methods** replace `evalJqAsJsonNode` / `evalJqAsMap` on each handler:
 
@@ -254,7 +276,10 @@ public List<JsonNode> transform(ExpressionEvaluator evaluator, JsonNode input) {
         throw new IllegalArgumentException(
             "Only 'jq' supported without CDI. Got: " + evaluator.type());
     }
-    return new JQExpressionEngine().transform(evaluator, input);
+    // Use JQEvaluator (common module) directly — NOT JQExpressionEngine (runtime)
+    JQExpressionEvaluator jqEval = (JQExpressionEvaluator) evaluator;
+    ValidationResult vr = new JQEvaluator().eval(jqEval.expression(), input);
+    return vr.ok() && vr.output() != null ? vr.output() : List.of(input);
 }
 ```
 
@@ -270,7 +295,10 @@ public List<JsonNode> transform(ExpressionEvaluator evaluator, JsonNode input) {
 | `runtime` (handlers) | `WorkerScheduleEventHandler`, `CaseContextChangedEventHandler`, `DefaultWorkOrchestrator`, `PersistentWorkerFunctionHandler`, `DefaultPersistentScope` | evalJq → registry.transform |
 | `runtime` (tests) | Existing projection tests | Update to use evaluator types |
 
-Foundation tier (`worker-api`), persistence modules, and scheduler modules are **not affected**.
+Foundation tier (`worker-api`) is **not affected**. `scheduler-quartz` (`QuartzWorkerExecutionJob`)
+is affected for output projection threading. Persistence: `SubCaseCompletionService` stores
+expression Strings — restore path wraps in `JQExpressionEvaluator` (default convention, same
+as `SubCaseMapping.of(String)`).
 
 ---
 
@@ -296,6 +324,16 @@ Foundation tier (`worker-api`), persistence modules, and scheduler modules are *
 
 **`WorkerScheduleEventHandler` integration tests** — update existing projection tests to verify
 registry dispatch (not direct JQ evaluation). Add test with non-JQ evaluator type.
+
+**`DefaultPersistentScope` tests** — add:
+- Input projection via registry.transform (not direct jqEvaluator.eval)
+- Output projection via registry.transform in emit()
+
+**`DefaultWorkOrchestrator` tests** — add:
+- Input projection resolves through CapabilityTarget, not capability.inputSchema()
+- Fallback when no binding matches (wraps in JQExpressionEvaluator)
+
+**`SubCaseMapping` persistence round-trip** — verify String restore wraps in JQExpressionEvaluator
 
 **`DefaultExpressionEngineRegistryTest`** — existing `transform()` tests should already pass.
 Add test with null evaluator returning identity.
