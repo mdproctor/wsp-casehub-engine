@@ -4,7 +4,7 @@ title: "Projections speak every language"
 date: 2026-08-22
 entry_type: note
 subtype: diary
-projects: [casehub-engine]
+projects: [casehubio/engine]
 tags: [expression-evaluator, projections, type-migration, casehub]
 ---
 
