@@ -9,3 +9,4 @@
 | [2026-08-13-mdp03-the-bridge-that-wasnt.md](2026-08-13-mdp03-the-bridge-that-wasnt.md) | 2026-08-13 | Goal decomposition to engine binding bridge — three bugs, one missing abstraction layer, and a deliberate v1 constraint |
 | [2026-08-17-mdp01-two-gate-compliance.md](2026-08-17-mdp01-two-gate-compliance.md) | 2026-08-17 | Two-gate compliance model for delegation and escalation observation — why policy judgments need different observation gates than measurements |
 | [2026-08-17-mdp02-the-view-that-wasnt-just-a-view.md](2026-08-17-mdp02-the-view-that-wasnt-just-a-view.md) | 2026-08-17 | Composition endpoint reveals snapshot gaps — target types, per-node duration, timeout detection, strategy fields |
+| [2026-08-22-mdp01-projections-speak-every-language.md](2026-08-22-mdp01-projections-speak-every-language.md) | 2026-08-22 | Per-expression language override extended from boolean conditions to all data transform projections |
