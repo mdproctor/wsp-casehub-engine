@@ -1,0 +1,15 @@
+# Work Plan — issue-1004-fix-compilation-errors
+
+## State
+branch: issue-1004-fix-compilation-errors
+state: scaffolded
+project-sha: f8a01d664862022935968ece6c891fa3051fd7cf
+date: 2026-08-26
+issue-repo: casehubio/engine
+covers: 1004
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1004 — Issue #1004 ← active
