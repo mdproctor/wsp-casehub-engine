@@ -1,0 +1,15 @@
+# Work Plan — issue-1006-audit-yaml-deserialization
+
+## State
+branch: issue-1006-audit-yaml-deserialization
+state: scaffolded
+project-sha: 182de0dbd25abefbb475af69f3188a5b180f4f2b
+date: 2026-08-27
+issue-repo: casehubio/engine
+covers: 1006
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1006 — Issue #1006 ← active
