@@ -1,0 +1,15 @@
+# Work Plan — issue-1007-reasoning-lineage-linkage
+
+## State
+branch: issue-1007-reasoning-lineage-linkage
+state: scaffolded
+project-sha: 0dce7421e2789d96f03c561e7575aef1def5a8e2
+date: 2026-08-27
+issue-repo: casehubio/engine
+covers: 950,1007
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1007 — Issue #1007 ← active

@@ -1,1 +1,1 @@
-# Design Journal — issue-954-eventlog-metadata-integration-test
+# Design Journal — issue-1007-reasoning-lineage-linkage
