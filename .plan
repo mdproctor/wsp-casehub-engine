@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1007-reasoning-lineage-linkage
-state: active
+state: closing:stamped
 project-sha: fcb632d4607340430593d1b080d46f720ee5d142
 date: 2026-08-27
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/engine#1007 — Issue #1007 ← active
   - [x] Batch 1: Merkle chain
