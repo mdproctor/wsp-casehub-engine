@@ -1,0 +1,15 @@
+# Work Plan — issue-996-judgment-scheduler-spi
+
+## State
+branch: issue-996-judgment-scheduler-spi
+state: scaffolded
+project-sha: 61369e5ce010466c6cc98bfca7e6eb7a1485c596
+date: 2026-08-28
+issue-repo: casehubio/engine
+covers: 996,998
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#996 — Issue #996 ← active
