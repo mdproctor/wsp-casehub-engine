@@ -13,5 +13,5 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1007 — Issue #1007 ← active
-  - [ ] Batch 1: Merkle chain
-    - [ ] Task 1: Add reasoning to WorkerDecisionEvent and populate domainData
+  - [x] Batch 1: Merkle chain
+    - [x] Task 1: Add reasoning to WorkerDecisionEvent and populate domainData
