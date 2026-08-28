@@ -3,10 +3,10 @@
 ## State
 branch: issue-1007-reasoning-lineage-linkage
 state: scaffolded
-project-sha: 0dce7421e2789d96f03c561e7575aef1def5a8e2
+project-sha: fcb632d4607340430593d1b080d46f720ee5d142
 date: 2026-08-27
 issue-repo: casehubio/engine
-covers: 950,1007
+covers: 1007
 design-repo: project
 design-section-hashes: 
 flyway-next-v: none
