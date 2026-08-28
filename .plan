@@ -1,0 +1,15 @@
+# Work Plan — issue-997-judgment-verifier-spi
+
+## State
+branch: issue-997-judgment-verifier-spi
+state: scaffolded
+project-sha: 9d5b294b7fda14d03fabc212fc9274178be0f7a8
+date: 2026-08-28
+issue-repo: casehubio/engine
+covers: 997
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#997 — Issue #997 ← active
