@@ -1,17 +1,29 @@
-# HANDOFF — 2026-08-17
+# Handoff — 2026-07-30
 
-## Last Session
+## What's Done
 
-Landed #645 — delegation and escalation compliance observation in `BehavioralComplianceRecorder`. Two new dimensions (DELEGATION, ESCALATION) follow a two-gate model: eidos disposition gate + engine structural gate. Delegation uses `PlanItemStore` compound children as evidence (case-level, known v1 limitation). Escalation uses `PlannedAction` presence and `Declined` outcome for COMPLIANT, autonomous success for VIOLATED. Cross-dimension: Declined is VIOLATED for attestation + COMPLIANT for escalation (deliberate). Also fixed 3 pre-existing `AgentDescriptor` test compilation errors from upstream eidos-api record change.
+- PR landed on upstream — multi-approver oversight gate (#810) + epic #820 (4/5 issues closed)
+- Work repo: createMultiInstance SPI, adapter bridge, cancellation cascade, approvedBy aggregation, resolutionTypeName threading
+- Design-reviewed spec (10 rounds, $30.80), 1 blog entry published
+- Slot 54 created for engine#813 (alternative scheduler SPI)
 
-## Cross-Module
+- **casehubio/engine#799** — engine-side: module rename (blackboard→planning), sealed PlanItemDefinition, Compound container (lifecycle, completion, gating), Stage retirement, DagPlan unification, HTN SPI promotion, DecompositionStrategy wiring
+- **casehubio/blocks#73** — blocks-side: migrate to engine-api types, GoalOrientedDecomposition (GOAP), DispositionAwareRouting, agent dispatch wiring, ExecutionBackend, PatternType
 
-No cross-module changes this session.
+- Pick up #817 (YAML schema for QuorumConfig) — needs design brainstorm before implementation
 
-## References
+## What's Left
 
-| Doc | Path |
-|-----|------|
-| Design spec | `docs/specs/issue-645-delegation-escalation-compliance/2026-08-17-delegation-escalation-compliance-design.md` |
-| Decisions | `docs/specs/issue-645-delegation-escalation-compliance/decisions.md` |
-| Diary entry | `docs/blog/2026-08-17-mdp01-two-gate-compliance.md` |
+- engine#817: YAML schema for QuorumConfig — needs design brainstorm (Med complexity) · S · Med
+- engine#764: update architecture spec §5 Connectors · S · Low
+- scaffold#35: replace scaffold inline REST with engine-rest dependency · M · Med
+- Work repo DataRef support — follow-on from #740 (not yet filed) · M · Med
+- Real `WorkloadDataProvider` implementation (actor-state or work adapter) — not filed · M · Med
+
+## What's Next
+
+| # | Description | Scale | Complexity | Notes |
+|---|-------------|-------|------------|-------|
+| #813 | Alternative scheduler SPI | L | Med | Slot 54 created |
+| #817 | YAML schema for QuorumConfig | S | Med | Deferred from #820 epic |
+| #764 | Update architecture spec §5 Connectors | S | Low | |
