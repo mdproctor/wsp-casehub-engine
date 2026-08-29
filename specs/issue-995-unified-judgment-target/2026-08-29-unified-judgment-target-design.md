@@ -257,9 +257,11 @@ public record EscalationContext(
 3. Resolves `JudgmentEscalator` via `EngineStrategyResolver` from `JudgmentTarget.escalatorStrategy()`
 4. Calls `escalator.escalate(context)` with `escalationCount` and `maxEscalations`
 5. Writes `JUDGMENT_ESCALATED` EventLog with decision outcome in metadata (after escalator decision, not before — so escalationCount reflects prior events only)
-6. On `ReYield`: re-publishes judgment request with feedback appended to prompt context
-7. On `RouteHigher`: re-publishes with elevated trust threshold on the target
+6. On `ReYield`: calls `planItem.tryMarkReDispatching()` (DELEGATED → DISPATCHING), then re-publishes judgment request with feedback appended to prompt context through `JudgmentScheduler.schedule()` — the scheduler's `markDelegated()` succeeds from DISPATCHING as normal
+7. On `RouteHigher`: same PlanItem transition as ReYield, then re-publishes with elevated trust threshold on the target
 8. On `Fault`: marks PlanItem FAULTED, writes `_diagnostics`
+
+**PlanItem re-dispatch transition:** `PlanItem.tryMarkReDispatching()` — CAS-based `DELEGATED → DISPATCHING` transition. Follows the existing revert pattern (`revertDispatching()`: DISPATCHING → PENDING, `revertEscalated()`: ESCALATED → PENDING). Semantically correct: the PlanItem was delegated, but the delegation is being retried with updated parameters. The intermediate DISPATCHING state allows downstream schedulers to call `markDelegated()` normally without weakening the state machine's safety guarantees.
 
 **Escalation count tracking:** `escalationCount` is derived from `EventLogRepository` — count of `JUDGMENT_ESCALATED` entries for `(caseId, bindingName)`. Durable across restarts, consistent with the event-sourced audit trail. The EventLog write (step 5) occurs after the escalator decision (step 4), so the count passed to the escalator reflects only prior escalations. With `maxEscalations=3`: the `ReYieldEscalator` checks `escalationCount < maxEscalations`, allowing escalation counts 0, 1, 2 (three re-yields total) and faulting at count 3.
 
@@ -375,6 +377,13 @@ Test pattern follows `casehub-engine-a2a` integration tests. Test config at `rea
 - **YAML:** Parse `judgment:` without `human:` → JudgmentTarget with null routingConfig
 - **Integration:** JudgmentTarget with HumanRoutingConfig dispatches to HumanTaskScheduler via DelegatingJudgmentScheduler
 - **Integration:** JudgmentEscalationHandler resolves escalator, executes ReYield
+- **Unit:** JudgmentNodeExecutor — Completed unblocks thread, ReYielded resets timeout and loops, Faulted throws JudgmentFaultException, timeout throws JudgmentTimeoutException, cleanup in finally block
+- **Unit:** JudgmentCallableDispatcher — dispatch delegates to JudgmentNodeExecutor, CompletableFuture result mapping
+- **Unit:** JudgmentNodeResult sealed type exhaustiveness
+- **Integration:** SWF judgment call end-to-end — `call: casehub:judgment` → response → executor unblocks
+- **Integration:** Non-binding completion path — SWF judgment response reaches executor without JudgmentTarget binding (R2-04 path)
+- **Integration:** Escalation re-yield through JudgmentNodeExecutor — re-yield resets per-cycle timeout, PlanItem re-dispatch transition
+- **Integration:** escalationCount via EventLog — count tracks correctly across re-yield cycles
 - **Integration:** React execution end-to-end (#957)
 - **Integration:** React audit trail (#957)
 
@@ -390,7 +399,7 @@ Test pattern follows `casehub-engine-a2a` integration tests. Test config at `rea
 | `engine-api` | JudgmentTarget gains fields (title, outcomes, scope, priority, trustThreshold, escalatorStrategy, routingConfig, expiresAtExpression), RoutingConfig/HumanRoutingConfig, JudgmentEscalator/EscalationDecision/EscalationContext, HumanTaskTarget `implements BindingTarget` removed (class retained as scheduler data carrier), BindingTarget permits updated |
 | `engine-common` | JudgmentScheduleRequest gains caseBudgetDeadline, resolvedTitle, resolvedScope, experiences, candidateScores |
 | `runtime` | DelegatingJudgmentScheduler replaces NoOp, publishJudgmentSchedule absorbs human dispatch (conditional on HumanRoutingConfig), JudgmentEscalationHandler gains escalator resolution, EngineStrategyResolver gains `@Any Instance<JudgmentEscalator>` constructor parameter + `registerStrategies(judgmentEscalators)` call, FaultEscalator, ReYieldEscalator, JudgmentNodeExecutor (@ApplicationScoped), JudgmentNodeResult, JudgmentCallableDispatcher |
-| `planning` | PlanningCasePlanModelSnapshotProvider: `case JudgmentTarget jt -> jt.routingConfig() instanceof HumanRoutingConfig ? "HUMAN" : "JUDGMENT"` |
+| `planning` | PlanningCasePlanModelSnapshotProvider: `case JudgmentTarget jt -> jt.routingConfig() instanceof HumanRoutingConfig ? "HUMAN" : "JUDGMENT"`, PlanItem gains `tryMarkReDispatching()` (DELEGATED → DISPATCHING) |
 | `scheduler-quartz` | QuartzWorkerExecutionManager switch update (remove HumanTaskTarget case) |
 | `work-cloudevent` | CloudEventHumanTaskScheduler unchanged (receives via delegation) |
 | `react` | New integration tests (#957) |
