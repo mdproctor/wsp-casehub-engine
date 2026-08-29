@@ -44,7 +44,7 @@ Every yield separates three concerns:
 - `priority` — request priority
 
 **New fields:**
-- `trustThreshold` — minimum trust level for caller selection (nullable Double, from #995 spec)
+- `trustThreshold` — minimum trust level for caller selection (nullable String — ordinal category, consistent with `VerificationResult.TrustTooLow.requiredLevel` and `EscalationDecision.RouteHigher.minimumTrustLevel`)
 - `escalatorStrategy` — post-verification-failure handling (nullable String, NamedStrategy ID)
 - `routingConfig` — caller-type-specific routing hints (nullable `RoutingConfig`)
 
@@ -170,7 +170,7 @@ judgment:
 The existing `publishJudgmentSchedule()` in `CaseContextChangedEventHandler` expands to handle both human and non-human yields. The method always:
 1. Evaluates `inputMapping` if present → `inputData`
 2. Resolves `promptExpression` if present → `resolvedPrompt`
-3. Resolves `expiresIn` / `expiresInExpression` / `expiresAtExpression` → `expiresAtDeadline`
+3. Resolves deadline — `expiresIn`/`expiresInExpression` (relative, mutually exclusive) and `expiresAtExpression` (absolute) are **independent concerns**. When both produce an Instant, pick the earliest. This is consistent with `caseBudgetDeadline` resolution in the existing `CloudEventHumanTaskScheduler`. The builder enforces mutual exclusivity only between `expiresIn` and `expiresInExpression` (same concept, different expression modes); `expiresAtExpression` is composable with either. → `expiresAtDeadline`
 4. Resolves `caseBudgetDeadline` from `PropagationContext.getDeadline()`
 5. Resolves `title` / `titleExpression` → `resolvedTitle`
 6. Resolves `scope` / `scopeExpression` → `resolvedScope`
@@ -252,11 +252,16 @@ public record EscalationContext(
 #### Handler integration
 
 `JudgmentEscalationHandler` (already exists from #997) gains escalator resolution:
-1. Resolves `JudgmentEscalator` via `EngineStrategyResolver` from `JudgmentTarget.escalatorStrategy()`
-2. Calls `escalator.escalate(context)`
-3. On `ReYield`: re-publishes judgment request with feedback appended to prompt context
-4. On `RouteHigher`: re-publishes with elevated trust threshold on the target
-5. On `Fault`: marks PlanItem FAULTED, writes `_diagnostics`
+1. Queries `eventLogRepository.findByCaseAndTypes(caseId, [JUDGMENT_ESCALATED], tenancyId)`, filters by `bindingName` in metadata → `escalationCount`
+2. Reads `maxEscalations` from `CaseDefinitionSpec` (default 3 if null)
+3. Resolves `JudgmentEscalator` via `EngineStrategyResolver` from `JudgmentTarget.escalatorStrategy()`
+4. Calls `escalator.escalate(context)` with `escalationCount` and `maxEscalations`
+5. Writes `JUDGMENT_ESCALATED` EventLog with decision outcome in metadata (after escalator decision, not before — so escalationCount reflects prior events only)
+6. On `ReYield`: re-publishes judgment request with feedback appended to prompt context
+7. On `RouteHigher`: re-publishes with elevated trust threshold on the target
+8. On `Fault`: marks PlanItem FAULTED, writes `_diagnostics`
+
+**Escalation count tracking:** `escalationCount` is derived from `EventLogRepository` — count of `JUDGMENT_ESCALATED` entries for `(caseId, bindingName)`. Durable across restarts, consistent with the event-sourced audit trail. The EventLog write (step 5) occurs after the escalator decision (step 4), so the count passed to the escalator reflects only prior escalations. With `maxEscalations=3`: the `ReYieldEscalator` checks `escalationCount < maxEscalations`, allowing escalation counts 0, 1, 2 (three re-yields total) and faulting at count 3.
 
 #### CaseDefinitionSpec gains `maxEscalations`
 
@@ -324,6 +329,9 @@ This follows the `WorkerRuntime.awaitCase()` pattern — cheap blocking on virtu
 | `InsufficientEvidence` | Publish JUDGMENT_ESCALATED | (escalation handler enqueues `ReYielded()` on re-yield) |
 | `TrustTooLow` | Publish JUDGMENT_ESCALATED | (escalation handler enqueues `ReYielded()` on re-yield) |
 | `Rejected` | Write `_diagnostics` → fire CONTEXT_CHANGED | Enqueue `Faulted(reason)` |
+| (no binding / not JudgmentTarget) | Write event log → fire CONTEXT_CHANGED | Enqueue `Completed(response)` |
+
+The last row covers **SWF/DAG judgment yields** where `call: casehub:judgment` runs inside a worker's Serverless Workflow. The enclosing binding is a `CapabilityTarget` (not `JudgmentTarget`), so binding lookup either finds no binding or a non-judgment binding. In this case, verification is not run at the binding level — the response is accepted directly and the DAG thread is unblocked. The `pending.containsKey(key)` check and `Completed(response)` enqueue must be placed **outside** the `instanceof JudgmentTarget` conditional in `JudgmentCompletedHandler`, so SWF judgment responses always reach the DAG executor.
 
 Escalation handler notifications:
 | Escalation decision | JudgmentNodeExecutor notification |
