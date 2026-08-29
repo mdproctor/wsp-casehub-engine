@@ -31,7 +31,8 @@ Every yield separates three concerns:
 **Yield semantics (already present from #996/#997):**
 - `prompt` / `promptExpression` — what to ask
 - `inputMapping` / `outputMapping` — data flow
-- `expiresIn` / `expiresInExpression` — deadline
+- `expiresIn` / `expiresInExpression` — relative deadline (Duration)
+- `expiresAtExpression` — absolute deadline from case context (JQ → Instant)
 - `evidenceRequirements` — required evidence keys
 - `verifierStrategy` — post-response verification
 - `resolutionType` — typed response validation
@@ -65,18 +66,31 @@ public record HumanRoutingConfig(
 - `JudgmentTarget` with null routingConfig → scheduler picks caller
 - Future sealed permits: `LlmRoutingConfig`, `A2ARoutingConfig` — no target changes
 
-#### HumanTaskTarget deletion
+#### HumanTaskTarget deletion from BindingTarget
 
-`HumanTaskTarget` is removed from `BindingTarget` sealed permits:
+`HumanTaskTarget` is removed from `BindingTarget` sealed permits and `implements BindingTarget` is stripped:
 
 ```java
 public sealed interface BindingTarget
     permits CapabilityTarget, SubCaseTarget, JudgmentTarget, SignalTarget, ExtensionTarget {}
 ```
 
-- `HumanTaskTarget.java` — deleted
+`HumanTaskTarget` is **retained as an internal data carrier** for the scheduler layer. `HumanTaskScheduleRequest` keeps its `HumanTaskTarget target` field, and all `HumanTaskScheduler` implementations (`CloudEventHumanTaskScheduler`, `HumanTaskScheduleHandler`) remain unchanged. `DelegatingJudgmentScheduler.toHumanRequest()` constructs a `HumanTaskTarget` from `JudgmentTarget` + `HumanRoutingConfig` fields.
+
+Changes:
+- `HumanTaskTarget.java` — `implements BindingTarget` removed; class retained as scheduler-layer data carrier
 - `Binding.Builder.humanTask()` — deleted
-- `case HumanTaskTarget` — removed from all 6 switch sites
+- `case HumanTaskTarget` — removed from all 9 switch/instanceof sites:
+  1. `CaseContextChangedEventHandler:379` — publishByTarget dispatch
+  2. `PlanningCasePlanModelSnapshotProvider:180` — mapTargetType
+  3. `BindingExecutorResolver:48` — resolve
+  4. `QuartzWorkerExecutionManager:372` — createTriggerJobData
+  5. `PlanItemCompletionApplier:219` (planning) — applyOutputMapping
+  6. `PlanItemCompletionApplier:190` (engine-adapter) — applyOutputMapping
+  7. `SchedulerService:124` — registerScheduledTriggers
+  8. `SchedulerService:244` — createJobData
+  9. `CbrCaseRetainObserver:266` — buildRoutingKeyMap
+- `BindingDeserializer:226` — `deserializeHumanTask()` updated to produce `JudgmentTarget` with `HumanRoutingConfig`
 - `publishHumanTaskSchedule()` — logic absorbed into `publishJudgmentSchedule()`
 - `humanTask:` YAML block — replaced by `judgment:` with `human:` sub-block
 - `HumanTaskTargetTest.java`, `HumanTaskTargetDispatchTest.java` — migrated to JudgmentTarget
@@ -117,15 +131,16 @@ public record JudgmentScheduleRequest(
     JudgmentTarget target,        // full target — scheduler reads routingConfig, prompt, etc.
     Map<String, Object> inputData,
     String resolutionTypeName,
-    Instant expiresAtDeadline,
-    String resolvedTitle,         // new — resolved from title/titleExpression
-    String resolvedScope,         // new — resolved from scope/scopeExpression
+    @Nullable Instant expiresAtDeadline,
+    @Nullable Instant caseBudgetDeadline,    // new — from PropagationContext
+    @Nullable String resolvedTitle,          // new — resolved from title/titleExpression
+    @Nullable String resolvedScope,          // new — resolved from scope/scopeExpression
     List<RetrievedExperience> experiences,    // new — from CBR retrieval
     Map<String, Double> candidateScores      // new — from HumanTaskRouting
 ) {}
 ```
 
-The experiences and candidateScores fields are needed because the unified dispatch path now handles human yields that previously got these from `publishHumanTaskSchedule()`.
+`caseBudgetDeadline` is propagated from `PropagationContext.getDeadline()` — schedulers use it to select the earliest of task and budget deadlines. The experiences and candidateScores fields are needed because the unified dispatch path now handles human yields that previously got these from `publishHumanTaskSchedule()`.
 
 #### YAML schema
 
@@ -152,19 +167,31 @@ judgment:
 
 #### publishJudgmentSchedule() — unified dispatch
 
-The existing `publishJudgmentSchedule()` in `CaseContextChangedEventHandler` expands to handle both human and non-human yields. When `routingConfig` is `HumanRoutingConfig`:
-1. Resolves candidate groups/users via `CandidateSetSpec`
-2. Expands group membership via `GroupMembershipProvider`
-3. Runs `HumanTaskRoutingStrategy` (CBR, constraint) if configured
-4. Resolves title, scope from expressions
-5. Evaluates bridge validation for payloadType
-6. Creates PlanItem (PENDING → DELEGATED via `markDelegated()`)
+The existing `publishJudgmentSchedule()` in `CaseContextChangedEventHandler` expands to handle both human and non-human yields. The method always:
+1. Evaluates `inputMapping` if present → `inputData`
+2. Resolves `promptExpression` if present → `resolvedPrompt`
+3. Resolves `expiresIn` / `expiresInExpression` / `expiresAtExpression` → `expiresAtDeadline`
+4. Resolves `caseBudgetDeadline` from `PropagationContext.getDeadline()`
+5. Resolves `title` / `titleExpression` → `resolvedTitle`
+6. Resolves `scope` / `scopeExpression` → `resolvedScope`
+
+When `target.routingConfig() instanceof HumanRoutingConfig hrc`, additionally:
+7. Resolves `hrc.candidateGroups()` / `hrc.candidateUsers()` via `CandidateSetSpec` → `resolvedGroups`, `resolvedUsers`
+8. Runs `HumanTaskRoutingStrategy` from `caseDefinition.getHumanTaskRouting()` → `HumanTaskRoutingResult` → `finalGroups`, `finalUsers`, `candidateScores`
+9. Evaluates bridge validation for `hrc.payloadType()` against `inputData`
+
+All computed values are passed to `JudgmentScheduleRequest`:
+```java
+new JudgmentScheduleRequest(
+    caseId, tenancyId, bindingName, target, inputData,
+    resolutionTypeName, expiresAtDeadline, caseBudgetDeadline,
+    resolvedTitle, resolvedScope, experiences, candidateScores)
+```
+
+The `DelegatingJudgmentScheduler` then maps from `JudgmentScheduleRequest` → `HumanTaskScheduleRequest` when `routingConfig instanceof HumanRoutingConfig`, populating the `HumanTaskTarget` data carrier from `JudgmentTarget` + `HumanRoutingConfig` fields.
 
 When `routingConfig` is null:
-1. Evaluates input mapping
-2. Resolves prompt expression
-3. Creates PlanItem
-4. Dispatches to `JudgmentScheduler`
+1. Steps 1–6 above, then dispatches to `JudgmentScheduler`
 
 #### Cross-repo migration
 
@@ -231,9 +258,9 @@ public record EscalationContext(
 4. On `RouteHigher`: re-publishes with elevated trust threshold on the target
 5. On `Fault`: marks PlanItem FAULTED, writes `_diagnostics`
 
-#### CaseDefinition gains `maxEscalations`
+#### CaseDefinitionSpec gains `maxEscalations`
 
-`CaseDefinition.maxEscalations` (Integer, nullable — default 3). YAML: `spec: { maxEscalations: 3 }`.
+`CaseDefinitionSpec.maxEscalations` (Integer, nullable — default 3). YAML: `spec: { maxEscalations: 3 }`. Placed on `CaseDefinitionSpec` alongside peer operational limits `maxDecompositionDepth` and `maxAdaptations`.
 
 ### Part 3: DagNode Judgment Integration (#1000)
 
@@ -243,39 +270,73 @@ DagDriver's `Function<T, R>` executor is synchronous. A judgment node publishes 
 
 #### JudgmentNodeExecutor
 
+`@ApplicationScoped`. Uses a `BlockingQueue<JudgmentNodeResult>` per pending judgment to support per-cycle timeouts across escalation re-yields.
+
 ```java
+@ApplicationScoped
 public class JudgmentNodeExecutor {
-    private final ConcurrentHashMap<String, CompletableFuture<JudgmentResponse>> pending;
+    private final ConcurrentHashMap<String, BlockingQueue<JudgmentNodeResult>> pending;
 
     public JudgmentResponse execute(JudgmentTarget target, Map<String, Object> input,
-                                     UUID caseId, String bindingName, Duration timeout) {
-        CompletableFuture<JudgmentResponse> future = new CompletableFuture<>();
+                                     UUID caseId, String bindingName, Duration perCycleTimeout) {
+        BlockingQueue<JudgmentNodeResult> queue = new LinkedBlockingQueue<>();
         String key = caseId + ":" + bindingName;
-        pending.put(key, future);
-        // Publish judgment request via event bus
+        pending.put(key, queue);
         publishJudgmentYield(target, input, caseId, bindingName);
         try {
-            return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
+            while (true) {
+                JudgmentNodeResult result = queue.poll(perCycleTimeout.toMillis(), MILLISECONDS);
+                if (result == null) {
+                    throw new JudgmentTimeoutException(bindingName, perCycleTimeout);
+                }
+                switch (result) {
+                    case JudgmentNodeResult.Completed(var response) -> { return response; }
+                    case JudgmentNodeResult.ReYielded() -> { /* timeout resets — loop */ }
+                    case JudgmentNodeResult.Faulted(var reason) ->
+                        throw new JudgmentFaultException(bindingName, reason);
+                }
+            }
+        } finally {
             pending.remove(key);
-            throw new JudgmentTimeoutException(bindingName, timeout);
         }
-    }
-
-    // Called by JudgmentCompletedHandler
-    public void complete(UUID caseId, String bindingName, JudgmentResponse response) {
-        String key = caseId + ":" + bindingName;
-        CompletableFuture<JudgmentResponse> future = pending.remove(key);
-        if (future != null) future.complete(response);
     }
 }
 ```
 
-This follows the `WorkerRuntime.awaitCase()` pattern — cheap blocking on virtual threads.
+`JudgmentNodeResult` is a sealed interface:
+```java
+sealed interface JudgmentNodeResult {
+    record Completed(JudgmentResponse response) implements JudgmentNodeResult {}
+    record ReYielded() implements JudgmentNodeResult {}
+    record Faulted(String reason) implements JudgmentNodeResult {}
+}
+```
+
+This follows the `WorkerRuntime.awaitCase()` pattern — cheap blocking on virtual threads — but with per-cycle timeout that resets on each escalation re-yield.
+
+#### Completion protocol
+
+`JudgmentNodeExecutor` is `@Inject`ed into both `JudgmentCompletedHandler` and `JudgmentEscalationHandler`. The protocol:
+
+| Verification outcome | Handler action | JudgmentNodeExecutor notification |
+|---|---|---|
+| `Accepted` | Apply output mapping → fire CONTEXT_CHANGED | Enqueue `Completed(response)` — **after** output mapping is applied |
+| `InsufficientEvidence` | Publish JUDGMENT_ESCALATED | (escalation handler enqueues `ReYielded()` on re-yield) |
+| `TrustTooLow` | Publish JUDGMENT_ESCALATED | (escalation handler enqueues `ReYielded()` on re-yield) |
+| `Rejected` | Write `_diagnostics` → fire CONTEXT_CHANGED | Enqueue `Faulted(reason)` |
+
+Escalation handler notifications:
+| Escalation decision | JudgmentNodeExecutor notification |
+|---|---|
+| `ReYield` | Enqueue `ReYielded()` — per-cycle timeout resets |
+| `RouteHigher` | Enqueue `ReYielded()` — per-cycle timeout resets |
+| `Fault` | Enqueue `Faulted(reason)` |
+
+The handlers check `pending.containsKey(key)` before enqueuing — if no DAG thread is waiting (non-DAG judgment yield), the notification is a no-op. This keeps the DAG integration transparent to non-DAG code paths.
 
 #### SWF integration
 
-`call: casehub:judgment` callable task type in the flow module. `JudgmentCallableTaskBuilder implements CallableTaskBuilder<CallFunction>` handles the `casehub:judgment` call and delegates to `JudgmentNodeExecutor`.
+`call: casehub:judgment` callable task type in the flow module. A `JudgmentCallableDispatcher implements CallableDispatcher` is registered in `CallableDispatchRegistry` for the `"casehub:judgment"` call name. The existing `CasehubCallableTaskBuilder` already accepts all `CallFunction` instances and delegates to `CallableDispatchRegistry` — no new `CallableTaskBuilder` is needed. `JudgmentCallableDispatcher` delegates to `JudgmentNodeExecutor`.
 
 ### Part 4: React Module Integration Tests (#957)
 
@@ -318,14 +379,14 @@ Test pattern follows `casehub-engine-a2a` integration tests. Test config at `rea
 
 | Module | Change |
 |--------|--------|
-| `engine-api` | JudgmentTarget gains fields, RoutingConfig/HumanRoutingConfig, JudgmentEscalator/EscalationDecision/EscalationContext, HumanTaskTarget DELETED, BindingTarget permits updated |
-| `engine-common` | JudgmentScheduleRequest gains fields |
-| `runtime` | DelegatingJudgmentScheduler replaces NoOp, publishJudgmentSchedule absorbs human dispatch, JudgmentEscalationHandler gains escalator resolution, EngineStrategyResolver gains Instance<JudgmentEscalator>, FaultEscalator, ReYieldEscalator, JudgmentNodeExecutor |
-| `planning` | PlanningCasePlanModelSnapshotProvider switch update (remove HumanTaskTarget case) |
-| `scheduler-quartz` | QuartzWorkerExecutionManager switch update |
+| `engine-api` | JudgmentTarget gains fields (title, outcomes, scope, priority, trustThreshold, escalatorStrategy, routingConfig, expiresAtExpression), RoutingConfig/HumanRoutingConfig, JudgmentEscalator/EscalationDecision/EscalationContext, HumanTaskTarget `implements BindingTarget` removed (class retained as scheduler data carrier), BindingTarget permits updated |
+| `engine-common` | JudgmentScheduleRequest gains caseBudgetDeadline, resolvedTitle, resolvedScope, experiences, candidateScores |
+| `runtime` | DelegatingJudgmentScheduler replaces NoOp, publishJudgmentSchedule absorbs human dispatch (conditional on HumanRoutingConfig), JudgmentEscalationHandler gains escalator resolution, EngineStrategyResolver gains `@Any Instance<JudgmentEscalator>` constructor parameter + `registerStrategies(judgmentEscalators)` call, FaultEscalator, ReYieldEscalator, JudgmentNodeExecutor (@ApplicationScoped), JudgmentNodeResult, JudgmentCallableDispatcher |
+| `planning` | PlanningCasePlanModelSnapshotProvider: `case JudgmentTarget jt -> jt.routingConfig() instanceof HumanRoutingConfig ? "HUMAN" : "JUDGMENT"` |
+| `scheduler-quartz` | QuartzWorkerExecutionManager switch update (remove HumanTaskTarget case) |
 | `work-cloudevent` | CloudEventHumanTaskScheduler unchanged (receives via delegation) |
 | `react` | New integration tests (#957) |
-| `flow` | JudgmentCallableTaskBuilder for `call: casehub:judgment` |
+| `flow` | JudgmentCallableDispatcher registered in CallableDispatchRegistry for `"casehub:judgment"` |
 
 ## Execution plan
 
