@@ -1,0 +1,15 @@
+# Work Plan — issue-995-unified-judgment-target
+
+## State
+branch: issue-995-unified-judgment-target
+state: scaffolded
+project-sha: a1f10cac5c963a2d51b0755bbc865aecea42a781
+date: 2026-08-29
+issue-repo: casehubio/engine
+covers: 995,999,1000,957
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#995 — Issue #995 ← active
