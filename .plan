@@ -1,0 +1,15 @@
+# Work Plan — issue-951-yaml-definition-resolution
+
+## State
+branch: issue-951-yaml-definition-resolution
+state: scaffolded
+project-sha: 8ee418433307b87b9c9fea28807c5f04dc1d97ab
+date: 2026-08-30
+issue-repo: casehubio/engine
+covers: 951
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#951 — Issue #951 ← active
