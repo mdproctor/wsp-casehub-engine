@@ -13,13 +13,13 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#995 — Issue #995 ← active
-  - [ ] Batch 1: Unified types
-    - [ ] Task 1: JudgmentTarget expansion + RoutingConfig + strip HumanTaskTarget
-  - [ ] Batch 2: Handler unification
-    - [ ] Task 2: DelegatingJudgmentScheduler + unified dispatch
-  - [ ] Batch 3: Escalator SPI
-    - [ ] Task 3: JudgmentEscalator + handler integration
-  - [ ] Batch 4: DAG integration
-    - [ ] Task 4: JudgmentNodeExecutor + SWF callable
-  - [ ] Batch 5: React tests
-    - [ ] Task 5: Integration tests for react module
+  - [x] Batch 1: Unified types
+    - [x] Task 1: JudgmentTarget expansion + RoutingConfig + strip HumanTaskTarget
+  - [x] Batch 2: Handler unification
+    - [x] Task 2: DelegatingJudgmentScheduler + unified dispatch
+  - [x] Batch 3: Escalator SPI
+    - [x] Task 3: JudgmentEscalator + handler integration
+  - [x] Batch 4: DAG integration
+    - [x] Task 4: JudgmentNodeExecutor + SWF callable
+  - [x] Batch 5: React tests
+    - [x] Task 5: Integration tests for react module

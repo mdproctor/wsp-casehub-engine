@@ -2,38 +2,45 @@
 
 **Branch:** `issue-995-unified-judgment-target`
 **Covers:** #995, #999, #1000, #957
-**Date:** 2026-08-29
+**Date:** 2026-08-30
 
 ## What happened
 
-This session completed Batches 1-3 of the unified JudgmentTarget plan:
+All 5 batches of the unified JudgmentTarget plan are complete:
 
-1. **#995 Task 1 (test migration) — DONE.** All test files migrated from `HumanTaskTarget` (as BindingTarget) to `JudgmentTarget` with `HumanRoutingConfig`. Planning module (571 tests), runtime dispatch (8 tests), CBR retain (21 tests) all pass.
+1. **#995 Task 1 (unified types) — DONE.** JudgmentTarget expanded with RoutingConfig, HumanTaskTarget stripped from BindingTarget, YAML parsing updated, all switch/instanceof sites migrated.
 
-2. **#995 Task 2 (DelegatingJudgmentScheduler) — DONE.** `DelegatingJudgmentScheduler` (`@DefaultBean`) bridges `JudgmentScheduleRequest` → `HumanTaskScheduleRequest` when `routingConfig instanceof HumanRoutingConfig`. `publishJudgmentSchedule()` expanded to handle human routing: candidate resolution, `HumanTaskRoutingStrategy`, bridge validation, title/scope expression resolution. `NoOpJudgmentScheduler` deleted. Dead code removed: `publishHumanTaskSchedule()`, `evaluateInputMapping()`, `resolveExpiresAtDeadline(HumanTaskTarget)`. `JudgmentScheduleRequest` gains 8 fields.
+2. **#995 Task 2 (handler unification) — DONE.** DelegatingJudgmentScheduler bridges JudgmentScheduleRequest → HumanTaskScheduleRequest. publishJudgmentSchedule() handles human routing (candidates, routing strategy, bridge validation).
 
-3. **#999 Task 3 (JudgmentEscalator SPI) — DONE.** SPI types: `JudgmentEscalator extends NamedStrategy`, `EscalationDecision` sealed (ReYield, RouteHigher, Fault), `EscalationContext` record. Built-in strategies: `FaultEscalator` (`@DefaultBean`, id="fault"), `ReYieldEscalator` (id="re-yield"). `CaseDefinition.maxEscalations` added. `EngineStrategyResolver` wired. `JudgmentEscalationHandler` resolves escalator, counts prior events, executes decision, writes outcome to EventLog metadata.
+3. **#999 Task 3 (escalator SPI) — DONE.** JudgmentEscalator NamedStrategy with FaultEscalator (@DefaultBean) and ReYieldEscalator. JudgmentEscalationHandler resolves escalator and executes decisions.
 
-4. **Pre-existing fix: Confidence type change.** Adapted `CbrRetrievalService` and `AgentExperienceRecorder` to neocortex `Confidence` record (was `Double`). 15 test files updated.
+4. **#1000 Task 4 (DAG integration) — DONE this session.**
+   - `JudgmentNodeResult` sealed type (Completed, ReYielded, Faulted) in common/spi
+   - `JudgmentNodeExecutor` (@ApplicationScoped, common) — blocking await with per-cycle timeout, BlockingQueue per pending judgment
+   - `JudgmentTimeoutException` and `JudgmentFaultException`
+   - `PlanItem.tryMarkReDispatching()` — CAS DELEGATED → DISPATCHING
+   - Handler execution paths wired: JudgmentEscalationHandler publishes JUDGMENT_RE_DISPATCH / JUDGMENT_FAULT events and enqueues to JudgmentNodeExecutor
+   - JudgmentCompletedHandler enqueues Completed/Faulted to JudgmentNodeExecutor (outside instanceof JudgmentTarget for SWF support)
+   - `JudgmentPlanItemHandler` (planning) consumes events: tryMarkReDispatching + JudgmentScheduler.schedule() for re-yield, markFaulted() for fault
+   - `CasehubJudgment` (flow) — SWF callable for `casehub:judgment`, delegates to JudgmentNodeExecutor
+
+5. **#957 Task 5 (react integration tests) — DONE this session.**
+   - `ReActExecutionIntegrationTest` — full end-to-end: case with react worker, StubChatModel (tool-use then final answer), case reaches COMPLETED
+   - `ReActAuditTrailTest` — verifies REACT_CYCLE EventLog entries (cycleIndex, toolCalls) and WORKER_EXECUTION_COMPLETED metadata (reactCycleCount)
+   - Tests hosted in planning module (integration test hub) with casehub-engine-react as test dependency
+   - Fixed react module test config: MemoryPlanItemStore → InMemoryPlanItemStore, added missing exclusions
 
 ## Key decisions
 
-**D1: EscalationContext avoids JudgmentResponse dependency.** `EscalationContext` in `api/spi/judgment/` can't reference `JudgmentResponse` (in `common/spi/`) — `api` doesn't depend on `common`. Solution: decompose response fields (decision, evidence, callerId, callerType) into the context record.
+**D1: JudgmentNodeExecutor in common, not runtime.** The flow module (which has CasehubJudgment callable) depends on common, not runtime. Placing the executor in common allows both runtime handlers and flow callable to access it.
 
-**D2: Dispatch tests assert on JudgmentScheduleRequest, not HumanTaskScheduleRequest.** `RecordingJudgmentScheduler` (non-DefaultBean) displaces `DelegatingJudgmentScheduler` in tests. Tests verify the engine's unified dispatch, not the downstream delegation. `DelegatingJudgmentScheduler` is tested separately.
+**D2: Handler execution via event bus.** JudgmentEscalationHandler (runtime) publishes JUDGMENT_RE_DISPATCH / JUDGMENT_FAULT events consumed by JudgmentPlanItemHandler (planning). This follows the existing cross-module communication pattern — runtime publishes events, planning manages PlanItems.
 
-## Resume from
+**D3: React tests in planning module.** The react module's @QuarkusTest infrastructure has a pre-existing issue (MemoryPlanItemStore typo causing silent PlanItem loss). Tests hosted in the planning module where the integration test infrastructure is proven.
 
-**Remaining on this branch (Tasks 4-5):**
-- Task 4: `JudgmentNodeExecutor` + SWF `casehub:judgment` callable (#1000) — blocking executor for DAG threads, CompletableFuture per pending judgment, handler wiring
-- Task 5: React module integration tests (#957) — two @QuarkusTest classes
+## Ready for work-end
 
-**Handler execution paths not yet wired:**
-- ReYield: PlanItem `tryMarkReDispatching()` (DELEGATED → DISPATCHING), re-publish judgment request with feedback — needs `JudgmentScheduler` + `BlackboardRegistry` injection
-- RouteHigher: same PlanItem transition, elevated trust threshold
-- Fault: mark PlanItem FAULTED, write `_diagnostics`
-
-**Cross-repo work slot** needed after engine changes land — 8 repos in one IntelliJ workspace for semantic refactoring.
+All batches complete. The branch is ready for review, squash, and close. Cross-repo migration (work slot for 8 repos) is tracked separately and deferred until after this branch lands.
 
 ## References
 
@@ -42,4 +49,4 @@ This session completed Batches 1-3 of the unified JudgmentTarget plan:
 | Design spec | `specs/issue-995-unified-judgment-target/2026-08-29-unified-judgment-target-design.md` |
 | Decisions | `specs/issue-995-unified-judgment-target/decisions.md` |
 | Plan | `plans/2026-08-29-unified-judgment-target.md` |
-| .plan | `.plan` (queue position 0/1, active #995) |
+| .plan | `.plan` (all 5 batches done) |
