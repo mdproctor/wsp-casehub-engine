@@ -4,3 +4,5 @@
 {"ts": "2026-08-29T15:31:17.984472+00:00", "mode": "wrap", "action": "user_input", "step": "garden_feedback", "steps_executed": [], "error": ""}
 {"ts": "2026-08-29T15:31:23.577804+00:00", "mode": "wrap", "action": "user_input", "step": "notes", "steps_executed": [], "error": ""}
 {"ts": "2026-08-29T15:31:29.777854+00:00", "mode": "wrap", "action": "user_input", "step": "handoff_write", "steps_executed": [], "error": ""}
+{"ts": "2026-08-29T15:33:15.872966+00:00", "mode": "wrap", "action": "complete", "step": "", "steps_executed": ["wip_commit"], "error": ""}
+{"ts": "2026-08-30T07:32:26.874103+00:00", "mode": "wrap", "action": "complete", "step": "", "steps_executed": [], "error": ""}
