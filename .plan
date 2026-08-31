@@ -13,3 +13,8 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#987 — Issue #987 ← active
+  - [ ] Batch 1: Records+Converter
+    - [ ] Task 1: YAML records + CaseDefinition field
+    - [ ] Task 2: Converter — walk HTN tree
+  - [ ] Batch 2: Strategy
+    - [ ] Task 3: ExplicitHtnDecompositionStrategy
