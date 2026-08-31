@@ -1,73 +1,26 @@
-# HANDOFF — casehub-engine (Slot 160)
+# HANDOFF — casehub-engine (#1015)
 
-## Session Summary (2026-08-30)
+## Session Summary (2026-08-31)
 
-Governed yield reconciliation (#994). The v2 branch was abandoned because main received parallel work (#995, #999, #1000) that partially covered it. This session filed and executed 5 focused issues for the first round of gaps, then did a second gap analysis that revealed the v2 branch had significantly richer types than what we ported.
+yaml-core record pattern adoption (#1015). Designed and started implementing the migration from hand-coded Jackson deserializers (~2587 lines) to plain records + thin converter, following the desiredstate pattern. Batch 1 complete — 32 YAML record files created and compiling. Also closed #985 (already implemented), updated governed yield tracking (#1009–#1013 + blocks#220–#221 all landed).
 
-## Phase 1 — Completed (5 issues, all closed)
+## Progress
 
-| Issue | Repo | SHA | What |
-|-------|------|-----|------|
-| engine#1009 | engine | `db23e878` | CallerConfig sealed (Human/Llm/A2A/Any), typed Evidence, CallerIdentity, enriched VerificationContext/EscalationContext |
-| engine#1010 | engine | `c45ab268` | JudgmentPayload sealed (BindingPayload/GatePayload), JudgmentRequest, CloudEventJudgmentScheduler, CallerRefParser.JudgmentRef |
-| engine#1011 | engine | `cf3c03ea` | Escalate(CallerConfig, reason) replaces RouteHigher, DefaultJudgmentEscalator heuristic |
-| blocks#219 | blocks | `55a11b9` | JudgmentPhase SPI, JudgmentContext, JudgmentDecision sealed, ExecutionModel.judgment field |
-| qhorus#422 | qhorus | `f7753a47` | MessageType.JUDGMENT — commissive speech act for governed yield |
+- **Batch 1 (Records):** DONE — 32 record files in `io.casehub.api.model.converter.yaml`
+- **Batch 2 (Converter + Wiring):** NOT STARTED — `YamlCaseDefinitionConverter` + wire into mapper
+- **Batch 3 (Cleanup):** NOT STARTED — delete ~2587 lines, inline CaseDefinitionSpec
+- **Batch 4 (yaml-core):** NOT STARTED — VariableResolver + ForEachExpander integration
 
-All landed on fork main (not upstream). Repos in the slot are on main at origin/main.
+## Key Decision
 
-## Phase 2 — Completed (engine-side)
+The 6 polymorphic deserializers (Trigger, ExpressionEvaluator, GoalExpression, CaseCompletion, AdaptationConfig, SubCaseMapping) stay as `@JsonDeserialize` annotations on record fields — they handle genuine polymorphism that records can't replace.
 
-Engine issues #1012 and #1013 landed on main (2026-08-31). The governed yield engine foundation is complete.
+## References
 
-| Issue | SHA | What |
-|-------|-----|------|
-| engine#1012 | `1b886952` | Enriched CallerConfig/CallerIdentity/Evidence, JudgmentTarget.maxEscalationAttempts, deprecated HumanTaskTarget/HumanTaskScheduler |
-| engine#1013 | landed via #1000 | DagNode.judgment field, DagNodeSnapshot.hasJudgment, DagDriver JUDGING state |
-
-Blocks-side also complete (2026-08-31):
-
-| Issue | Repo | What |
-|-------|------|------|
-| blocks#220 | blocks | Judgment loop in AbstractExecutionDriver |
-| blocks#221 | blocks | LlmJudgmentPhase, PatternJudgmentConfig, verifiers, YAML |
-
-**Governed yield is fully landed** — all 7 issues across engine, blocks, and qhorus.
-
-## Slot-Local M2 Issues
-
-The slot-local `.m2` had stale SNAPSHOTs that were fixed this session:
-- `casehub-worker-api` — copied from global m2 (old `inputSchema`/`outputSchema` → new `inputProjection`/`outputProjection`)
-- `casehub-neocortex-cognitive-api` — was missing entirely, copied from global m2
-- `casehub-neocortex-parent` — old POM lacked cognitive-api in dependencyManagement
-
-**Pre-existing test compilation breaks (NOT fixed — out of scope):**
-- engine: `AgentExperienceRecorderTest` references `Outcome.importance()` — stale neocortex SNAPSHOT
-- blocks: `StrategyLearningOrchestrator` references `EngagementEvent.sentimentShift()` — same cause
-- These block `mvn test` on the runtime/blocks modules. Workaround: temporarily move broken file to `/tmp/`, run specific tests, restore
-
-## V2 Branch Reference
-
-The abandoned branches contain the source material for cherry-picking:
-- **engine:** `issue-994-governed-yield-v2` (9 commits) — CallerConfig with full fields, Evidence with ref, JudgmentTarget.maxEscalationAttempts, DagNode.judgment, CLAUDE.md updates
-- **blocks:** `issue-994-governed-yield` (5 judgment commits at tip) — JudgmentPhase/Context/Decision, ExecutionModel.judgment, LlmJudgmentPhase, PatternJudgmentConfig, YAML parsing, handler wiring, 4 test classes
-- **qhorus:** `issue-994-governed-yield` (1 judgment commit) — already cherry-picked as #422
-
-**Do not delete these branches** — they're the cherry-pick source for Phase 2.
-
-## What's Next
-
-Governed yield is fully complete — all 7 issues across engine (#1009–#1013), blocks (#220–#221), and qhorus (#422) landed on main.
-
-**Engine priorities (updated 2026-08-31):**
-
-| Priority | Issue | Scale | What |
-|----------|-------|-------|------|
-| 1 | #1015 | L / High | Adopt yaml-core record pattern — eliminate hand-coded deserializers |
-| 2 | #984 | L / Med | Standalone YAML examples for all execution models |
-| 3 | #987 | M / High | YAML HTN decomposition tree |
-| — | #959 | S / Low | Reasoning support for persistent workers |
-| — | #958 | S / Low | Independent importance weights for worker-reasoning |
-| — | #867 | S / Low | Read identity from PropagationContext |
-
-#1015 is the highest-value engine work — structural improvement that reduces maintenance burden across all future YAML features. #984 and #987 are remaining #978 (YAML DSL) children.
+| Artifact | Path |
+|----------|------|
+| Design spec | `specs/issue-1015-yaml-core-adoption/2026-08-31-yaml-core-adoption-design.md` |
+| Decisions | `specs/issue-1015-yaml-core-adoption/decisions.md` |
+| Implementation plan | `plans/2026-08-31-yaml-core-adoption.md` |
+| Journal | `JOURNAL.md` |
+| Records package | `proj/api/src/main/java/io/casehub/api/model/converter/yaml/` |

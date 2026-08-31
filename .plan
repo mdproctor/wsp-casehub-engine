@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1015-yaml-core-adoption
-state: scaffolded
+state: active
 project-sha: 60466fc57ff6a5024ef6cf08f09455ed98528e6b
 date: 2026-08-31
 issue-repo: casehubio/engine
@@ -13,9 +13,9 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1015 — Issue #1015 ← active
-  - [ ] Batch 1: Records
-    - [ ] Task 1: Supporting YAML records
-    - [ ] Task 2: Top-level records
+  - [x] Batch 1: Records
+    - [x] Task 1: Supporting YAML records
+    - [x] Task 2: Top-level records
   - [ ] Batch 2: Converter
     - [ ] Task 3: YamlCaseDefinitionConverter
     - [ ] Task 4: Wire into mapper
