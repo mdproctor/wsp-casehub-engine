@@ -60,21 +60,20 @@ spec:
           tasks:
             - name: credit-check
               capability: credit-scoring
-            - name: approval
-              tasks:
-                - name: underwrite
-                  capability: underwriting
-                methods:
-                  - guardLabel: "Auto-approve"
-                    guard: ".creditScore > 750"
-                    tasks:
-                      - name: auto-approve
-                        capability: auto-approval
-                  - guardLabel: "Manual review"
-                    guard: ".creditScore <= 750"
-                    tasks:
-                      - name: manual-review
-                        capability: manual-review
+            - name: approval-decision
+              methods:
+                - guardLabel: "Auto-approve"
+                  guard: ".creditScore > 750"
+                  tasks:
+                    - name: auto-approve
+                      capability: auto-approval
+                - guardLabel: "Manual review"
+                  guard: ".creditScore <= 750"
+                  tasks:
+                    - name: underwrite
+                      capability: underwriting
+                    - name: manual-review
+                      capability: manual-review
 ```
 
 A task node is a **leaf** when it has `capability:` and no `methods:`. It is a **compound** when it has `methods:` (with or without `capability:`).
