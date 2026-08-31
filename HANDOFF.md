@@ -2,7 +2,7 @@
 
 ## Session Summary (2026-08-31)
 
-yaml-core record pattern adoption (#1015). Batch 3 (Cleanup) now complete. Deleted 3186 lines of hand-coded deserializers: `CaseDefinitionDeserializer` (793), `BindingDeserializer` (670), `CaseDefinitionPostProcessor` (472), `CaseDefinitionSpec` (408), `WorkerDeserializer` (97), 3 mixins, and 4 associated test files. `CaseDefinitionSpec` fields inlined into `CaseDefinition`. `CaseDefinitionModule` cleaned — only polymorphic deserializers retained (used by `@JsonDeserialize` on YAML records). 1360/1361 api tests pass (1 pre-existing failure in deprecated `HumanTaskTargetTest`).
+yaml-core record pattern adoption (#1015). All 4 batches complete. Net result: ~3200 lines of hand-coded deserializers deleted, replaced by 32+ YAML records + `YamlCaseDefinitionConverter`. `CaseDefinitionSpec` inlined into `CaseDefinition`. yaml-core `VariableResolver` and `ForEachExpander` integrated — YAML definitions support `${env.X}` variable resolution and `forEach` template expansion. 1372/1373 api tests pass (1 pre-existing failure in deprecated `HumanTaskTargetTest`). Also fixed yaml-core `VariableResolver` to support deferred `each` prefix (committed to platform repo).
 
 ## Progress
 
@@ -14,7 +14,12 @@ yaml-core record pattern adoption (#1015). Batch 3 (Cleanup) now complete. Delet
   - ExpressionLang context propagation via ObjectReader attributes
   - HumanTask validation ported to converter
 - **Batch 3 (Cleanup):** DONE — 12 files deleted, 3186 lines removed, CaseDefinitionSpec inlined
-- **Batch 4 (yaml-core):** NOT STARTED — VariableResolver + ForEachExpander integration
+- **Batch 4 (yaml-core):** DONE
+  - `JsonNodeForEachAdapter` — adapts raw JsonNode for ForEachExpander
+  - `expandForEach()` in mapper — runs when `iterations:` block present
+  - `resolveVariables()` + new `load()` overload — `${env.X}` / `${config.X}` resolution
+  - yaml-core fix: deferredPrefixes checked before hardcoded `each` prefix
+  - 12 new tests (7 forEach + 5 variable resolution)
 
 ## Key Decisions
 
@@ -23,6 +28,8 @@ yaml-core record pattern adoption (#1015). Batch 3 (Cleanup) now complete. Delet
 3. Worker function wiring converts `YamlWorker` to `JsonNode` via `ObjectMapper.valueToTree()` for provider dispatch compatibility.
 4. `YamlCaseSpec` gained `workers` and `bindings` fields to support existing YAML structure where these are under `spec:`.
 5. `ExpressionEvaluatorDeserializer.EXPRESSION_LANG_KEY` made public for mapper access.
+6. ForEach expansion operates at JsonNode level (before deserialization) — stamps `${each.*}` into all string fields via `VariableResolver.resolveMap()`.
+7. Variable resolution defers `each` prefix (resolved later during forEach expansion). Fixed yaml-core to support this ordering.
 
 ## References
 
