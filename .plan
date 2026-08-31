@@ -13,3 +13,14 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1015 — Issue #1015 ← active
+  - [ ] Batch 1: Records
+    - [ ] Task 1: Supporting YAML records
+    - [ ] Task 2: Top-level records
+  - [ ] Batch 2: Converter
+    - [ ] Task 3: YamlCaseDefinitionConverter
+    - [ ] Task 4: Wire into mapper
+  - [ ] Batch 3: Cleanup
+    - [ ] Task 5: Delete old code
+  - [ ] Batch 4: yaml-core
+    - [ ] Task 6: VariableResolver
+    - [ ] Task 7: ForEachExpander
