@@ -1,0 +1,2 @@
+{"event":"promote","branch":"issue-1015-yaml-core-adoption","files":[],"timestamp":"2026-08-31T13:15:44.722909+00:00"}
+{"event":"land","repo":"engine","branch":"issue-1015-yaml-core-adoption","base_branch":"main","landed_sha":"9ec289f3ebdeede5fcfeb9b591a33bd7bc689072","push_target":"upstream","mirrored":true,"stamped":true,"timestamp":"2026-08-31T15:45:06.365671+00:00"}
