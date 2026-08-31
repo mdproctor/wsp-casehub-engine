@@ -1,0 +1,15 @@
+# Work Plan — issue-987-yaml-htn-decomposition
+
+## State
+branch: issue-987-yaml-htn-decomposition
+state: scaffolded
+project-sha: 9ec289f3ebdeede5fcfeb9b591a33bd7bc689072
+date: 2026-08-31
+issue-repo: casehubio/engine
+covers: 987
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#987 — Issue #987 ← active
