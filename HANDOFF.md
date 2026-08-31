@@ -16,47 +16,24 @@ Governed yield reconciliation (#994). The v2 branch was abandoned because main r
 
 All landed on fork main (not upstream). Repos in the slot are on main at origin/main.
 
-## Phase 2 — Remaining (4 issues, filed but not started)
+## Phase 2 — Completed (engine-side)
 
-Second gap analysis revealed the v2 branch had significantly richer types. The foundation types from Phase 1 are correct but too thin for real usage.
+Engine issues #1012 and #1013 landed on main (2026-08-31). The governed yield engine foundation is complete.
 
-### Execution sequence (dependency order):
+| Issue | SHA | What |
+|-------|-----|------|
+| engine#1012 | `1b886952` | Enriched CallerConfig/CallerIdentity/Evidence, JudgmentTarget.maxEscalationAttempts, deprecated HumanTaskTarget/HumanTaskScheduler |
+| engine#1013 | landed via #1000 | DagNode.judgment field, DagNodeSnapshot.hasJudgment, DagDriver JUDGING state |
 
-**1. engine#1012 — Enrich CallerConfig, CallerIdentity, Evidence** (M / Med)
-   - `CallerConfig.Human`: 2 fields → 12 (add CandidateSetSpec groups/users, title, titleExpression, outcomes, claimDeadlineHours, scope, scopeExpression, priority, templateRef, payloadType, quorum)
-   - `CallerConfig.Llm`: 1 field → 3 (add `modelName`, `systemPrompt`)
-   - `CallerConfig.A2A`: add `streaming` boolean
-   - `CallerIdentity`: add `trustScore` (Double, nullable)
-   - `Evidence`: add `ref` (nullable String, external reference)
-   - `JudgmentTarget`: add per-target `maxEscalationAttempts`
-   - Add `@Deprecated(forRemoval=true)` on `HumanTaskTarget`, `HumanTaskScheduler`
-   - Replace `DelegatingJudgmentScheduler` with clean `NoOpJudgmentScheduler` `@DefaultBean`
-   - **Approach:** cherry-pick from v2 where possible, re-implement against current API
-   - **Blocked by:** nothing
+### Remaining blocks-side work (not started):
 
-**2. blocks#220 — Wire judgment loop in AbstractExecutionDriver** (S / Low)
-   - Add Phase 3.5 judgment integration in the execution loop (after aggregation, before termination)
-   - `JudgmentContext` construction with `lastJudgmentFeedback` threading
-   - `Rejected` → re-iterate with feedback, `Escalated` → break, `Approved` → continue
-   - Add `ExecutionEventListener.onJudgment(JudgmentDecision)` default method
-   - Cherry-pick tests: `ExecutionModelJudgmentTest` (175 lines), `SupervisorJudgmentTest` (96 lines)
-   - **Blocked by:** engine#1012 (CallerConfig.Llm.systemPrompt for test fixtures)
+**1. blocks#220 — Wire judgment loop in AbstractExecutionDriver** (S / Low)
+   - Phase 3.5 judgment integration in the execution loop
+   - **Blocked by:** nothing (engine#1012 dependency resolved)
 
-**3. blocks#221 — Port engine-adapter judgment types** (M / Med)
-   - `PatternJudgmentConfig` — record with prompt, callerConfig, verifierStrategy, evidenceRequirements, mode
-   - `LlmJudgmentPhase` — ChatModel-based judgment evaluator with APPROVE/REJECT parsing
-   - `LlmJudgmentScheduler` — bridges pattern judgment to engine's JudgmentScheduler
-   - `SchemaValidationVerifier`, `LlmEvaluationVerifier` — verification strategies
-   - YAML parsing in `PatternWorkerFunctionProvider`
-   - Handler integration in `PatternWorkerFunctionHandler`
-   - Cherry-pick tests: `LlmJudgmentPhaseTest`, `LlmJudgmentSchedulerTest`, `PatternJudgmentYamlTest`, `SchemaValidationVerifierTest`
-   - **Blocked by:** engine#1012, blocks#220
-
-**4. engine#1013 — DagNode.judgment field** (M / Med)
-   - Nullable `JudgmentTarget judgment` on `DagNode` for yield gates in DAG execution
-   - `DagNodeSnapshot.hasJudgment` for REST visibility
-   - DagDriver JUDGING state integration
-   - **Blocked by:** engine#1012, blocks#221
+**2. blocks#221 — Port engine-adapter judgment types** (M / Med)
+   - PatternJudgmentConfig, LlmJudgmentPhase, LlmJudgmentScheduler, verification strategies
+   - **Blocked by:** blocks#220
 
 ## Slot-Local M2 Issues
 
@@ -81,6 +58,17 @@ The abandoned branches contain the source material for cherry-picking:
 
 ## What's Next
 
-Start with engine#1012 (enrich foundation types). It unblocks everything else. Approach: diff v2's CallerConfig/CallerIdentity/Evidence against current main, cherry-pick the field additions, adapt to current imports. This is a single-session M-scale issue.
+Engine governed yield work is complete (#1009–#1013 all landed). Remaining governed yield is blocks-side: blocks#220 (S, driver wiring) then blocks#221 (M, engine-adapter types).
 
-After #1012: blocks#220 (S, driver wiring — cherry-pick + import fix), then blocks#221 (M, engine-adapter types — cherry-pick + adapt), then engine#1013 (M, DagNode.judgment — cherry-pick + DagDriver integration).
+**Engine priorities (updated 2026-08-31):**
+
+| Priority | Issue | Scale | What |
+|----------|-------|-------|------|
+| 1 | #1015 | L / High | Adopt yaml-core record pattern — eliminate hand-coded deserializers |
+| 2 | #984 | L / Med | Standalone YAML examples for all execution models |
+| 3 | #987 | M / High | YAML HTN decomposition tree |
+| — | #959 | S / Low | Reasoning support for persistent workers |
+| — | #958 | S / Low | Independent importance weights for worker-reasoning |
+| — | #867 | S / Low | Read identity from PropagationContext |
+
+#1015 is the highest-value engine work — structural improvement that reduces maintenance burden across all future YAML features. #984 and #987 are remaining #978 (YAML DSL) children.
