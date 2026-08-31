@@ -25,15 +25,14 @@ Engine issues #1012 and #1013 landed on main (2026-08-31). The governed yield en
 | engine#1012 | `1b886952` | Enriched CallerConfig/CallerIdentity/Evidence, JudgmentTarget.maxEscalationAttempts, deprecated HumanTaskTarget/HumanTaskScheduler |
 | engine#1013 | landed via #1000 | DagNode.judgment field, DagNodeSnapshot.hasJudgment, DagDriver JUDGING state |
 
-### Remaining blocks-side work (not started):
+Blocks-side also complete (2026-08-31):
 
-**1. blocks#220 — Wire judgment loop in AbstractExecutionDriver** (S / Low)
-   - Phase 3.5 judgment integration in the execution loop
-   - **Blocked by:** nothing (engine#1012 dependency resolved)
+| Issue | Repo | What |
+|-------|------|------|
+| blocks#220 | blocks | Judgment loop in AbstractExecutionDriver |
+| blocks#221 | blocks | LlmJudgmentPhase, PatternJudgmentConfig, verifiers, YAML |
 
-**2. blocks#221 — Port engine-adapter judgment types** (M / Med)
-   - PatternJudgmentConfig, LlmJudgmentPhase, LlmJudgmentScheduler, verification strategies
-   - **Blocked by:** blocks#220
+**Governed yield is fully landed** — all 7 issues across engine, blocks, and qhorus.
 
 ## Slot-Local M2 Issues
 
@@ -58,7 +57,7 @@ The abandoned branches contain the source material for cherry-picking:
 
 ## What's Next
 
-Engine governed yield work is complete (#1009–#1013 all landed). Remaining governed yield is blocks-side: blocks#220 (S, driver wiring) then blocks#221 (M, engine-adapter types).
+Governed yield is fully complete — all 7 issues across engine (#1009–#1013), blocks (#220–#221), and qhorus (#422) landed on main.
 
 **Engine priorities (updated 2026-08-31):**
 
