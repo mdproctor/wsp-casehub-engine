@@ -2,7 +2,7 @@
 
 ## Session Summary (2026-08-31)
 
-yaml-core record pattern adoption (#1015). Batch 2 (Converter + Wiring) now complete. The `YamlCaseDefinitionConverter` converts YAML records to `CaseDefinition` domain objects, replacing both `CaseDefinitionDeserializer` (793 lines) and `CaseDefinitionPostProcessor` (472 lines). `CaseDefinitionYamlMapper` now uses the records+converter path. All 239 mapper tests and 1390/1391 api tests pass (1 pre-existing failure in deprecated `HumanTaskTargetTest`).
+yaml-core record pattern adoption (#1015). Batch 3 (Cleanup) now complete. Deleted 3186 lines of hand-coded deserializers: `CaseDefinitionDeserializer` (793), `BindingDeserializer` (670), `CaseDefinitionPostProcessor` (472), `CaseDefinitionSpec` (408), `WorkerDeserializer` (97), 3 mixins, and 4 associated test files. `CaseDefinitionSpec` fields inlined into `CaseDefinition`. `CaseDefinitionModule` cleaned — only polymorphic deserializers retained (used by `@JsonDeserialize` on YAML records). 1360/1361 api tests pass (1 pre-existing failure in deprecated `HumanTaskTargetTest`).
 
 ## Progress
 
@@ -13,7 +13,7 @@ yaml-core record pattern adoption (#1015). Batch 2 (Converter + Wiring) now comp
   - Record fixes: field name aliases, structural corrections, @JsonDeserialize cleanup
   - ExpressionLang context propagation via ObjectReader attributes
   - HumanTask validation ported to converter
-- **Batch 3 (Cleanup):** NOT STARTED — delete old deserializers, inline CaseDefinitionSpec
+- **Batch 3 (Cleanup):** DONE — 12 files deleted, 3186 lines removed, CaseDefinitionSpec inlined
 - **Batch 4 (yaml-core):** NOT STARTED — VariableResolver + ForEachExpander integration
 
 ## Key Decisions
