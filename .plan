@@ -13,3 +13,16 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#984 — Issue #984 ← active
+  - [ ] Batch 1: Choreography+Sequential
+    - [ ] Task 1: Choreography triple
+    - [ ] Task 2: Sequential triple
+  - [ ] Batch 2: GOAP+LLM
+    - [ ] Task 3: GOAP triple
+    - [ ] Task 4: LLM decomposition triple
+  - [ ] Batch 3: HumanTask+SubCase
+    - [ ] Task 5: HumanTask triple
+    - [ ] Task 6: SubCase triple
+  - [ ] Batch 4: A2A+MCP+Validation
+    - [ ] Task 7: A2A triple
+    - [ ] Task 8: MCP triple
+    - [ ] Task 9: Schema validation+README
