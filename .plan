@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1018-schema-yaml-record-gen
-state: scaffolded
+state: active
 project-sha: 87c6bd5b037bad29bbebb90a3804ad90ab85b7b7
 date: 2026-09-01
 issue-repo: casehubio/engine
@@ -13,9 +13,9 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1018 — Issue #1018 ← active
-  - [ ] Batch 1: Generator Core
-    - [ ] Task 1: Schema+Mapping parsers
-    - [ ] Task 2: Record emitter+main class
-  - [ ] Batch 2: Mapping+Wiring
-    - [ ] Task 3: Complete mapping file
-    - [ ] Task 4: Build wiring+switchover
+  - [x] Batch 1: Generator Core
+    - [x] Task 1: Schema+Mapping parsers
+    - [x] Task 2: Record emitter+main class
+  - [x] Batch 2: Mapping+Wiring
+    - [x] Task 3: Complete mapping file
+    - [x] Task 4: Build wiring+switchover
