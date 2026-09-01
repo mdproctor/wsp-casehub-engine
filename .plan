@@ -1,0 +1,15 @@
+# Work Plan — issue-984-yaml-examples
+
+## State
+branch: issue-984-yaml-examples
+state: scaffolded
+project-sha: 16bbc0801cf9f1fa216cbe229f15f095394b25a6
+date: 2026-09-01
+issue-repo: casehubio/engine
+covers: 984
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#984 — Issue #984 ← active
