@@ -13,3 +13,9 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1018 — Issue #1018 ← active
+  - [ ] Batch 1: Generator Core
+    - [ ] Task 1: Schema+Mapping parsers
+    - [ ] Task 2: Record emitter+main class
+  - [ ] Batch 2: Mapping+Wiring
+    - [ ] Task 3: Complete mapping file
+    - [ ] Task 4: Build wiring+switchover
