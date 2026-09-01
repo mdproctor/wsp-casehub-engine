@@ -10,6 +10,20 @@
 **Exploration:** quick
 **Status:** captured
 
+## D4: Three-pathway pairing
+
+**Choice:** Every example exists in all three forms: YAML + Java DSL (`CaseHub` subclass) + Java Annotations (`@Case` interface). Where annotations can't express a feature natively, `@Customize` drops into the DSL — showing the blend honestly.
+**Alternatives:**
+- YAML + best-fit Java — one Java file using whichever pathway fits. Less work but doesn't show all three side-by-side.
+- YAML + DSL only — skip annotations. Misses the annotation pathway which is the primary Java entry point.
+- YAML first, Java later — faster to ship but parity isn't proven until all three exist.
+**Rationale:** The "Rosetta Stone" approach — same case definition in all three forms. Shows users exactly where each pathway is self-sufficient and where it needs `@Customize` escape hatches. Directly proves YAML/Java parity. Existing annotated examples (3 already exist) provide a head start.
+**Trade-offs:** ~24 files for 8 examples (8 YAML + 8 DSL + 8 annotations). Some annotation versions will need `@Customize` for features annotations can't express natively (A2A, MCP, SubCase mappings). That's honest documentation, not a weakness.
+**Depends on:** D2 (scope), D3 (domain)
+**Sources:** `examples/` (9 existing annotated Java examples), `casehub-engine-annotations` module, `api/model/converter/YamlCaseDefinitionConverter.java`
+**Exploration:** quick
+**Status:** captured
+
 ## D2: Scope — first batch
 
 **Choice:** Core 8 examples for this branch: Choreography, Sequential, GOAP, LLM decomposition, HumanTask, SubCase, A2A, MCP
@@ -23,6 +37,20 @@
 **Exploration:** quick
 **Status:** captured
 
+## D4: Three-pathway pairing
+
+**Choice:** Every example exists in all three forms: YAML + Java DSL (`CaseHub` subclass) + Java Annotations (`@Case` interface). Where annotations can't express a feature natively, `@Customize` drops into the DSL — showing the blend honestly.
+**Alternatives:**
+- YAML + best-fit Java — one Java file using whichever pathway fits. Less work but doesn't show all three side-by-side.
+- YAML + DSL only — skip annotations. Misses the annotation pathway which is the primary Java entry point.
+- YAML first, Java later — faster to ship but parity isn't proven until all three exist.
+**Rationale:** The "Rosetta Stone" approach — same case definition in all three forms. Shows users exactly where each pathway is self-sufficient and where it needs `@Customize` escape hatches. Directly proves YAML/Java parity. Existing annotated examples (3 already exist) provide a head start.
+**Trade-offs:** ~24 files for 8 examples (8 YAML + 8 DSL + 8 annotations). Some annotation versions will need `@Customize` for features annotations can't express natively (A2A, MCP, SubCase mappings). That's honest documentation, not a weakness.
+**Depends on:** D2 (scope), D3 (domain)
+**Sources:** `examples/` (9 existing annotated Java examples), `casehub-engine-annotations` module, `api/model/converter/YamlCaseDefinitionConverter.java`
+**Exploration:** quick
+**Status:** captured
+
 ## D3: Domain flavor
 
 **Choice:** Different realistic domains per example — each uses a domain that naturally fits its execution model
@@ -33,5 +61,19 @@
 **Trade-offs:** Harder to compare execution models side-by-side. But the Three Pathways Guide (#986) is the right place for comparison, not the examples themselves.
 **Depends on:** D2 (scope)
 **Sources:** engine#978 Part 3 (blocks-ui fixtures)
+**Exploration:** quick
+**Status:** captured
+
+## D4: Three-pathway pairing
+
+**Choice:** Every example exists in all three forms: YAML + Java DSL (`CaseHub` subclass) + Java Annotations (`@Case` interface). Where annotations can't express a feature natively, `@Customize` drops into the DSL — showing the blend honestly.
+**Alternatives:**
+- YAML + best-fit Java — one Java file using whichever pathway fits. Less work but doesn't show all three side-by-side.
+- YAML + DSL only — skip annotations. Misses the annotation pathway which is the primary Java entry point.
+- YAML first, Java later — faster to ship but parity isn't proven until all three exist.
+**Rationale:** The "Rosetta Stone" approach — same case definition in all three forms. Shows users exactly where each pathway is self-sufficient and where it needs `@Customize` escape hatches. Directly proves YAML/Java parity. Existing annotated examples (3 already exist) provide a head start.
+**Trade-offs:** ~24 files for 8 examples (8 YAML + 8 DSL + 8 annotations). Some annotation versions will need `@Customize` for features annotations can't express natively (A2A, MCP, SubCase mappings). That's honest documentation, not a weakness.
+**Depends on:** D2 (scope), D3 (domain)
+**Sources:** `examples/` (9 existing annotated Java examples), `casehub-engine-annotations` module, `api/model/converter/YamlCaseDefinitionConverter.java`
 **Exploration:** quick
 **Status:** captured
