@@ -13,12 +13,12 @@ flyway-next-v: none
 
 ## Queue
 - [x] casehubio/engine#1027 — Issue #1027
-- [ ] casehubio/engine#1028 — wire unwired annotation attributes ← active
-- [ ] casehubio/engine#1029 — add singular add methods to Builder
-- [ ] casehubio/engine#1032 — on(String) convenience
-- [ ] casehubio/engine#1033 — seal Trigger interface
-- [ ] casehubio/engine#1034 — CompoundDeclaration builder
-- [ ] casehubio/engine#1035 — GoalKind YAML status mapping
-- [ ] casehubio/engine#1036 — CSV forEach data sources
-- [ ] casehubio/engine#1030 — yaml-core ModuleExpander integration
-- [ ] casehubio/engine#1031 — Compound SubCase Judgment annotations
+- [x] casehubio/engine#1028 — wire unwired annotation attributes
+- [x] casehubio/engine#1029 — add singular add methods to Builder
+- [x] casehubio/engine#1032 — on(String) convenience
+- [x] casehubio/engine#1033 — seal Trigger interface
+- [x] casehubio/engine#1034 — CompoundDeclaration builder
+- [x] casehubio/engine#1035 — GoalKind YAML status mapping
+- [x] casehubio/engine#1036 — CSV forEach data sources
+- [x] casehubio/engine#1030 — yaml-core ModuleExpander integration
+- [x] casehubio/engine#1031 — Compound SubCase Judgment annotations
