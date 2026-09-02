@@ -1,0 +1,24 @@
+# Work Plan — issue-1027-dsl-annotations-yaml-audit
+
+## State
+branch: issue-1027-dsl-annotations-yaml-audit
+state: active
+project-sha: 48f9b75c1e9b44557faf857f8b7345764bba2353
+date: 2026-09-02
+issue-repo: casehubio/engine
+covers: 1028,1029,1030,1031,1032,1033,1034,1035,1036
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [x] casehubio/engine#1027 — Issue #1027
+- [ ] casehubio/engine#1028 — wire unwired annotation attributes ← active
+- [ ] casehubio/engine#1029 — add singular add methods to Builder
+- [ ] casehubio/engine#1032 — on(String) convenience
+- [ ] casehubio/engine#1033 — seal Trigger interface
+- [ ] casehubio/engine#1034 — CompoundDeclaration builder
+- [ ] casehubio/engine#1035 — GoalKind YAML status mapping
+- [ ] casehubio/engine#1036 — CSV forEach data sources
+- [ ] casehubio/engine#1030 — yaml-core ModuleExpander integration
+- [ ] casehubio/engine#1031 — Compound SubCase Judgment annotations
