@@ -1,8 +1,8 @@
 # Work Plan — issue-984-yaml-examples
 
 ## State
-branch: issue-984-yaml-examples
-state: active
+branch: main
+state: drained
 project-sha: 16bbc0801cf9f1fa216cbe229f15f095394b25a6
 date: 2026-09-01
 issue-repo: casehubio/engine
@@ -12,18 +12,6 @@ design-section-hashes:
 flyway-next-v: none
 batch2: done
 
+evidence-era: true
 ## Queue
-- [ ] casehubio/engine#984 — Issue #984 ← active
-  - [x] Batch 1: Choreography+Sequential
-    - [x] Task 1: Choreography triple
-    - [x] Task 2: Sequential triple
-  - [x] Batch 2: GOAP+LLM
-    - [x] Task 3: GOAP triple
-    - [x] Task 4: LLM decomposition triple
-  - [x] Batch 3: HumanTask+SubCase
-    - [x] Task 5: HumanTask triple
-    - [x] Task 6: SubCase triple
-  - [x] Batch 4: A2A+MCP+Validation
-    - [x] Task 7: A2A triple
-    - [x] Task 8: MCP triple
-    - [x] Task 9: Schema validation+README
+- [x] casehubio/engine#984 — Issue #984
