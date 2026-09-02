@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-984-yaml-examples
-state: scaffolded
+state: active
 project-sha: 16bbc0801cf9f1fa216cbe229f15f095394b25a6
 date: 2026-09-01
 issue-repo: casehubio/engine
@@ -13,9 +13,9 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#984 — Issue #984 ← active
-  - [ ] Batch 1: Choreography+Sequential
-    - [ ] Task 1: Choreography triple
-    - [ ] Task 2: Sequential triple
+  - [x] Batch 1: Choreography+Sequential
+    - [x] Task 1: Choreography triple
+    - [x] Task 2: Sequential triple
   - [ ] Batch 2: GOAP+LLM
     - [ ] Task 3: GOAP triple
     - [ ] Task 4: LLM decomposition triple
