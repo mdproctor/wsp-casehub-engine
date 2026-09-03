@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1027-dsl-annotations-yaml-audit
-state: closing:review
+state: closing:promoted
 project-sha: 48f9b75c1e9b44557faf857f8b7345764bba2353
 date: 2026-09-02
 issue-repo: casehubio/engine
