@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1027-dsl-annotations-yaml-audit
-state: active
+state: closing:review
 project-sha: 48f9b75c1e9b44557faf857f8b7345764bba2353
 date: 2026-09-02
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
+evidence-era: true
 ## Queue
 - [x] casehubio/engine#1027 — Issue #1027
 - [x] casehubio/engine#1028 — wire unwired annotation attributes
