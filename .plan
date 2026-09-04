@@ -1,0 +1,15 @@
+# Work Plan — issue-986-three-pathways-guide
+
+## State
+branch: issue-986-three-pathways-guide
+state: scaffolded
+project-sha: abff67f3107aedf19b0735375bb1b13d77882957
+date: 2026-09-04
+issue-repo: casehubio/engine
+covers: 986
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#986 — Issue #986 ← active
