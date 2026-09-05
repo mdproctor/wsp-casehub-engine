@@ -1,0 +1,15 @@
+# Work Plan — issue-1044-watchdog-recovery-bridge
+
+## State
+branch: issue-1044-watchdog-recovery-bridge
+state: scaffolded
+project-sha: 61198a8a5edd793c4bed5bddc52813943afeee20
+date: 2026-09-05
+issue-repo: casehubio/engine
+covers: 1044,1023,974
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1044 — Issue #1044 ← active
