@@ -1,0 +1,15 @@
+# Work Plan — issue-1050-routing-outcome-per-step
+
+## State
+branch: issue-1050-routing-outcome-per-step
+state: scaffolded
+project-sha: 253ecd4afc2ee77f14dd9815dbc616cb7e97aecf
+date: 2026-09-07
+issue-repo: casehubio/engine
+covers: 1050
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1050 — Issue #1050 ← active
