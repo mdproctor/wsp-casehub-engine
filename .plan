@@ -1,0 +1,19 @@
+# Work Plan — issue-1047-compensation-viz-follow-ups
+
+## State
+branch: issue-1047-compensation-viz-follow-ups
+state: closing:promoted
+issue-repo: casehubio/engine
+covers: 1047
+Current: casehubio/engine#1047 — saga: extend CompensationGraphProjection with data flow edges for design-time viewer
+date: 2026-09-05
+
+evidence-era: true
+## Queue
+- [ ] casehubio/engine#1047 — saga: extend CompensationGraphProjection with data flow edges for design-time viewer ← active
+  - [x] Batch 1: Foundation
+    - [x] Task 1: Add requiredKeys to Binding
+    - [x] Task 2: Create BindingGraphProjection and types
+  - [x] Batch 2: Integration
+    - [x] Task 3: Cross-module verification
+- [ ] casehubio/engine#1048 — saga: compensation GraphQL subscriptions + enriched timeline for ops dashboard
