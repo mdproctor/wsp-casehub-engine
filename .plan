@@ -4,7 +4,7 @@
 branch: issue-1047-compensation-viz-follow-ups
 state: active
 issue-repo: casehubio/engine
-covers: casehubio/engine#1047
+covers: 1047
 Current: casehubio/engine#1047 — saga: extend CompensationGraphProjection with data flow edges for design-time viewer
 date: 2026-09-05
 
