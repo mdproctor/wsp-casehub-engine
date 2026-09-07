@@ -1,15 +1,15 @@
-# Work Plan — issue-1063-judgment-target-schema
+# Work Plan — issue-1062-worker-schema-oneof
 
 ## State
-branch: issue-1063-judgment-target-schema
+branch: issue-1062-worker-schema-oneof
 state: scaffolded
-project-sha: 8b9ab1b5583ba115c446c540d47a5b19e721e704
+project-sha: b6f2028b7d7caf0543e616945b438284d7df2f95
 date: 2026-09-07
 issue-repo: casehubio/engine
-covers: 1063
+covers: 1062
 design-repo: workspace
 design-section-hashes: 
 flyway-next-v: none
 
 ## Queue
-- [ ] casehubio/engine#1063 — Issue #1063 ← active
+- [ ] casehubio/engine#1062 — Issue #1062 ← active

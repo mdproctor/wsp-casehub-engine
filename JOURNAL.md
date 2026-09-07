@@ -1,1 +1,1 @@
-# Design Journal — issue-1063-judgment-target-schema
+# Design Journal — issue-1062-worker-schema-oneof
