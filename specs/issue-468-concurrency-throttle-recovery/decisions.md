@@ -28,3 +28,27 @@ Composability: stall resolution and worker completion both free budget implicitl
 
 **Exploration:** deep-analysis
 **Status:** captured
+
+## D2: Watchdog bridge scope and delivery mechanism
+
+**Choice:** Engine bridge is a CDI `@ObservesAsync WatchdogAlertEvent` observer — qhorus already fires this event. Bridge scope limited to worker-hung conditions only (AGENT_STALE, BARRIER_STUCK, LOOP_DETECTED, CONVERSATION_STALL, ECHO_CHAMBER, CIRCULAR_DELEGATION). Action: cancel the pending Quartz/db-scheduler job for affected workers → synthetic `WorkerOutcome.Expired("Watchdog: <condition>")` → existing failure pipeline → RecoveryCoordinator handles escalation. No context signaling, no notification delivery, no case-level condition handling.
+
+**Alternatives:**
+- Extend to case-level conditions (CONTEXT_PRESSURE, QUEUE_DEPTH, etc.) via `.watchdogAlert` context signal — reinvents notification inside the engine; case-level conditions need human judgment, not automated recovery
+- Route case-level alerts through platform notification service (inbox/human-attention model) — wrong abstraction; watchdog alerts are operational signals needing durable event delivery (CloudEvents/JMS tier), not human inboxes
+- New `WatchdogTrigger` binding type for automated case-level response — deferred; no concrete use case yet where the automated action is clear
+
+**Rationale:** Worker-hung conditions have clear automated responses (cancel → retry → recover). Case-level conditions don't — CONTEXT_PRESSURE is a capacity planning signal, QUEUE_DEPTH is an operational concern. The bridge does the thing that's unambiguously useful (unstick hung workers) and defers the thing that needs more design (automated case-level response, durable operational event bus).
+
+**Trade-offs:** 6 of 12 watchdog conditions have no engine-side automated response in v1. Follow-up issue tracks automated case-level handling.
+
+**Depends on:** D1 (layered architecture — bridge is the post-dispatch layer)
+
+**Sources:**
+- `WatchdogEvaluationService` (qhorus runtime) — already fires `alertEvents.fireAsync(WatchdogAlertEvent)`, has containment actions (PAUSE_CHANNEL, DEREGISTER_AGENT, QUARANTINE)
+- `WatchdogAlertEvent.context().affectedAgentIds()` — identifies hung agents
+- Platform notification service (`io.casehub.platform.api.notification`) — human inbox model (Notification, NotificationStore, subscriptions, preferences, delivery channels), wrong tier for operational signals
+- `QhorusMessageSignalBridge.handlePathologyAlert()` — existing PathologyCondition→context signal pattern; NOT reused because context signaling for case-level alerts reinvents notification
+
+**Exploration:** deep-analysis
+**Status:** captured
