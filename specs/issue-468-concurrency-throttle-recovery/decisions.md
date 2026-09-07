@@ -29,6 +29,8 @@ Composability: stall resolution and worker completion both free budget implicitl
 **Exploration:** deep-analysis
 **Status:** captured
 
+---
+
 ## D2: Watchdog bridge scope and delivery mechanism
 
 **Choice:** Engine bridge is a CDI `@ObservesAsync WatchdogAlertEvent` observer — qhorus already fires this event. Bridge scope limited to worker-hung conditions only (AGENT_STALE, BARRIER_STUCK, LOOP_DETECTED, CONVERSATION_STALL, ECHO_CHAMBER, CIRCULAR_DELEGATION). Action: cancel the pending Quartz/db-scheduler job for affected workers → synthetic `WorkerOutcome.Expired("Watchdog: <condition>")` → existing failure pipeline → RecoveryCoordinator handles escalation. No context signaling, no notification delivery, no case-level condition handling.
@@ -49,6 +51,45 @@ Composability: stall resolution and worker completion both free budget implicitl
 - `WatchdogAlertEvent.context().affectedAgentIds()` — identifies hung agents
 - Platform notification service (`io.casehub.platform.api.notification`) — human inbox model (Notification, NotificationStore, subscriptions, preferences, delivery channels), wrong tier for operational signals
 - `QhorusMessageSignalBridge.handlePathologyAlert()` — existing PathologyCondition→context signal pattern; NOT reused because context signaling for case-level alerts reinvents notification
+
+**Exploration:** deep-analysis
+**Status:** captured
+
+---
+
+## D3: External dispatch budget SPI — capacity query, not permit acquire/release
+
+**Choice:** Stateless capacity query SPI. Engine asks "how many can I dispatch?" and gets a number. No acquire/release lifecycle, no permits, no leases.
+
+```java
+// engine-api
+public interface DispatchBudget {
+    int availableCapacity(DispatchBudgetQuery query);
+}
+public record DispatchBudgetQuery(UUID caseId, String tenancyId) {}
+```
+
+`@DefaultBean` returns `Integer.MAX_VALUE` (unlimited). Claudony provides `@ApplicationScoped` checking its session pool.
+
+Case-level cap is engine-internal (not the SPI): `CaseDefinition.maxConcurrentDispatches` → count active PlanItems → limit admitted bindings. No TOCTOU race because `CaseEvaluationSerializer` guarantees one evaluation per case at a time.
+
+Dispatch flow: `admitted = min(selected.size(), caseBudget, externalBudget)`.
+
+**Alternatives:**
+- Permit acquire/release (`tryAcquire(count)` / `release(permit)`) — requires release on 7+ termination paths across 4 handler classes (success, failure, retry exhaustion, action gate approval/rejection/expiration, case cancellation, scoped worker termination, crash recovery). Missing one → permit leak → permanent capacity reduction. Disproportionate complexity.
+- No SPI (provider-side backpressure at `submit()` only) — wastes routing, EventLog, and PlanItem creation work for workers that can't submit. Budget query prevents this waste.
+
+**Rationale:** Per-case serialization (`CaseEvaluationSerializer`) eliminates same-case TOCTOU races — exact enforcement where it matters most. Cross-case races are brief (query→dispatch is milliseconds) and the provider handles overflow at `submit()`. The query is an optimization (avoid wasted work), not a transactional guarantee. Zero lifecycle complexity.
+
+**Trade-offs:** Cross-case races can briefly over-dispatch by a few workers. Provider must handle overflow gracefully at `submit()` (queue or block). Acceptable because the race window is milliseconds and the budget is advisory.
+
+**Depends on:** D1 (budget is the pre-dispatch layer)
+
+**Sources:**
+- `CaseEvaluationSerializer` (runtime) — per-case ReentrantLock + coalescing, guarantees one evaluation per case
+- `CaseContextChangedEventHandler.rules()` — dispatch fan-out, `CompletableFuture.runAsync()` for multi-binding
+- `CaseContextChangedEventHandler.scheduleWorker()` — creates PlanItem, EventLog, calls `executionManager.submit()` (significant wasted work if pool is full)
+- `CompositeWorkerExecutionManager.submit()` — routes to backend, hard gate
 
 **Exploration:** deep-analysis
 **Status:** captured
