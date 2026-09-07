@@ -5,10 +5,10 @@ branch: issue-1054-cbr-playbook-selection
 state: active
 issue-repo: casehubio/engine
 covers: casehubio/engine#1054,casehubio/engine#1055,casehubio/engine#1056
-Current: casehubio/engine#1055 — Cross-case-type CBR retrieval
+Current: casehubio/engine#1054 — CBR retrieval at situation evaluation
 date: 2026-09-07
 
 ## Queue
-- [x] casehubio/engine#1054 — CBR retrieval at situation evaluation — case definition selection before startCase()
-- [ ] casehubio/engine#1055 — Cross-case-type CBR retrieval — compare outcomes across playbook types ← active
-- [ ] casehubio/engine#1056 — CbrCaseRetainObserver should enrich problem/solution with case definition metadata and case context
+- [ ] casehubio/engine#1054 — CBR retrieval at situation evaluation — case definition selection before startCase()
+- [x] casehubio/engine#1055 — Cross-case-type CBR retrieval — compare outcomes across playbook types
+- [x] casehubio/engine#1056 — CbrCaseRetainObserver should enrich problem/solution with case definition metadata and case context
