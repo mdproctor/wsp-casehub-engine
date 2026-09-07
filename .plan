@@ -1,0 +1,15 @@
+# Work Plan — issue-1061-dedup-schema-modules
+
+## State
+branch: issue-1061-dedup-schema-modules
+state: scaffolded
+project-sha: f5b2e18e11c3455a7194d3ee648029cd192da9ce
+date: 2026-09-07
+issue-repo: casehubio/engine
+covers: 1061
+design-repo: workspace
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1061 — Issue #1061 ← active
