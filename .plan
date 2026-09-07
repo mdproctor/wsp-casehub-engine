@@ -1,0 +1,15 @@
+# Work Plan — issue-468-concurrency-throttle-recovery
+
+## State
+branch: issue-468-concurrency-throttle-recovery
+state: active
+project-sha: slot-creation
+date: 2026-09-04
+issue-repo: casehubio/parent
+covers: engine:1043,engine:1044,claudony:203,devtown:185
+design-repo: project
+design-section-hashes: 
+flyway-next-v: unknown
+
+## Queue
+- [ ] casehubio/parent#468 — Issue #468 ← active
