@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1061-dedup-schema-modules
-state: scaffolded
+state: closing:review
 project-sha: f5b2e18e11c3455a7194d3ee648029cd192da9ce
 date: 2026-09-07
 issue-repo: casehubio/engine
@@ -11,5 +11,6 @@ design-repo: workspace
 design-section-hashes: 
 flyway-next-v: none
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/engine#1061 — Issue #1061 ← active
