@@ -1,0 +1,15 @@
+# Work Plan — issue-1067-shorthand-module-migration
+
+## State
+branch: issue-1067-shorthand-module-migration
+state: scaffolded
+project-sha: 46b86678b22e3b55e795def11b3292d03e2a80b0
+date: 2026-09-07
+issue-repo: casehubio/engine
+covers: 1067
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1067 — Issue #1067 ← active
