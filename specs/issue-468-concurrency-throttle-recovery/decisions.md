@@ -93,3 +93,36 @@ Dispatch flow: `admitted = min(selected.size(), caseBudget, externalBudget)`.
 
 **Exploration:** deep-analysis
 **Status:** captured
+
+---
+
+## D4: Watchdog bridge — identity resolution and worker cancellation mechanism
+
+**Choice:** Three-part resolution:
+
+1. **Enrich `WatchdogAlertEvent` with `@Nullable UUID caseId`** (qhorus-api change, qhorus#433). `WatchdogEvaluationService` resolves from channel metadata. Per-channel alerts carry caseId; cross-channel (target="*") carry null.
+
+2. **Identity resolution via sender name = worker name convention.** Alert contexts carry sender names (LOOP_DETECTED, ECHO_CHAMBER, CONVERSATION_STALL, CIRCULAR_DELEGATION, BARRIER_STUCK) or instance IDs (AGENT_STALE). Sender names match engine `Worker.name()` because the engine sets `from: workerName` in `CaseChannelProvider.postToChannel()`. Instance IDs require best-effort matching. Bridge queries `PlanItemStore` for active PlanItems where `executorName()` matches, getting `bindingName`.
+
+3. **Synthetic `Expired` outcome, not direct Quartz cancellation.** Bridge publishes `WorkflowExecutionCompleted(Expired("Watchdog: <condition>"))` on the event bus. Existing `WorkflowExecutionCompletedHandler` handles all side effects (PlanItem status, compound completion, settlement, recovery coordinator). The original Quartz job continues running until its own timeout — when it completes, the handler sees the PlanItem is already terminal and discards.
+
+**Alternatives:**
+- Direct Quartz job cancellation (`JobScheduler.cancel()`) — requires `JobIdentifier("binding-" + bindingName, "case-" + caseId)`, which the bridge CAN construct with caseId + bindingName. But interrupting a running virtual thread is unreliable. Synthetic failure outcome is cleaner — reuses the established `QhorusMessageSignalBridge` pattern.
+- Bridge queries qhorus APIs to resolve identity — cross-layer dependency, engine depends on qhorus internals
+- No caseId enrichment, bridge does full EventLog scan — expensive, fragile
+
+**Rationale:** Follows the established `QhorusMessageSignalBridge.handleWorkerOutcome()` pattern: resolve via metadata → publish failure event → existing pipeline handles it. Adding caseId to WatchdogAlertEvent is a minimal, clean cross-repo change. The identity convention (sender = worker name) holds for all current consumers and degrades gracefully (log warning, no action) when it doesn't.
+
+**Trade-offs:** AGENT_STALE uses instance IDs (not sender names) — requires best-effort matching. The original Quartz job runs until its own timeout even after the synthetic Expired is published — wastes resources briefly but avoids unreliable thread interruption. Follow-up: engine#1066 tracks watchdog notification migration to platform notification service.
+
+**Depends on:** D2 (bridge scope — worker-hung conditions only), qhorus#433 (caseId enrichment)
+
+**Sources:**
+- `AgentStaleContext(staleCount, staleInstanceIds)` — instance IDs, NOT sender names
+- `LoopDetectedContext(channelId, channelName, sender, ...)` — sender = worker name (set by engine postToChannel)
+- `WorkerScheduleEventHandler.postToChannel()` — sets `from` to workerName
+- `QhorusMessageSignalBridge.handleWorkerOutcome()` — established pattern: correlationId → EventLog → publish WorkflowExecutionCompleted
+- `JobScheduler.cancel(JobIdentifier)` — `JobIdentifier.of("binding-" + bindingName, "case-" + caseId)`
+
+**Exploration:** deep-analysis
+**Status:** captured
