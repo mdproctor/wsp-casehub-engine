@@ -1,1 +1,31 @@
-{"status":"done","strategy":"manual","commits_before":12,"commits_after":5,"verified":true}
+{
+  "repo": "engine",
+  "base": "origin/main",
+  "groups": [
+    {
+      "label": "#1055 \u2014 cross-case-type CBR retrieval",
+      "commits": [
+        "3a62741b",
+        "dcf41888"
+      ],
+      "message": "feat(#1055): cross-case-type CBR retrieval\n\nAdd crossType flag to CbrConfig for querying across all case definition\ntypes within a domain. CbrRetrievalService uses CbrQuery.crossType()\n(AllInDomain scope) when enabled, threading per-result caseType from\nScoredCbrCase into RetrievedExperience.\n\nChanges:\n- CbrConfig.crossType (boolean, default false, mutually exclusive with caseType)\n- RetrievedExperience.caseType (nullable String, 9th component)\n- CbrRetrievalService branches on crossType for query construction\n- CbrConfigDeserializer parses crossType from YAML\n- Fix ScoredCbrCase 2-arg constructor calls (upstream API change)\n- CLAUDE.md updated\n\nCloses #1055"
+    },
+    {
+      "label": "#1056 \u2014 CbrCaseRetainObserver enrichment",
+      "commits": [
+        "d240d541",
+        "e28dcb31"
+      ],
+      "message": "feat(#1056): enrich CbrCaseRetainObserver problem/solution with metadata\n\nCbrCaseRetainObserver now composes meaningful problem text from case\ndefinition metadata (title, summary) and app-defined JQ expressions,\nand appends labels/types to the solution for discoverability.\n\nChanges:\n- CbrConfig.problemDescription (JQ expression for app-specific problem extraction)\n- buildProblem(): JQ expression -> title+summary -> caseType fallback chain\n- buildSolution(): appends definition labels and types to trace string\n- CbrConfigDeserializer parses problemDescription from YAML\n- CLAUDE.md updated\n\nCloses #1056"
+    },
+    {
+      "label": "#1054 \u2014 pre-startCase CBR retrieval",
+      "commits": [
+        "ba00601a",
+        "f99dcf80"
+      ],
+      "message": "feat(#1054): CbrRetrievalService.retrieveForSelection() \u2014 pre-startCase CBR\n\nAdd retrieveForSelection() overload that queries CBR without requiring\na CaseInstance or CaseDefinition. Takes pre-extracted features, domain,\nand scoring parameters directly. Always uses cross-type queries\n(AllInDomain scope) for comparing outcomes across case definition types.\n\nConsumers use this at situation evaluation time to rank case definitions\nby past outcome quality before calling startCase().\n\nCloses #1054"
+    }
+  ],
+  "verified": true
+}
