@@ -13,14 +13,14 @@ flyway-next-v: unknown
 
 ## Queue
 - [ ] casehubio/parent#468 — Issue #468 ← active
-  - [ ] Batch 1: SPI+Cap
-    - [ ] Task 1: DispatchBudget SPI and default bean
-    - [ ] Task 2: CaseDefinition.maxConcurrentDispatches + YAML
-    - [ ] Task 3: Case-level throttle in CaseContextChangedEventHandler
-  - [ ] Batch 2: Qhorus
-    - [ ] Task 4: Add caseId to WatchdogAlertEvent
-  - [ ] Batch 3: Bridge
-    - [ ] Task 5: WatchdogResponseAction + CaseDefinition.watchdogPolicy
-    - [ ] Task 6: WatchdogRecoveryBridge core implementation
-  - [ ] Batch 4: Docs
-    - [ ] Task 7: CLAUDE.md + contributor guide updates
+  - [x] Batch 1: SPI+Cap
+    - [x] Task 1: DispatchBudget SPI and default bean
+    - [x] Task 2: CaseDefinition.maxConcurrentDispatches + YAML
+    - [x] Task 3: Case-level throttle in CaseContextChangedEventHandler
+  - [x] Batch 2: Qhorus
+    - [x] Task 4: Add caseId to WatchdogAlertEvent
+  - [x] Batch 3: Bridge
+    - [x] Task 5: WatchdogResponseAction + CaseDefinition.watchdogPolicy
+    - [x] Task 6: WatchdogRecoveryBridge core implementation
+  - [x] Batch 4: Docs
+    - [x] Task 7: CLAUDE.md + contributor guide updates
