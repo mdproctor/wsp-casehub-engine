@@ -1,2 +1,6 @@
+<<<<<<< HEAD
 project: /Users/mdproctor/claude/casehub/slots/182/engine
+=======
+project: /Users/mdproctor/claude/casehub/slots/174/engine
+>>>>>>> issue-468-concurrency-throttle-recovery
 created: 2026-09-07

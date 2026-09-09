@@ -1,0 +1,128 @@
+# Decisions — issue-468-concurrency-throttle-recovery
+
+## D1: Layered intervention architecture
+
+**Choice:** Three independent mechanisms at different points in the execution loop, not a unified abstraction.
+
+- **Budget** (pre-dispatch): case-level cap (engine-internal, from CaseDefinition) + external dispatch budget SPI (engine-api, claudony implements). Sits between `loopControl.select()` and dispatch in `CaseContextChangedEventHandler.rules()`.
+- **Watchdog bridge** (post-dispatch): two-channel response based on condition class. Worker-hung conditions (AGENT_STALE, BARRIER_STUCK, LOOP_DETECTED, CONVERSATION_STALL, ECHO_CHAMBER, CIRCULAR_DELEGATION) → cancel affected worker → synthetic `Expired` → existing failure pipeline → RecoveryCoordinator. Case-level conditions (CONTEXT_PRESSURE, CHANNEL_IDLE, QUEUE_DEPTH, OBLIGATION_FAN_OUT, APPROVAL_PENDING, DELIVERY_LAG) → context signal at `.watchdogAlert` → case-definition bindings react (same pattern as existing PathologyCondition).
+- **Recovery** (post-failure): existing RecoveryCoordinator, unchanged. Receives genuine worker failures including watchdog-cancelled workers.
+
+Composability: stall resolution and worker completion both free budget implicitly via PlanItem state transitions. CONTEXT_CHANGED re-evaluates and admits more bindings. No new coordination needed.
+
+**Alternatives:**
+- Unified CaseIntervention abstraction covering budget + watchdog + recovery — over-abstracts genuinely different operations at different pipeline points
+- Extend RecoveryCoordinator.handleFailure() with watchdog data — semantic mismatch (RecoveryContext requires worker-scoped data that watchdog alerts don't have)
+- Watchdog routes directly into RecoveryCoordinator — impedance mismatch forces fabrication of synthetic RecoveryContext fields
+
+**Rationale:** Budget is pre-dispatch governance, watchdog is post-dispatch observation, recovery is post-failure escalation. Different data, different actions, different pipeline positions. Forcing a shared abstraction creates semantic tension. The existing CONTEXT_CHANGED loop provides composability without coupling.
+
+**Trade-offs:** No single place to see "all governance" for a case. Each mechanism is independently configurable, which means more config surface on CaseDefinition.
+
+**Sources:**
+- `CaseContextChangedEventHandler.rules()` (runtime, line 224-324) — dispatch fan-out, no throttle today
+- `RecoveryCoordinator` / `RecoveryContext` (common/spi/recovery/) — worker-failure-scoped
+- `WatchdogAlertRouter` / `WatchdogAlertEvent` / `AlertContext` (qhorus-api) — 12 condition types, routes to notification endpoints
+- `QhorusMessageSignalBridge.handlePathologyAlert()` (runtime, line 138) — existing pathology→context signal pattern
+- `PathologyCondition` enum (api/model/) — existing 4-condition subset
+
+**Exploration:** deep-analysis
+**Status:** captured
+
+---
+
+## D2: Watchdog bridge scope and delivery mechanism
+
+**Choice:** Engine bridge is a CDI `@ObservesAsync WatchdogAlertEvent` observer — qhorus already fires this event. Bridge scope limited to worker-hung conditions only (AGENT_STALE, BARRIER_STUCK, LOOP_DETECTED, CONVERSATION_STALL, ECHO_CHAMBER, CIRCULAR_DELEGATION). Action: cancel the pending Quartz/db-scheduler job for affected workers → synthetic `WorkerOutcome.Expired("Watchdog: <condition>")` → existing failure pipeline → RecoveryCoordinator handles escalation. No context signaling, no notification delivery, no case-level condition handling.
+
+**Alternatives:**
+- Extend to case-level conditions (CONTEXT_PRESSURE, QUEUE_DEPTH, etc.) via `.watchdogAlert` context signal — reinvents notification inside the engine; case-level conditions need human judgment, not automated recovery
+- Route case-level alerts through platform notification service (inbox/human-attention model) — wrong abstraction; watchdog alerts are operational signals needing durable event delivery (CloudEvents/JMS tier), not human inboxes
+- New `WatchdogTrigger` binding type for automated case-level response — deferred; no concrete use case yet where the automated action is clear
+
+**Rationale:** Worker-hung conditions have clear automated responses (cancel → retry → recover). Case-level conditions don't — CONTEXT_PRESSURE is a capacity planning signal, QUEUE_DEPTH is an operational concern. The bridge does the thing that's unambiguously useful (unstick hung workers) and defers the thing that needs more design (automated case-level response, durable operational event bus).
+
+**Trade-offs:** 6 of 12 watchdog conditions have no engine-side automated response in v1. Follow-up issue tracks automated case-level handling.
+
+**Depends on:** D1 (layered architecture — bridge is the post-dispatch layer)
+
+**Sources:**
+- `WatchdogEvaluationService` (qhorus runtime) — already fires `alertEvents.fireAsync(WatchdogAlertEvent)`, has containment actions (PAUSE_CHANNEL, DEREGISTER_AGENT, QUARANTINE)
+- `WatchdogAlertEvent.context().affectedAgentIds()` — identifies hung agents
+- Platform notification service (`io.casehub.platform.api.notification`) — human inbox model (Notification, NotificationStore, subscriptions, preferences, delivery channels), wrong tier for operational signals
+- `QhorusMessageSignalBridge.handlePathologyAlert()` — existing PathologyCondition→context signal pattern; NOT reused because context signaling for case-level alerts reinvents notification
+
+**Exploration:** deep-analysis
+**Status:** captured
+
+---
+
+## D3: External dispatch budget SPI — capacity query, not permit acquire/release
+
+**Choice:** Stateless capacity query SPI. Engine asks "how many can I dispatch?" and gets a number. No acquire/release lifecycle, no permits, no leases.
+
+```java
+// engine-api
+public interface DispatchBudget {
+    int availableCapacity(DispatchBudgetQuery query);
+}
+public record DispatchBudgetQuery(UUID caseId, String tenancyId) {}
+```
+
+`@DefaultBean` returns `Integer.MAX_VALUE` (unlimited). Claudony provides `@ApplicationScoped` checking its session pool.
+
+Case-level cap is engine-internal (not the SPI): `CaseDefinition.maxConcurrentDispatches` → count active PlanItems → limit admitted bindings. No TOCTOU race because `CaseEvaluationSerializer` guarantees one evaluation per case at a time.
+
+Dispatch flow: `admitted = min(selected.size(), caseBudget, externalBudget)`.
+
+**Alternatives:**
+- Permit acquire/release (`tryAcquire(count)` / `release(permit)`) — requires release on 7+ termination paths across 4 handler classes (success, failure, retry exhaustion, action gate approval/rejection/expiration, case cancellation, scoped worker termination, crash recovery). Missing one → permit leak → permanent capacity reduction. Disproportionate complexity.
+- No SPI (provider-side backpressure at `submit()` only) — wastes routing, EventLog, and PlanItem creation work for workers that can't submit. Budget query prevents this waste.
+
+**Rationale:** Per-case serialization (`CaseEvaluationSerializer`) eliminates same-case TOCTOU races — exact enforcement where it matters most. Cross-case races are brief (query→dispatch is milliseconds) and the provider handles overflow at `submit()`. The query is an optimization (avoid wasted work), not a transactional guarantee. Zero lifecycle complexity.
+
+**Trade-offs:** Cross-case races can briefly over-dispatch by a few workers. Provider must handle overflow gracefully at `submit()` (queue or block). Acceptable because the race window is milliseconds and the budget is advisory.
+
+**Depends on:** D1 (budget is the pre-dispatch layer)
+
+**Sources:**
+- `CaseEvaluationSerializer` (runtime) — per-case ReentrantLock + coalescing, guarantees one evaluation per case
+- `CaseContextChangedEventHandler.rules()` — dispatch fan-out, `CompletableFuture.runAsync()` for multi-binding
+- `CaseContextChangedEventHandler.scheduleWorker()` — creates PlanItem, EventLog, calls `executionManager.submit()` (significant wasted work if pool is full)
+- `CompositeWorkerExecutionManager.submit()` — routes to backend, hard gate
+
+**Exploration:** deep-analysis
+**Status:** captured
+
+---
+
+## D4: Watchdog bridge — identity resolution and worker cancellation mechanism
+
+**Choice:** Three-part resolution:
+
+1. **Enrich `WatchdogAlertEvent` with `@Nullable UUID caseId`** (qhorus-api change, qhorus#433). `WatchdogEvaluationService` resolves from channel metadata. Per-channel alerts carry caseId; cross-channel (target="*") carry null.
+
+2. **Identity resolution via sender name = worker name convention.** Alert contexts carry sender names (LOOP_DETECTED, ECHO_CHAMBER, CONVERSATION_STALL, CIRCULAR_DELEGATION, BARRIER_STUCK) or instance IDs (AGENT_STALE). Sender names match engine `Worker.name()` because the engine sets `from: workerName` in `CaseChannelProvider.postToChannel()`. Instance IDs require best-effort matching. Bridge queries `PlanItemStore` for active PlanItems where `executorName()` matches, getting `bindingName`.
+
+3. **Synthetic `Expired` outcome, not direct Quartz cancellation.** Bridge publishes `WorkflowExecutionCompleted(Expired("Watchdog: <condition>"))` on the event bus. Existing `WorkflowExecutionCompletedHandler` handles all side effects (PlanItem status, compound completion, settlement, recovery coordinator). The original Quartz job continues running until its own timeout — when it completes, the handler sees the PlanItem is already terminal and discards.
+
+**Alternatives:**
+- Direct Quartz job cancellation (`JobScheduler.cancel()`) — requires `JobIdentifier("binding-" + bindingName, "case-" + caseId)`, which the bridge CAN construct with caseId + bindingName. But interrupting a running virtual thread is unreliable. Synthetic failure outcome is cleaner — reuses the established `QhorusMessageSignalBridge` pattern.
+- Bridge queries qhorus APIs to resolve identity — cross-layer dependency, engine depends on qhorus internals
+- No caseId enrichment, bridge does full EventLog scan — expensive, fragile
+
+**Rationale:** Follows the established `QhorusMessageSignalBridge.handleWorkerOutcome()` pattern: resolve via metadata → publish failure event → existing pipeline handles it. Adding caseId to WatchdogAlertEvent is a minimal, clean cross-repo change. The identity convention (sender = worker name) holds for all current consumers and degrades gracefully (log warning, no action) when it doesn't.
+
+**Trade-offs:** AGENT_STALE uses instance IDs (not sender names) — requires best-effort matching. The original Quartz job runs until its own timeout even after the synthetic Expired is published — wastes resources briefly but avoids unreliable thread interruption. Follow-up: engine#1066 tracks watchdog notification migration to platform notification service.
+
+**Depends on:** D2 (bridge scope — worker-hung conditions only), qhorus#433 (caseId enrichment)
+
+**Sources:**
+- `AgentStaleContext(staleCount, staleInstanceIds)` — instance IDs, NOT sender names
+- `LoopDetectedContext(channelId, channelName, sender, ...)` — sender = worker name (set by engine postToChannel)
+- `WorkerScheduleEventHandler.postToChannel()` — sets `from` to workerName
+- `QhorusMessageSignalBridge.handleWorkerOutcome()` — established pattern: correlationId → EventLog → publish WorkflowExecutionCompleted
+- `JobScheduler.cancel(JobIdentifier)` — `JobIdentifier.of("binding-" + bindingName, "case-" + caseId)`
+
+**Exploration:** deep-analysis
+**Status:** captured
