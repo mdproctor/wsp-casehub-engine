@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-468-concurrency-throttle-recovery
-state: closing:review
+state: closing:promoted
 project-sha: slot-creation
 date: 2026-09-04
 issue-repo: casehubio/parent
