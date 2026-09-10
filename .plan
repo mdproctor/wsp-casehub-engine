@@ -1,0 +1,22 @@
+# Work Plan — issue-1074-sx-batch
+
+## State
+branch: issue-1074-sx-batch
+state: scaffolded
+project-sha: 957af2881c9a292fa0a0f0a4bebea13fdfc14a6d
+date: 2026-09-11
+issue-repo: casehubio/engine
+covers: 1074,1065,1060,1045,1008,959,958,912
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1074 — Issue #1074 ← active
+- [ ] casehubio/engine#1065 — schema-validation-tests-dsl-doc
+- [ ] casehubio/engine#1060 — adopt-shorthand-module
+- [ ] casehubio/engine#1045 — actorstate-capacity-override
+- [ ] casehubio/engine#1008 — reasoning-propagation-orchestrator
+- [ ] casehubio/engine#959 — reasoning-persistent-workers
+- [ ] casehubio/engine#958 — importance-weights-reasoning-domain
+- [ ] casehubio/engine#912 — casecontext-worker-api-design
