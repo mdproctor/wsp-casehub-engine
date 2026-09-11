@@ -1,20 +1,30 @@
 # HANDOFF — casehub-engine
 
-## Session Summary (2026-09-06)
+## Last Session
 
-Landed #1047 — generalized `CompensationGraphProjection` to `BindingGraphProjection` with three typed edges (COMPENSATION, DATA_FLOW, TRIGGER_DEPENDENCY). Added `requiredKeys: Set<String>` to `Binding` as symmetric counterpart to `producedKeys` for non-fragile trigger dependency inference. Old compensation-specific graph types deleted. Landed as `18ee47a9` on main. Filed #1053 (ctx.py parse_covers bug with fully qualified format).
+Completed the unified resolution pipeline (engine#1081). Batches 4 and 5 landed this session:
 
-IntelliJ MCP symlink issue discovered and triaged — absolute symlinks in slot clones (`.claude`, `.build`, `.worktrees`) caused IntelliJ to resolve to the original repo path. All three removed from slot 180. Garden entry GE-20260820-f45988 revised with variant.
+**Batch 4 — Retrieval Feedback:**
+- `fireStepOutcomeObserver()` changed from `.get()` single-dispatch to multi-observer iteration
+- DECLINED outcome mapping fixed in `handleSemanticFailure()` (`routingOutcome` derived per case)
+- `RetrievalFeedbackObserver` — Layer 1 feedback via `StepOutcomeObserver`. Correlates dispatch-time experiences from EventLog metadata with worker outcomes (SUCCESS→RELEVANT, DECLINED→NOT_RELEVANT for declined agent, FAILURE→NOT_RELEVANT)
+- `caseId` field added to `RetrievedExperience` (13th, backward-compatible) — `CbrRetrievalService.mapScoredCase()` threads `scored.caseId()` through
 
-## Next Action
+**Batch 5 — Candidate Presentation + Selection Feedback:**
+- `publishJudgmentSchedule()` populates `_candidates.<bindingName>` with ranked summaries via `engineSet()` when experiences are non-empty
+- `SelectionFeedbackRecorder` — Layer 3 feedback observing `PlanItemStateChangedEvent`. Validates `selectedCaseId` against presented candidates (rejects fabricated IDs). Selected→HIGHLY_RELEVANT, unselected above threshold→PARTIALLY_RELEVANT
+- `casehub.cbr.outcome-weighting.enabled=true` default-on
+- `cbr-playbook-guide.md` updated with Outcome Weighting and Retrieval Feedback sections
 
-Advance .plan to #1048 — compensation GraphQL subscriptions + enriched timeline for ops dashboard. Branch is stamped closed; next session should `work next` or start fresh on a new branch for #1048.
+All 5 batches (foundation types, mixed retrieval, document ingestion, retrieval feedback, candidate presentation) are complete. Issue #1081 is ready for work-end.
+
+## Pre-Existing Issues
+
+- **CDI ambiguity in `@QuarkusTest` runtime tests:** `DefaultTestPrincipal` / `CurrentPrincipal` `AmbiguousResolutionException`. Pre-existing — affects `StepOutcomeObserverTest` and other `@QuarkusTest` classes.
+- **YamlCaseHubTest case sensitivity:** 3 failures in api module (`"Minimal"` vs `"minimal"`). Pre-existing.
 
 ## References
 
-| Artifact | Path |
-|----------|------|
-| Spec | `wksp/specs/issue-1047-compensation-viz-follow-ups/2026-09-06-binding-graph-projection-design.md` |
-| Decisions | `wksp/specs/issue-1047-compensation-viz-follow-ups/decisions.md` |
-| Blog | `wksp/blog/2026-09-06-mdp01-the-missing-half-of-produced-keys.md` |
-| Plan | `wksp/plans/2026-09-06-binding-graph-projection.md` |
+- `specs/issue-1081-unified-resolution-pipeline/2026-09-11-unified-resolution-pipeline-design.md` — design spec
+- `plans/2026-09-11-unified-resolution-pipeline.md` — implementation plan (all 5 batches complete)
+- `blog/2026-09-11-mdp02-every-resolution-same-pipeline.md` — diary entry
