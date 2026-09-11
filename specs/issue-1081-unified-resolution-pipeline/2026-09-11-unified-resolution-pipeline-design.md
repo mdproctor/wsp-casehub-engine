@@ -37,6 +37,21 @@ Situation → Retrieve → Rank → Select → Execute → Feedback
 
 The variable is who selects and who executes. The fully automated path (current behavior) remains the default. Human-in-the-loop adds alternatives at each stage, not gates.
 
+### 2.1 Why CBR for documents (not RAG)
+
+Neocortex has both RAG (`rag-*` modules) and CBR (`memory-*` modules). RAG is designed for chunk-level retrieval — it splits documents into chunks, embeds them, and retrieves relevant chunks. CBR is designed for whole-case retrieval — it stores complete cases with features and retrieves similar ones.
+
+Resolution guidance is whole-document retrieval: a runbook is a case (problem description + solution steps), not a bag of chunks. CBR's `CbrCaseMemoryStore` already supports:
+- Dense vector search (semantic matching via problem() field embedding)
+- SPLADE sparse embeddings
+- BM25 server-side inference
+- Feature vector similarity (structural matching)
+- Hybrid fusion across all four legs
+
+This makes CBR functionally equivalent to RAG for whole-document semantic retrieval, while additionally supporting feature-based structural matching that RAG lacks. The mixed ranked list of plan traces and documents is natural in CBR — both are cases with problem/solution structure. RAG would require a separate retrieval pipeline and a merge step.
+
+The trade-off: CBR's feature extraction assumes the adapter can identify discriminating features. For documents where features aren't obvious, the dense vector (semantic) leg dominates and feature weights should be low.
+
 ## 3. Architecture
 
 The unified pipeline is not a new module. It's distributed across existing engine components, with each piece landing in its natural home:
@@ -49,7 +64,7 @@ The unified pipeline is not a new module. It's distributed across existing engin
 | **Select (auto)** | `AgentRoutingStrategy` (runtime) | No change — existing CBR signal provider |
 | **Select (human)** | `JudgmentTarget` binding (YAML) | Payload enriched with ranked candidate list |
 | **Execute** | `WorkerScheduleEventHandler` → scheduler | No change |
-| **Feedback L1** | `RetrievalFeedbackEvaluator` (new, runtime) | Correlates retrieval trace with worker outcome |
+| **Feedback L1** | `RetrievalFeedbackObserver` (new, runtime) | StepOutcomeObserver: correlates retrieval trace with worker outcome |
 | **Feedback L2** | `CbrCaseRetainObserver` (runtime) | Already wired — no change |
 | **Feedback L3** | Judgment completion path (runtime) | Selection recorded as feedback signal |
 
@@ -118,6 +133,8 @@ public record ResolutionStep(
 **`ResolutionGuide`** gains `List<ResolutionStep> steps` (nullable, defaults to `List.of()` in compact constructor) and a `withSteps(List<ResolutionStep>)` copy-with-modify method (same pattern as `ResolvedCase.withFeatures()`). The `solution` text field remains for prose. Both are populated — prose for humans, steps for LLMs and the engine.
 
 Follows the same pattern as `ResolvedCase.resolutionStep` (List of plan trace steps).
+
+**Steps are optional.** Not all resolution knowledge is step-based — declarative knowledge ("when error X, root cause is Y"), decision trees, reference knowledge, and advisory knowledge don't decompose into sequential steps. The `steps` field is nullable. Documents without steps carry prose only (`solution` text). The engine handles both: step-based documents enable LLM-guided execution; prose-only documents are presented to human analysts or used as context by agent workers.
 
 ### 4.2 Engine api (`io.casehub.api.model`)
 
@@ -195,14 +212,16 @@ public record ResolutionStepInput(
 - Domain resolution follows the same chain as `CbrRetrievalService.resolveDomain()`
 - Error isolation per document — one failed ingestion doesn't block others
 
-**`RetrievalFeedbackEvaluator`** — `@ApplicationScoped`. Correlates retrieval traces with worker outcomes.
+**`RetrievalFeedbackObserver`** — `@ApplicationScoped`, implements `StepOutcomeObserver`. Correlates retrieval traces with worker outcomes via the existing per-step observer SPI (same pattern as `CaseOutcomeObserver` for case-level CBR retain).
 
 - Injects `Instance<CbrRetrievalTracker>` — transparent no-op when tracker absent
-- Called from `WorkflowExecutionCompletedHandler` on both success and failure paths
-- On SUCCESS: all retrieved cases scored as `RELEVANT`
+- `StepOutcomeEvent` carries `caseId`, `tenancyId`, `bindingName`, `workerName`, `outcome`, `contextSnapshot`
+- On SUCCESS/COMPLETED: all retrieved cases scored as `RELEVANT`
 - On DECLINED/FAILED: retrieved cases that informed the failed agent scored as `NOT_RELEVANT`; others unscored (avoids noise)
 - On EXPIRED: all retrieved cases scored as `PARTIALLY_RELEVANT` (timeout doesn't imply irrelevance)
 - Reads `experiences` from EventLog metadata (already stored at dispatch time by `WorkerScheduleEventHandler`)
+
+**Neocortex dependency:** `CbrRetrievalTracker` (neocortex memory-api) currently has `record()` and `findTraces()` but no feedback method. This spec requires adding `feedback(String caseId, String tenancyId, List<CbrRetrievalFeedback> entries)` to `CbrRetrievalTracker` in neocortex. `CbrRetrievalFeedback` record: `(String tracedCaseId, RetrievalOutcome outcome)`. This is a neocortex-memory-api change, tracked as a dependency of child issue #5.
 
 **Selection feedback** — wired in the judgment completion path:
 
@@ -238,8 +257,8 @@ When `CaseContextChangedEventHandler` evaluates a judgment binding that targets 
 
 1. `CaseContextChangedEventHandler.publishByTarget()` detects that the binding is a `JudgmentTarget` AND the case definition has a `CbrConfig`. This is the trigger for candidate population — judgment bindings without a `CbrConfig` on the case definition skip this path entirely.
 2. CBR retrieval runs via `CbrRetrievalService.retrieve()` (same call as the existing capability dispatch path)
-3. Results are written to `_candidates.<bindingName>` in the working layer as a JSON array of `{sourceType, similarity, caseType, problem, solution, documentSteps, planSteps, confidence}`
-4. The judgment payload includes the candidates from this context path
+3. Candidate **summaries** are written to `_candidates.<bindingName>` in the working layer as a JSON array of `{caseId, sourceType, similarity, caseType, problem, confidence, stepCount}`. Full document content is NOT written to the context — it's retrieved on demand via `CbrCaseMemoryStore` when the selected candidate is dispatched. This prevents context bloat for large knowledge bases.
+4. The judgment payload includes the candidate summaries from this context path. Writes to `_candidates.*` suppress `CONTEXT_CHANGED` (same pattern as `_diagnostics` writes via `engineSet()`) to prevent circular dispatch.
 5. The human/LLM resolution is written to the output path specified by the binding's `producedKeys`
 
 ### 6.3 YAML example
@@ -328,9 +347,9 @@ The judgment's `resolutionType` is `ResolutionSelection`. The human/LLM picks a 
 
 ### 7.1 Layer 1 — Retrieval relevance (per-step)
 
-**When:** After `WorkflowExecutionCompletedHandler` processes a worker completion.
+**When:** After each worker execution step completes (success or failure), via `StepOutcomeObserver` SPI.
 
-**How:** `RetrievalFeedbackEvaluator.evaluate(WorkflowExecutionCompleted event)`:
+**How:** `RetrievalFeedbackObserver.onStepOutcome(StepOutcomeEvent event)`:
 
 1. Read `experiences` from EventLog metadata (stored at dispatch time)
 2. If empty → return (no retrieval to evaluate)
@@ -341,7 +360,7 @@ The judgment's `resolutionType` is `ResolutionSelection`. The human/LLM picks a 
    - `Expired` → each experience: `RetrievalOutcome.PARTIALLY_RELEVANT`
 4. Call `cbrRetrievalTracker.feedback(feedbackEntries)` for each
 
-**Threading:** `Instance<CbrRetrievalTracker>` with `isResolvable()` guard — transparent no-op when `memory-cbr-tracking` is not on the classpath.
+**Threading:** `Instance<CbrRetrievalTracker>` with `isResolvable()` guard — transparent no-op when `memory-cbr-tracking` is not on the classpath. Observer is fired from `WorkflowExecutionCompletedHandler.fireStepOutcomeObserver()` with `isUnsatisfied()` guard — same pattern as the existing `StepOutcomeObserver`.
 
 ### 7.2 Layer 2 — CBR outcome tracking (per-case)
 
@@ -446,7 +465,7 @@ Document in `cbr-playbook-guide.md` under a new "Outcome Weighting" section.
 | 2 | RetrievedExperience extension (sourceType, documentContent, documentSteps) | S | Low | #1 |
 | 3 | CbrRetrievalService mixed retrieval mapping | M | Med | #2 |
 | 4 | CorpusSourceAdapter SPI + ResolutionIngestionService | M | Med | #1 |
-| 5 | RetrievalFeedbackEvaluator (Layer 1 + Layer 2 wiring) | M | Med | #3 |
+| 5 | RetrievalFeedbackObserver (Layer 1 via StepOutcomeObserver) + CbrRetrievalTracker.feedback() neocortex change | M | Med | #3, neocortex change |
 | 6 | JudgmentTarget candidate presentation + ResolutionSelection | L | High | #3 |
 | 7 | Selection feedback (Layer 3) | S | Med | #5, #6 |
 | 8 | Outcome weighting default-on + documentation | XS | Low | — |
@@ -461,7 +480,7 @@ Parallel work: #4 (ingestion) can proceed independently after #1. #8 can land at
 
 ### 11.1 Unit tests
 
-- `RetrievalFeedbackEvaluator` — mock `CbrRetrievalTracker`, verify feedback calls for each outcome type
+- `RetrievalFeedbackObserver` — mock `CbrRetrievalTracker`, verify feedback calls for each outcome type (Success, Declined, Failed, Expired)
 - `ResolutionIngestionService` — mock `CorpusSourceAdapter` and `CbrCaseMemoryStore`, verify store calls and error isolation
 - `CbrRetrievalService` mixed mapping — verify `ResolutionGuide` → `RetrievedExperience` with `sourceType=RESOLUTION_GUIDE`
 - `ResolutionSelection` — round-trip Jackson serialization
