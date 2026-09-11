@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1074-sx-batch
-state: active
+state: closing:promoted
 project-sha: 957af2881c9a292fa0a0f0a4bebea13fdfc14a6d
 date: 2026-09-11
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
+evidence-era: true
 ## Queue
 - [x] casehubio/engine#1074 — Issue #1074
 - [x] casehubio/engine#1065 — schema-validation-tests-dsl-doc
