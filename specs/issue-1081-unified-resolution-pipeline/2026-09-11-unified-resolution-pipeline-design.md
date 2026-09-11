@@ -115,7 +115,7 @@ public record ResolutionStep(
 }
 ```
 
-**`ResolutionGuide`** gains `List<ResolutionStep> steps` (nullable, defaults to `List.of()` in compact constructor). The `solution` text field remains for prose. Both are populated — prose for humans, steps for LLMs and the engine.
+**`ResolutionGuide`** gains `List<ResolutionStep> steps` (nullable, defaults to `List.of()` in compact constructor) and a `withSteps(List<ResolutionStep>)` copy-with-modify method (same pattern as `ResolvedCase.withFeatures()`). The `solution` text field remains for prose. Both are populated — prose for humans, steps for LLMs and the engine.
 
 Follows the same pattern as `ResolvedCase.resolutionStep` (List of plan trace steps).
 
@@ -234,12 +234,13 @@ For human-in-the-loop resolution selection, the case definition declares two bin
 
 ### 6.2 Candidate context path
 
-When `CaseContextChangedEventHandler` evaluates a judgment binding with CBR candidates:
+When `CaseContextChangedEventHandler` evaluates a judgment binding that targets a capability with a `cbr:` block:
 
-1. CBR retrieval runs (already in the dispatch path for capability bindings)
-2. Candidates are written to `_candidates.<bindingName>` in the working layer as a JSON array of `{sourceType, similarity, caseType, problem, solution, documentSteps, planSteps, confidence}`
-3. The judgment payload includes the candidates from this context path
-4. The human/LLM resolution is written to the output path specified by the binding
+1. `CaseContextChangedEventHandler.publishByTarget()` detects that the binding is a `JudgmentTarget` AND the case definition has a `CbrConfig`. This is the trigger for candidate population — judgment bindings without a `CbrConfig` on the case definition skip this path entirely.
+2. CBR retrieval runs via `CbrRetrievalService.retrieve()` (same call as the existing capability dispatch path)
+3. Results are written to `_candidates.<bindingName>` in the working layer as a JSON array of `{sourceType, similarity, caseType, problem, solution, documentSteps, planSteps, confidence}`
+4. The judgment payload includes the candidates from this context path
+5. The human/LLM resolution is written to the output path specified by the binding's `producedKeys`
 
 ### 6.3 YAML example
 
