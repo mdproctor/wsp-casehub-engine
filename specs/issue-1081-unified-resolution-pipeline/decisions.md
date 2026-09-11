@@ -108,3 +108,42 @@
 **Depends on:** D3 (HITL model)
 **Exploration:** quick
 **Status:** captured
+
+## D10: ResolutionStep placement
+
+**Choice:** In neocortex memory-api, on ResolutionGuide
+**Alternatives:**
+- Engine api on RetrievedExperience — neocortex stays unaware of steps; loses co-location with the data model
+- Shared type in engine-api — couples engine-api to neocortex via a shared dependency
+**Rationale:** Same pattern as ResolvedCase.resolutionStep (plan traces). ResolutionGuide owns its structured content. Engine maps to RetrievedExperience at retrieval time.
+**Trade-offs:** Neocortex gains a new record type. Ingestion adapters must produce ResolutionStep instances.
+**Sources:** neocortex ResolvedCase (resolutionStep field pattern)
+**Exploration:** quick
+**Depends on:** D8 (document structure)
+**Status:** captured
+
+## D11: Feedback evaluation path
+
+**Choice:** EventLog metadata correlation — extend existing completion path
+**Alternatives:**
+- Dedicated RetrievalFeedbackEvent — cleaner separation but adds event bus traffic and a new handler
+- CaseOutcomeObserver — per-case not per-step; too coarse for retrieval relevance
+**Rationale:** WorkflowExecutionCompletedHandler already stores retrieval data in EventLog metadata. Adding a feedback evaluation step that reads the stored retrieval trace, compares with worker outcome, and calls CbrRetrievalTracker.feedback() extends the existing path without new events.
+**Trade-offs:** WorkflowExecutionCompletedHandler grows slightly. Feedback evaluation is coupled to completion handling.
+**Sources:** engine CLAUDE.md (Worker Outcome Handling section), neocortex CbrRetrievalTracker SPI
+**Exploration:** quick
+**Depends on:** D4 (feedback activation)
+**Status:** captured
+
+## D12: Candidate flow to judgment
+
+**Choice:** Retrieval in binding condition — candidates written to well-known context path
+**Alternatives:**
+- Eager retrieval at case start — stale if context changes between start and dispatch
+- Retrieval as a separate worker step — adds a step to every case
+**Rationale:** CaseContextChangedEventHandler retrieves candidates when evaluating the judgment binding, writes them to _candidates.<capabilityName>. The judgment payload carries them. The capability binding's condition checks .selectedCandidate != null.
+**Trade-offs:** Retrieval runs during binding condition evaluation, which must be fast. CBR retrieval is already in this path.
+**Sources:** engine CaseContextChangedEventHandler (existing CBR retrieval in dispatch path)
+**Exploration:** quick
+**Depends on:** D3 (HITL model), D9 (selection gate model)
+**Status:** captured
