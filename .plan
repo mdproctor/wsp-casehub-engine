@@ -13,8 +13,8 @@ flyway-next-v: none
 
 ## Queue
 - [x] casehubio/engine#1074 — Issue #1074
-- [ ] casehubio/engine#1065 — schema-validation-tests-dsl-doc ← active
-- [ ] casehubio/engine#1060 — adopt-shorthand-module
+- [x] casehubio/engine#1065 — schema-validation-tests-dsl-doc
+- [ ] casehubio/engine#1060 — adopt-shorthand-module ← active
 - [ ] casehubio/engine#1045 — actorstate-capacity-override
 - [ ] casehubio/engine#1008 — reasoning-propagation-orchestrator
 - [ ] casehubio/engine#959 — reasoning-persistent-workers
