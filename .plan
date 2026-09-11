@@ -15,4 +15,4 @@ flyway-next-v: none
 - [x] casehubio/engine#960 — Issue #960
 - [x] casehubio/engine#767 — serializable-binding-conditions
 - [x] casehubio/engine#716 — caselifecycleevent-consumer-updates
-- [ ] casehubio/engine#660 — timer-sentry-periodic-evaluation ← active
+- [x] casehubio/engine#660 — timer-sentry-periodic-evaluation
