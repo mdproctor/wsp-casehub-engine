@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1081-unified-resolution-pipeline
-state: active
+state: closing:promoted
 project-sha: slot-creation
 date: 2026-09-11
 issue-repo: casehubio/engine
@@ -11,18 +11,6 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: unknown
 
+evidence-era: true
 ## Queue
-- [ ] casehubio/engine#1081 — Issue #1081 ← active
-  - [x] Batch 1: Foundation
-    - [x] Task 1: CBR naming + API types
-    - [x] Task 2: RetrievedExperience extension
-  - [x] Batch 2: Mixed Retrieval
-    - [x] Task 3: Cross-type fix + mapping
-  - [x] Batch 3: Ingestion
-    - [x] Task 4: CorpusSourceAdapter + IngestionService
-  - [ ] Batch 4: Feedback
-    - [ ] Task 5: Handler fixes + FeedbackObserver
-  - [ ] Batch 5: Candidate Presentation
-    - [ ] Task 6: JudgmentTarget enrichment
-  - [ ] Batch 6: Selection + Polish
-    - [ ] Task 7: Selection feedback + outcome weighting + docs
+- [x] casehubio/engine#1081 — Issue #1081
