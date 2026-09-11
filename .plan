@@ -1,0 +1,18 @@
+# Work Plan — issue-960-m-batch
+
+## State
+branch: issue-960-m-batch
+state: scaffolded
+project-sha: a33d1909b0373f48a41fa1a648c8aa8d3848981b
+date: 2026-09-11
+issue-repo: casehubio/engine
+covers: 960,767,716,660
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#960 — Issue #960 ← active
+- [ ] casehubio/engine#767 — serializable-binding-conditions
+- [ ] casehubio/engine#716 — caselifecycleevent-consumer-updates
+- [ ] casehubio/engine#660 — timer-sentry-periodic-evaluation
