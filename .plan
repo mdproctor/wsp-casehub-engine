@@ -16,7 +16,7 @@ flyway-next-v: none
 - [x] casehubio/engine#1065 — schema-validation-tests-dsl-doc
 - [x] casehubio/engine#1060 — adopt-shorthand-module
 - [x] casehubio/engine#1045 — actorstate-capacity-override
-- [ ] casehubio/engine#1008 — reasoning-propagation-orchestrator ← active
-- [ ] casehubio/engine#959 — reasoning-persistent-workers
+- [x] casehubio/engine#1008 — reasoning-propagation-orchestrator
+- [ ] casehubio/engine#959 — reasoning-persistent-workers ← active
 - [ ] casehubio/engine#958 — importance-weights-reasoning-domain
 - [ ] casehubio/engine#912 — casecontext-worker-api-design
