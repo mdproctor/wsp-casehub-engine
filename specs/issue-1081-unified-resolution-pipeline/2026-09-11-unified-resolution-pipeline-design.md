@@ -104,7 +104,7 @@ The unified pipeline is not a new module. It's distributed across existing engin
                                       │
                  ┌────────────────────▼────────────────────────────┐
                  │                  Feedback                       │
-                 │  L1: RetrievalFeedbackEvaluator (per-step)      │
+                 │  L1: RetrievalFeedbackObserver (per-step)        │
                  │  L2: CbrCaseRetainObserver (per-case, existing) │
                  │  L3: Selection feedback (per-judgment)          │
                  └─────────────────────────────────────────────────┘
@@ -270,14 +270,34 @@ public sealed interface CorpusChangeEvent {
 
 ## 5. CbrRetrievalService Extension
 
-`CbrRetrievalService.retrieve()` already handles multiple CBR types via `BUILT_IN_TYPES` map. The extension is in the mapping from `ScoredCbrCase` to `RetrievedExperience`:
+### 5.1 Cross-type class parameter fix
+
+`CbrRetrievalService.retrieve()` currently resolves `caseClass` from `cbrType` (defaulting to `"plan"` → `PlanCbrCase.class`) BEFORE the `crossType` check. It then passes this class to `cbrStore.retrieveSimilar(query, caseClass)`. For cross-type queries, the `Class<C>` parameter constrains the generic return type to `ScoredCbrCase<PlanCbrCase>` — a `ResolutionGuide` result cannot be in this container without either an unchecked cast in the store or a type filter that silently drops it.
+
+**Fix:** When `crossType: true`, `retrieve()` must pass `CbrCase.class` (the interface) instead of the `cbrType`-resolved class:
+
+```java
+if (config.crossType()) {
+    return retrieveInternal(definition, instance, CbrCase.class);
+}
+```
+
+This ensures the store returns all matching types and the generic container accepts any `CbrCase` subtype. The same fix applies to `retrieveForSelection()` (currently zero external callers, but the correct class parameter ensures it works when wired for candidate presentation in child issue #6).
+
+### 5.2 Result mapping
+
+The `mapScoredCase()` method currently handles `PlanCbrCase` (with plan adaptation). It must be extended to also handle `ResolutionGuide`:
 
 - `ScoredCbrCase<ResolvedCase>` → `RetrievedExperience` with `sourceType=PLAN_TRACE`, existing `planTrace` populated
 - `ScoredCbrCase<ResolutionGuide>` → `RetrievedExperience` with `sourceType=RESOLUTION_GUIDE`, `documentContent` from `solution()`, `documentSteps` mapped from `steps()` (`GuidanceStep` → `DocumentStep`)
 
-Cross-type retrieval via `CaseTypeScope.AllInDomain()` already returns mixed results. The engine just needs to map both types.
+### 5.3 Case type for stored ResolutionGuide entries
 
-`retrieveForSelection()` also returns mixed results — consumers group by `sourceType` and `caseType` for presentation.
+`ResolutionGuide.CBR_TYPE` is `"textual"` (the `cbrType` constant). Ingested documents are stored with `caseType = "textual"`. Cross-type queries via `CbrQuery.crossType()` search across all case types in the domain, so both `"plan"` and `"textual"` entries are returned in a single retrieval.
+
+### 5.4 No existing cross-type test coverage
+
+Cross-type retrieval has never been tested: no test stores both `ResolvedCase` and `ResolutionGuide` entries and retrieves them in a single query. Child issue #3 must include an integration test that: (1) stores both types in the same domain, (2) retrieves cross-type, and (3) verifies both types appear in the `List<RetrievedExperience>` result with correct `sourceType` discriminators.
 
 ## 6. Candidate Presentation via JudgmentTarget
 
@@ -537,7 +557,7 @@ Log patterns:
 | 0 | CBR naming cleanup (PlanCbrCase → ResolvedCase, TextualCbrCase → ResolutionGuide) | XS | Low | — |
 | 1 | GuidanceStep on ResolutionGuide (with features field) + DocumentStep mapping | S | Low | #0 |
 | 2 | RetrievedExperience extension (sourceType, documentContent, documentSteps) | S | Low | #1 |
-| 3 | CbrRetrievalService mixed retrieval mapping | M | Med | #2 |
+| 3 | CbrRetrievalService cross-type class parameter fix + mixed retrieval mapping + cross-type integration test | M | Med | #2 |
 | 4 | CorpusSourceAdapter SPI + ResolutionIngestionService | M | Med | #1 |
 | 5 | RetrievalFeedbackObserver (Layer 1 via StepOutcomeObserver) + handler fixes (iteration + DECLINED outcome mapping) + CbrRetrievalTracker.feedback() neocortex change | M | Med | #3, neocortex change |
 | 6 | JudgmentTarget candidate presentation + ResolutionSelection | L | High | #3 |
@@ -562,7 +582,7 @@ Parallel work: #4 (ingestion) can proceed independently after #1. #8 can land at
 ### 11.2 Integration tests
 
 - End-to-end judgment candidate flow: case starts → CBR retrieves mixed results → judgment binding fires with candidates → human selects → capability binding dispatches
-- Feedback loop: case completes → `RetrievalFeedbackEvaluator` records relevance → verify tracker received correct feedback
+- Feedback loop: case completes → `RetrievalFeedbackObserver` records relevance → verify tracker received correct feedback
 - Ingestion: adapter produces documents → `ResolutionIngestionService` stores → CBR retrieves them
 
 ### 11.3 Test infrastructure
