@@ -16,10 +16,10 @@ flyway-next-v: unknown
   - [x] Batch 1: Foundation
     - [x] Task 1: CBR naming + API types
     - [x] Task 2: RetrievedExperience extension
-  - [ ] Batch 2: Mixed Retrieval
-    - [ ] Task 3: Cross-type fix + mapping
-  - [ ] Batch 3: Ingestion
-    - [ ] Task 4: CorpusSourceAdapter + IngestionService
+  - [x] Batch 2: Mixed Retrieval
+    - [x] Task 3: Cross-type fix + mapping
+  - [x] Batch 3: Ingestion
+    - [x] Task 4: CorpusSourceAdapter + IngestionService
   - [ ] Batch 4: Feedback
     - [ ] Task 5: Handler fixes + FeedbackObserver
   - [ ] Batch 5: Candidate Presentation
