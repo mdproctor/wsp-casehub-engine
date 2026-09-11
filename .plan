@@ -19,4 +19,4 @@ flyway-next-v: none
 - [x] casehubio/engine#1008 — reasoning-propagation-orchestrator
 - [x] casehubio/engine#959 — reasoning-persistent-workers
 - [x] casehubio/engine#958 — importance-weights-reasoning-domain
-- [ ] casehubio/engine#912 — casecontext-worker-api-design ← active
+- [x] casehubio/engine#912 — casecontext-worker-api-design
