@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-960-m-batch
-state: scaffolded
+state: active
 project-sha: a33d1909b0373f48a41fa1a648c8aa8d3848981b
 date: 2026-09-11
 issue-repo: casehubio/engine
