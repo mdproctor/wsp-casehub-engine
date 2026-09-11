@@ -208,7 +208,17 @@ public record GuidanceStepInput(
 ) {}
 ```
 
-**`CorpusChangeEvent`** — record: `changeType` (ADDED, UPDATED, REMOVED), `input` (ResolutionGuideInput), `documentId` (String).
+**`CorpusChangeEvent`** — sealed interface with distinct event types:
+
+```java
+public sealed interface CorpusChangeEvent {
+    record Added(ResolutionGuideInput input) implements CorpusChangeEvent {}
+    record Updated(ResolutionGuideInput input, String documentId) implements CorpusChangeEvent {}
+    record Removed(String documentId) implements CorpusChangeEvent {}
+}
+```
+
+`Added` and `Updated` carry the full input; `Removed` carries only the `documentId` needed for removal (the adapter may no longer have the document content). This avoids forcing adapters to construct dummy `ResolutionGuideInput` records for removal events.
 
 **Relationship to neocortex corpus module:** `casehub-neocortex-corpus` provides low-level corpus storage infrastructure (`ZipCorpusStore`, `FlatCorpusStore`, change detection). `CorpusSourceAdapter` is a higher-level SPI — it adapts domain-specific knowledge sources into `ResolutionGuideInput` records. A `CorpusSourceAdapter` implementation MAY use the neocortex corpus module as its backing storage (e.g., reading runbooks from a zip-based corpus), but the engine SPI is intentionally source-agnostic: adapters can read from APIs, databases, file systems, or any other knowledge source.
 
@@ -220,14 +230,18 @@ public record GuidanceStepInput(
 
 - Injects `Instance<CorpusSourceAdapter>` — transparent no-op when no adapter discovered
 - Injects `Instance<CbrCaseMemoryStore>` — transparent no-op when no store available
-- On `@Observes StartupEvent @Priority(300)`: calls `adapter.discover(tenancyId)` for initial load, subscribes to `adapter.onChange()` for incremental updates
+- **TenancyId source:** `casehub.corpus.tenancy-ids` config property (list). At startup, iterates over configured tenancies. Single-tenant deployments configure one value; multi-tenant deployments list all. No tenancy enumeration exists at startup (no cases exist yet, `CbrCaseAdmin.discoverTenants()` throws `UnsupportedOperationException`), so explicit configuration is required.
+- On `@Observes StartupEvent @Priority(300)`: for each configured tenancyId, calls `adapter.discover(tenancyId)` for initial load, subscribes to `adapter.onChange()` for incremental updates
 - Maps `ResolutionGuideInput` → `ResolutionGuide` with features
 - Domain resolution follows the same chain as `CbrRetrievalService.resolveDomain()`
 - Error isolation per document — one failed ingestion doesn't block others
 
 **`RetrievalFeedbackObserver`** — `@ApplicationScoped`, implements `StepOutcomeObserver`. Correlates retrieval traces with worker outcomes via the existing per-step observer SPI.
 
-**Prerequisite fix:** `WorkflowExecutionCompletedHandler.fireStepOutcomeObserver()` currently uses `stepOutcomeObserver.get()` (single-dispatch). This must be changed to iterate — `for (StepOutcomeObserver obs : stepOutcomeObserver)` — matching the `CaseOutcomeObserver` pattern in `CaseStatusChangedHandler` (line 243). Without this, adding `RetrievalFeedbackObserver` alongside `NoOpStepOutcomeObserver` would cause `AmbiguousResolutionException`. This one-line fix is part of child issue #5. The `StepOutcomeObserver` javadoc already documents multi-dispatch ("discovers all beans... calls for each"), so the fix aligns implementation with contract.
+**Prerequisite fixes in `WorkflowExecutionCompletedHandler`** (child issue #5):
+
+1. **Iteration fix:** `fireStepOutcomeObserver()` currently uses `stepOutcomeObserver.get()` (single-dispatch). Must change to iterate — `for (StepOutcomeObserver obs : stepOutcomeObserver)` — matching the `CaseOutcomeObserver` pattern in `CaseStatusChangedHandler` (line 243). Without this, adding `RetrievalFeedbackObserver` alongside `NoOpStepOutcomeObserver` causes `AmbiguousResolutionException`.
+2. **DECLINED outcome fix:** `handleSemanticFailure()` (lines 510-520) currently passes `RoutingOutcome.FAILURE` for ALL semantic failures (Declined, Failed, Expired). The `WorkerOutcome.Declined` branch must pass `RoutingOutcome.DECLINED` to `fireStepOutcomeObserver()` instead of `RoutingOutcome.FAILURE`. Without this, the DECLINED-specific feedback mapping below is unreachable — the observer never sees `RoutingOutcome.DECLINED`. The `ExperienceAnalyser` already assigns distinct weights to DECLINED vs FAILURE (-0.5 vs -1.0), confirming the enum was designed for this distinction.
 
 - Injects `Instance<CbrRetrievalTracker>` — transparent no-op when tracker absent
 - Injects `EventLogRepository` — required for reading experiences from dispatch-time metadata
@@ -236,11 +250,13 @@ public record GuidanceStepInput(
 - Outcome-to-relevance mapping using actual `RoutingOutcome` values:
   - `SUCCESS` → each experience: `RetrievalOutcome.RELEVANT`
   - `DECLINED` → experiences for the declined agent: `RetrievalOutcome.NOT_RELEVANT`; others: no signal
-  - `FAILURE` → all experiences: `RetrievalOutcome.NOT_RELEVANT` (FAILURE covers both failed and expired workers; RoutingOutcome does not distinguish timeout from logic failure, so all failures are treated as NOT_RELEVANT)
+  - `FAILURE` → all experiences: `RetrievalOutcome.NOT_RELEVANT` (FAILURE covers both failed and expired workers; includes transient infrastructure failures where retrieval may have been perfectly relevant — see trade-off note below)
   - `GATE_REJECTED` → no signal (gate rejection reflects human oversight, not retrieval quality)
   - `GATE_EXPIRED` → no signal (gate timeout is not retrieval feedback)
   - `CANCELLED`, `OBSOLETE` → no signal (external cancellation and obsolescence are not retrieval feedback)
 - Calls `cbrRetrievalTracker.feedback(feedbackEntries)` for each
+
+**FAILURE → NOT_RELEVANT trade-off:** `RoutingOutcome.FAILURE` conflates logic failures (wrong approach — retrieval WAS irrelevant) with transient infrastructure failures (timeout, OOM — retrieval quality is unknown). Recording NOT_RELEVANT for transient failures creates false-negative signals. This is accepted because: (a) transient failures trigger reroutes which, on success, produce RELEVANT signals that offset the false negative; (b) the `FailureClassifier` runs AFTER the step observer fires in `handleSemanticFailure()`, so the classification is unavailable at observation time; (c) reordering the handler or duplicating classification in the observer would add complexity disproportionate to the signal quality improvement. If transient failure rates are high enough to degrade retrieval quality, a follow-up can add `FailureCategory` to `StepOutcomeEvent` and filter in the observer.
 
 **Neocortex dependency:** `CbrRetrievalTracker` (neocortex memory-api) currently has `record()` and `findTraces()` but no feedback method. This spec requires adding `feedback(String caseId, String tenancyId, List<CbrRetrievalFeedback> entries)` to `CbrRetrievalTracker` in neocortex. `CbrRetrievalFeedback` record: `(String tracedCaseId, RetrievalOutcome outcome)`. This is a neocortex-memory-api change, tracked as a dependency of child issue #5.
 
@@ -377,10 +393,10 @@ The judgment's `resolutionType` is `ResolutionSelection`. The human/LLM picks a 
 1. Query `EventLogRepository` for the most recent `WORKER_SCHEDULED` EventLog by `caseId + bindingName`
 2. Deserialize `experiences` from the EventLog metadata JSON
 3. If empty → return (no retrieval to evaluate)
-4. Map worker outcome to relevance using actual `RoutingOutcome` values:
+4. Map worker outcome to relevance using actual `RoutingOutcome` values (requires DECLINED handler fix from §4.4):
    - `SUCCESS` → each experience: `RetrievalOutcome.RELEVANT`
    - `DECLINED` → experiences for the declined agent: `RetrievalOutcome.NOT_RELEVANT`; others: no signal
-   - `FAILURE` → all experiences: `RetrievalOutcome.NOT_RELEVANT`
+   - `FAILURE` → all experiences: `RetrievalOutcome.NOT_RELEVANT` (includes transient failures — see §4.4 trade-off note)
    - `GATE_REJECTED`, `GATE_EXPIRED`, `CANCELLED`, `OBSOLETE` → no signal
 5. Call `cbrRetrievalTracker.feedback(feedbackEntries)` for each
 
@@ -430,27 +446,27 @@ CorpusSourceAdapter.discover(tenancyId)
         → ResolutionGuide(problem, solution, outcome=null, confidence=null,
                           features=input.features(), trustScore=null, producerAgentId=null)
         → guide.withSteps(input.steps())
-        → CbrCaseMemoryStore.supersedeMatching(caseType, domain, tenantId, filters, reason)
-          then CbrCaseMemoryStore.store(guide, caseType, entityId, domain, tenantId, caseId, scope)
+        → CbrCaseLifecycle.supersedeAll(List.of(deterministicCaseId), tenantId, "corpus re-ingestion")
+          then CbrCaseStore.store(guide, caseType, entityId, domain, tenantId, deterministicCaseId, scope)
 ```
 
-**Idempotent ingestion:** The deterministic `caseId` derived from `documentId` ensures that re-ingestion on application restart produces supersession of the existing entry rather than duplication. The `discover()` path uses the same `supersede + store` pattern as the `UPDATED` path in §8.2. `CbrCaseStore.store()` reads features from `guide.features()` — with the `features` field added to `ResolutionGuide` (§4.1), extracted features are persisted correctly.
+**Idempotent ingestion:** The deterministic `caseId` derived from `documentId` ensures that re-ingestion on application restart supersedes the existing entry rather than creating a duplicate. `supersedeAll(List.of(caseId), ...)` is the correct API for ID-based deduplication — it's a no-op if the caseId doesn't exist (first ingestion), and marks the old entry as superseded if it does (re-ingestion). Supersession is a soft-delete: the old entry is preserved for audit but excluded from retrieval. `CbrCaseStore.store()` reads features from `guide.features()` — with the `features` field added to `ResolutionGuide` (§4.1), extracted features are persisted correctly.
 
 ### 8.2 Change detection
 
 ```java
 if (adapter.supportsChangeDetection()) {
     adapter.onChange(event -> {
-        switch (event.changeType()) {
-            case ADDED -> ingest(event.input(), event.documentId());
-            case UPDATED -> update(event.documentId(), event.input());
-            case REMOVED -> remove(event.documentId());
+        switch (event) {
+            case CorpusChangeEvent.Added a -> ingest(a.input());
+            case CorpusChangeEvent.Updated u -> update(u.documentId(), u.input());
+            case CorpusChangeEvent.Removed r -> remove(r.documentId());
         }
     });
 }
 ```
 
-`UPDATED` uses `CbrCaseMemoryStore.supersede()` to mark the old entry and store the new one. `REMOVED` uses `CbrCaseMemoryStore.erase()`.
+`Updated` uses `CbrCaseLifecycle.supersedeAll()` to mark the old entry and `CbrCaseStore.store()` to create the new one. `Removed` uses `CbrCaseStore.erase()`.
 
 ### 8.3 Feature extraction
 
@@ -493,7 +509,7 @@ Note: `OutcomeWeightingCbrCaseMemoryStore` handles null confidence correctly —
 
 Agent workers consume resolution guidance through `RetrievedExperience.documentSteps()` and `RetrievedExperience.documentContent()`:
 
-- **Automated path (agent workers):** The `experiences` list on `AgentRoutingContext` already includes `RetrievedExperience` entries. Agent worker implementations (e.g., `claude-agent`, `langchain4j-agent`) serialize experiences into the LLM system/user prompt. When `sourceType=RESOLUTION_GUIDE`, the worker includes `documentSteps` as structured instructions and `automationHint` fields as implementation guidance. This requires no engine change — worker prompt templates already interpolate experiences.
+- **Automated path (agent workers):** The `experiences` list on `AgentRoutingContext` already includes `RetrievedExperience` entries — no new engine mechanism is needed to deliver document data to workers. However, worker implementations must be updated to consume `RESOLUTION_GUIDE` source types: current workers handle `planTrace` and `ExperiencePlanStep` fields only. When `sourceType=RESOLUTION_GUIDE`, the worker should include `documentSteps` as structured instructions and `automationHint` fields as implementation guidance in the LLM prompt. This is a worker-side change, not an engine change, and is tracked as part of child issue #6's testing scope (integration test must verify end-to-end with a worker that handles both source types).
 - **Human path:** Human analysts see `documentContent` (prose solution) in the judgment task UI. `documentSteps` are rendered as a numbered checklist.
 - **Hybrid path (LLM-as-judge):** LLM judgment workers receive the same `documentSteps` as automated workers, but the output goes through judgment resolution rather than direct execution.
 
@@ -523,7 +539,7 @@ Log patterns:
 | 2 | RetrievedExperience extension (sourceType, documentContent, documentSteps) | S | Low | #1 |
 | 3 | CbrRetrievalService mixed retrieval mapping | M | Med | #2 |
 | 4 | CorpusSourceAdapter SPI + ResolutionIngestionService | M | Med | #1 |
-| 5 | RetrievalFeedbackObserver (Layer 1 via StepOutcomeObserver) + StepOutcomeObserver iteration fix + CbrRetrievalTracker.feedback() neocortex change | M | Med | #3, neocortex change |
+| 5 | RetrievalFeedbackObserver (Layer 1 via StepOutcomeObserver) + handler fixes (iteration + DECLINED outcome mapping) + CbrRetrievalTracker.feedback() neocortex change | M | Med | #3, neocortex change |
 | 6 | JudgmentTarget candidate presentation + ResolutionSelection | L | High | #3 |
 | 7 | Selection feedback (Layer 3) | S | Med | #5, #6 |
 | 8 | Outcome weighting default-on + documentation | XS | Low | — |
