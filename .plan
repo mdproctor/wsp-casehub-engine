@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-960-m-batch
-state: active
+state: closing:promoted
 project-sha: a33d1909b0373f48a41fa1a648c8aa8d3848981b
 date: 2026-09-11
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
+evidence-era: true
 ## Queue
 - [x] casehubio/engine#960 — Issue #960
 - [x] casehubio/engine#767 — serializable-binding-conditions
