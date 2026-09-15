@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1096-record-modelid-resolution-step
-state: scaffolded
+state: closing:review
 project-sha: aa093db81f918acee9d505a60732f8b5450303f0
 date: 2026-09-15
 issue-repo: casehubio/engine
@@ -10,9 +10,7 @@ covers: 1096
 design-repo: project
 design-section-hashes: 
 flyway-next-v: none
+evidence-era: true
 
 ## Queue
-- [ ] casehubio/engine#1096 — Issue #1096 ← active
-  - [x] Batch 1: modelId
-    - [x] Task 1: Add modelId to Agent and AgentBuilder
-    - [x] Task 2: Populate modelId in CbrCaseRetainObserver
+- [x] casehubio/engine#1096 — Issue #1096
