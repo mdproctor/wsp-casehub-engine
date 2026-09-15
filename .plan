@@ -1,0 +1,15 @@
+# Work Plan — issue-1097-cbr-ensemble-retrieve-for-selection
+
+## State
+branch: issue-1097-cbr-ensemble-retrieve-for-selection
+state: scaffolded
+project-sha: 5a2a44c81770ac17c9566abda470a36a0a6f3a7c
+date: 2026-09-15
+issue-repo: casehubio/engine
+covers: 1097,1098
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1097 — Issue #1097 ← active
