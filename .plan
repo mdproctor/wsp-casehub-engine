@@ -13,3 +13,15 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1097 — Issue #1097 ← active
+  - [ ] Batch 1: Schema+Annotation
+    - [ ] Task 1: YAML schema parity
+    - [ ] Task 2: @Cbr annotation types
+    - [ ] Task 3: @Cbr deployment+recorder
+  - [ ] Batch 2: Ensemble
+    - [ ] Task 4: retrieveForSelectionWithEnsemble
+  - [ ] Batch 3: Examples
+    - [ ] Task 5: YAML example
+    - [ ] Task 6: DSL example
+    - [ ] Task 7: Annotated example
+  - [ ] Batch 4: Docs
+    - [ ] Task 8: CLAUDE.md updates
