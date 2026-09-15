@@ -17,7 +17,7 @@
 
 ## D2: Registration mechanism — WorkerScope at dispatch
 
-**Choice:** Agents register observers through `WorkerScope.registerObserver(EnvironmentObserver)` during worker execution. Engine manages lifecycle — observers are scoped to the agent's `LifecycleScope` (BINDING/COMPOUND/CASE).
+**Choice:** Agents register observers through `WorkerRuntime.registerObserver(EnvironmentObserver)` during worker execution. Engine manages lifecycle — observers are scoped to the agent's `LifecycleScope` (BINDING/COMPOUND/CASE). `WorkerRuntime` (in engine-api) is the correct interface — `WorkerScope` (in worker-api) cannot reference engine-api types due to dependency direction (engine → worker, not reverse).
 
 **Alternatives:**
 - Defer entirely to issue #1107 (Dynamic interest registration) — delays usability of observation SPI
@@ -27,10 +27,10 @@
 
 **Trade-offs:** Requires `WorkerScope` and `WorkerRuntime` API extensions. BINDING-scoped observers are destroyed after single dispatch — temporal patterns only work with COMPOUND or CASE scope.
 
-**Sources:** `ScopedWorkerRegistry.java:23`, `WorkerScope` (worker-api), `LifecycleScope` (api/model)
+**Sources:** `ScopedWorkerRegistry.java:23`, `WorkerRuntime.java:24` (engine-api), `WorkerScope` (worker-api), `LifecycleScope` (api/model)
 **Depends on:** D1 (SPI design defines what is registered)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — corrected `WorkerScope` to `WorkerRuntime`; `WorkerScope` (worker-api) cannot reference engine-api types
 
 ## D3: History buffer — Count-bounded + time-bounded sliding window
 
@@ -66,7 +66,7 @@
 
 ## D5: Pipeline integration — After binding dispatch, same serializer
 
-**Choice:** Observation evaluates AFTER `CaseContextChangedEventHandler.rules()` completes, still within the `CaseEvaluationSerializer` gate. Bindings dispatch first (existing behavior untouched), then observers evaluate. Observations are available for the next evaluation cycle's local rules (#1109).
+**Choice:** Observation evaluates AFTER `CaseContextChangedEventHandler.rules()` completes, still within the `CaseEvaluationSerializer` gate. Bindings dispatch first (existing behavior untouched), then observers evaluate. Observers must have bounded execution time (<100ms target) — the gate serializes all evaluation for a case. Observations are stored in ObservationRegistry (see D7) and available to the next evaluation cycle's local rules (#1109). LLM-backed observation (blocks #284) does NOT execute inside this gate — the engine observer detects a trigger pattern; the LLM call is dispatched as a separate worker.
 
 **Alternatives:**
 - Before binding dispatch — couples observation to the dispatch pipeline
@@ -74,9 +74,75 @@
 
 **Rationale:** Existing dispatch is untouched (additive, not replacement). Serializer gate prevents concurrent observation evaluation for the same case. Observations from cycle N inform local rules in cycle N+1 — no circular dependency.
 
-**Trade-offs:** One-cycle delay between context change and observation availability. Acceptable — observations inform strategy, not immediate dispatch.
+**Trade-offs:** One-cycle delay between context change and observation availability. Acceptable — observations inform strategy, not immediate dispatch. Slow observers degrade evaluation throughput for the entire case — timeout enforcement is the safety net (see D6).
 
-**Sources:** `CaseContextChangedEventHandler.java:185-203`, `CaseEvaluationSerializer.java:35-55`
-**Depends on:** D1 (SPI design determines evaluation contract), D4 (placement determines where handler lives)
+**Sources:** `CaseContextChangedEventHandler.java:185-203`, `CaseEvaluationSerializer.java:35-55`, issue #1104 ("Engine mechanics, blocks intelligence")
+**Depends on:** D1 (SPI design determines evaluation contract), D4 (placement determines where handler lives), D6 (thread model), D7 (materialization)
 **Exploration:** quick
+**Status:** revised — added bounded execution constraint; clarified LLM-backed observation is out of scope for serializer gate
+
+## D6: Observer thread model — Synchronous, bounded execution
+
+**Choice:** All observers execute synchronously within the evaluation cycle (inside the serializer gate per D5). Observers must have bounded execution time — target <100ms per observer. The SPI contract (D1) is a synchronous functional interface; the engine calls `observe()` and uses the returned `List<Observation>` immediately. LLM-backed observation (blocks #284) does not call LLM inside the observer — the engine observer detects a fast trigger pattern, and the LLM call is dispatched as a separate worker via normal binding dispatch.
+
+**Alternatives:**
+- Asynchronous evaluation — decouples from evaluation cycle, loses deterministic ordering guarantee, indeterminate availability of results in cycle N+1
+- Hybrid sync/async with marker interface — complexity of two execution models, interaction semantics undefined, harder to reason about
+
+**Rationale:** Engine-level observation is mechanical pattern detection — multi-key correlation, threshold crossings, temporal sequence detection. These are fast, bounded computations. The "engine mechanics, blocks intelligence" split from epic #1104 means the engine provides the detection mechanism; blocks provides the LLM intelligence that acts on detections. The observer detects; a worker dispatch handles the LLM call.
+
+**Trade-offs:** Slow observers degrade evaluation throughput. Timeout enforcement is the safety net — observers exceeding the bound are interrupted and their contribution lost for that cycle.
+
+**Sources:** `CaseEvaluationSerializer.java:23`, issue #1104 ("Engine mechanics, blocks intelligence")
+**Depends on:** D1 (SPI design), D5 (pipeline integration)
+**Exploration:** quick (surfaced by review R1-03, R1-07)
+**Status:** captured
+
+## D7: Observation materialization — ObservationRegistry, no CaseContext writes
+
+**Choice:** Observations produced by observers are stored in the `ObservationRegistry` (per-case, in-memory, in `common/internal` per D4). Observations are NOT written to `CaseContext`. Rules in cycle N+1 query the `ObservationRegistry` directly via a mechanism defined by issue #1109 (local rule evaluation). Observations decay or are replaced when the next observation cycle runs for that case.
+
+**Alternatives:**
+- Write to CaseContext working layer — creates feedback loop (write → `CaseContextChangedEvent` → re-evaluation → observe → write → ...)
+- Dedicated context layer (e.g., OBSERVATION) with handler skip — requires layer infrastructure changes, couples observation to context layer model
+- Context key prefix (`_observations.*`) with `engineSet` — still triggers `CaseContextChangedEvent` through event bus, still creates feedback loop
+
+**Rationale:** `ObservationRegistry` is already defined in D4 for per-case observation storage. Using it as the materialization target avoids feedback loops entirely — registry writes don't trigger `CaseContextChangedEvent`. Rules access observations through a clean query interface rather than through context key conventions. This cleanly separates observation data from case domain state.
+
+**Trade-offs:** Rules need a mechanism to query the `ObservationRegistry` — depends on #1109 (local rule evaluation). Until #1109 is implemented, observations are stored but not consumed by rules.
+
+**Sources:** `CaseContextChangedEventHandler.java:175-185`, `CaseContextImpl.java:46`, issue #1109, issue #1110
+**Depends on:** D1, D4, D5
+**Exploration:** quick (surfaced by review R1-05, R1-08)
+**Status:** captured
+
+## D8: Observer error isolation — Per-observer try-catch, log and skip
+
+**Choice:** Each observer evaluates inside its own try-catch block. On failure: log at WARN level, skip the observer, continue evaluating remaining observers. A failing observer loses its contribution for that cycle only — it does not block other observers or the evaluation pipeline. The observer will be re-evaluated in the next cycle.
+
+**Alternatives:**
+- Kill entire evaluation cycle on any observer failure — one bad observer blocks all binding dispatch and goal evaluation
+- Silently swallow all errors — hides observation data loss, makes debugging impossible
+
+**Rationale:** Follows the existing pattern in the evaluation pipeline where individual binding dispatches are isolated (try-catch in `evaluateAndDispatch`). Observer failure is not fatal — the observation is a best-effort contribution to the next cycle. WARN-level logging makes failures visible without propagating exceptions up the evaluation chain.
+
+**Sources:** `CaseContextChangedEventHandler.java` (evaluateAndDispatch exception handling pattern)
+**Depends on:** D5 (pipeline integration), D6 (synchronous execution)
+**Exploration:** quick (surfaced by review R1-12)
+**Status:** captured
+
+## D9: Observer cardinality — CaseDefinition maxObserversPerCase
+
+**Choice:** Maximum number of observers per case is configurable via `CaseDefinition.maxObserversPerCase`. Default: 20. Exceeding the cap logs WARN and silently drops the registration attempt. Per-binding observer count is uncapped within the per-case limit.
+
+**Alternatives:**
+- Unbounded registration — accumulation risk in swarm scenarios (#1112) with many agents registering observers
+- Hard-coded cap — not configurable for different case types with different observation needs
+- Per-agent cap — harder to enforce, doesn't address the aggregate latency problem
+
+**Rationale:** The serializer gate (D5) means every observer adds latency to the evaluation cycle. Bounding the count bounds the worst-case evaluation time (20 observers × 100ms target = 2s worst case). The cap is per-case (not per-agent) because aggregate evaluation latency is what matters. `CaseDefinition` is the natural configuration surface, consistent with existing `maxConcurrentDispatches`.
+
+**Sources:** `CaseDefinition` (`maxConcurrentDispatches` pattern), issue #1112 (swarm scenarios)
+**Depends on:** D2 (registration mechanism), D5 (pipeline integration), D6 (thread model)
+**Exploration:** quick (surfaced by review R1-14)
 **Status:** captured
