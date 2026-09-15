@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1097-cbr-ensemble-retrieve-for-selection
-state: scaffolded
+state: active
 project-sha: 5a2a44c81770ac17c9566abda470a36a0a6f3a7c
 date: 2026-09-15
 issue-repo: casehubio/engine
@@ -13,15 +13,15 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1097 — Issue #1097 ← active
-  - [ ] Batch 1: Schema+Annotation
-    - [ ] Task 1: YAML schema parity
-    - [ ] Task 2: @Cbr annotation types
-    - [ ] Task 3: @Cbr deployment+recorder
-  - [ ] Batch 2: Ensemble
-    - [ ] Task 4: retrieveForSelectionWithEnsemble
-  - [ ] Batch 3: Examples
-    - [ ] Task 5: YAML example
-    - [ ] Task 6: DSL example
-    - [ ] Task 7: Annotated example
-  - [ ] Batch 4: Docs
-    - [ ] Task 8: CLAUDE.md updates
+  - [x] Batch 1: Schema+Annotation
+    - [x] Task 1: YAML schema parity
+    - [x] Task 2: @Cbr annotation types
+    - [x] Task 3: @Cbr deployment+recorder
+  - [x] Batch 2: Ensemble
+    - [x] Task 4: retrieveForSelectionWithEnsemble
+  - [x] Batch 3: Examples
+    - [x] Task 5: YAML example
+    - [x] Task 6: DSL example
+    - [x] Task 7: Annotated example
+  - [x] Batch 4: Docs
+    - [x] Task 8: CLAUDE.md updates
