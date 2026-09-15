@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1096-record-modelid-resolution-step
-state: closing:review
+state: closing:promoted
 project-sha: aa093db81f918acee9d505a60732f8b5450303f0
 date: 2026-09-15
 issue-repo: casehubio/engine
