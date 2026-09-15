@@ -13,6 +13,6 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1096 — Issue #1096 ← active
-  - [ ] Batch 1: modelId
-    - [ ] Task 1: Add modelId to Agent and AgentBuilder
-    - [ ] Task 2: Populate modelId in CbrCaseRetainObserver
+  - [x] Batch 1: modelId
+    - [x] Task 1: Add modelId to Agent and AgentBuilder
+    - [x] Task 2: Populate modelId in CbrCaseRetainObserver
