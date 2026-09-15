@@ -259,7 +259,9 @@ Java `CaseHub` subclass with `CbrConfig.builder()`. Same triage scenario. Shows 
 
 ### Shared test infrastructure
 
-All three examples need pre-seeded CBR data. The `@QuarkusTest` in both annotated and DSL modules uses `InMemoryCbrCaseMemoryStore` (from `casehub-neocortex-memory-cbr-inmem`). Seeds 5 `ResolvedCase` instances with overlapping but divergent plan traces.
+All three examples need pre-seeded CBR data and a functioning `PlanEnsembleAnalyzer`. The `NoOpPlanEnsembleAnalyzer` (`@DefaultBean`) always picks only the highest-scoring plan and reports `inputPlanCount=1` — ensemble would always be null. The test needs an `@Alternative @Priority(1)` mock `PlanEnsembleAnalyzer` that produces actual step analysis from the seeded data, or `casehub-neocortex-memory-cbr` (the real implementation) as a test dependency if available.
+
+The `@QuarkusTest` in both annotated and DSL modules uses `InMemoryCbrCaseMemoryStore` (from `casehub-neocortex-memory-cbr-inmem`). Seeds 5 `ResolvedCase` instances with overlapping but divergent plan traces.
 
 A shared test utility class in a common test-jar is overkill for 2 modules — each module seeds its own data inline. The seeding pattern is simple enough to duplicate:
 
