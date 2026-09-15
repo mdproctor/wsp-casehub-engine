@@ -304,7 +304,7 @@ The `ObservationConfig` and `maxObserversPerCase` are resolved at registration t
 ### Observer lifecycle
 
 Observer lifecycle follows the binding's `LifecycleScope`:
-  - **BINDING** — observer destroyed after single dispatch (not useful for temporal patterns)
+  - **BINDING** — registration rejected. `DefaultWorkerRuntime.registerObserver()` checks the binding's `LifecycleScope` and throws `IllegalStateException` if BINDING. BINDING-scoped workers have no lifecycle cleanup event, so observers registered during BINDING dispatch would persist until case termination — effectively becoming CASE-scoped and consuming the per-case observer quota. Workers needing observers must declare COMPOUND or CASE scope on their binding
   - **COMPOUND** — observer lives for compound duration. Removed by `ScopedWorkerTerminationHandler` on `COMPOUND_COMPLETED` via `observationRegistry.unregisterByBinding(caseId, scopedBindingNames)`
   - **CASE** — observer lives for case duration. Removed by `CaseStatusChangedHandler` on terminal status via `observationRegistry.unregisterByCase(caseId)`
 
@@ -488,8 +488,10 @@ Construction is via static factory methods — workers call e.g. `ThresholdObser
 ## Audit
 
 New `CaseHubEventType`:
-- `OBSERVER_REGISTERED` — when an agent registers an observer. Metadata: `agentId`, `observerId`, `watchedKeys`
-- `OBSERVATION_DETECTED` — when an observer produces observations. Metadata: `agentId`, `observerId`, `patternIds`, `observationCount`
+- `OBSERVER_REGISTERED` — when an agent registers an observer. Metadata: `agentId`, `observerType`, `watchedKeys`
+- `OBSERVATION_DETECTED` — when an observer produces observations. Metadata: `agentId`, `observerType`, `patternIds`, `observationCount`
+
+Audit events use `observerType()` (not instance ID) — the evaluation loop iterates raw `EnvironmentObserver` instances and has access to `observerType()` but not to registry-internal instance IDs. Instance-level audit tracking is not needed for v1.
 
 Both are fire-and-forget EventLog writes — they do not block the evaluation pipeline.
 
@@ -510,7 +512,7 @@ No YAML declaration for individual observers — registration is runtime-only vi
 - Must NOT break existing `ContextChangeTrigger` model — observation is additive
 - Must NOT write to `CaseContext` — avoids feedback loops (D7)
 - Must NOT call LLM inside the observer — LLM observation dispatches as a separate worker (D6)
-- Observer evaluation bounded: <100ms per observer (enforced via `CompletableFuture.orTimeout()` on virtual threads — observers exceeding the bound are interrupted and their contribution is lost for that cycle), 20 observers per case max (D9)
+- Observer evaluation bounded: <100ms per observer (enforced via `CompletableFuture.orTimeout()` on virtual threads — observers exceeding the bound have their contribution discarded for that cycle; the observer's virtual thread continues running until natural completion but its result is ignored. `orTimeout` does NOT interrupt the underlying thread. Virtual threads are cheap, so the resource cost of leaked observer threads is low. True cooperative interruption would require observers to check `Thread.interrupted()`, which cannot be enforced at the SPI level). 20 observers per case max (D9)
 - `EnvironmentObserver` lives in `engine-api` — no dependency on `engine-common` or `runtime` types
 
 ## Dependencies
