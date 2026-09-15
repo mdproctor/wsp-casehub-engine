@@ -1,0 +1,15 @@
+# Work Plan — issue-1051-cbr-ensemble-consensus
+
+## State
+branch: issue-1051-cbr-ensemble-consensus
+state: scaffolded
+project-sha: 4813195225588dea25f8a154c1d778a6f7139ba2
+date: 2026-09-15
+issue-repo: casehubio/engine
+covers: 1051
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1051 — Issue #1051 ← active
