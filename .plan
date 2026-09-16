@@ -1,0 +1,15 @@
+# Work Plan — issue-1094-fix-casememoryobserver
+
+## State
+branch: issue-1094-fix-casememoryobserver
+state: scaffolded
+project-sha: a060b749e06ca4f306fee8fc6767def7837e23e7
+date: 2026-09-16
+issue-repo: casehubio/engine
+covers: 1094
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1094 — Issue #1094 ← active
