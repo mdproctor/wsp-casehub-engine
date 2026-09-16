@@ -146,3 +146,20 @@
 **Depends on:** D2 (registration mechanism), D5 (pipeline integration), D6 (thread model)
 **Exploration:** quick (surfaced by review R1-14)
 **Status:** captured
+
+## D10: Signal storage — Dedicated SignalRegistry, not CaseContext
+
+**Choice:** Signals live in a dedicated `SignalRegistry` (`engine-common`, `@ApplicationScoped`, `Resettable`), following the `ObservationRegistry` pattern. Not in CaseContext working layer. Workers read/write via `WorkerRuntime`. Observers perceive signals through an injected signal view. No CaseContext writes means no feedback loops.
+
+**Alternatives:**
+- CaseContext working layer at `_signals.<name>` — simpler, but `engineSet()` doesn't fire change listeners so observations can't detect signal changes via standard `changedKeys`. Also risks feedback loops without careful version-suppression discipline.
+- Dedicated `SIGNAL` context layer — clean separation, but requires layer infrastructure changes rejected in D7
+
+**Rationale:** #1105 Decision D7 established that coordination state should not live in the domain data layer. Signals are coordination primitives consumed by observers and local rules, not domain facts consumed by business triggers. Registry-based storage also enables lazy decay computation at read time without periodic CaseContext rewrites.
+
+**Trade-offs:** Signals are not automatically visible to JQ trigger conditions (which evaluate against CaseContext). Agents that want to trigger bindings based on signal state must use the observation pipeline (#1109 local rules). REST visibility requires explicit snapshot serialization.
+
+**Sources:** `ObservationRegistry.java:27`, `WritableLayerImpl.java:672` (engineSet), `CaseContextChangedEventHandler.java:1168` (observation pipeline), D7 (observation materialization), engine#1105, engine#1106
+**Depends on:** D7 (materialization pattern)
+**Exploration:** quick
+**Status:** captured
