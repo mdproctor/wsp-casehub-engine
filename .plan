@@ -14,6 +14,13 @@ date: 2026-09-15
 - [x] casehubio/engine#1107 — feat: Dynamic interest registration — agents register observation interests at runtime
 - [x] casehubio/engine#1108 — feat: Agent discovery & neighbor awareness — dynamic topology
 - [ ] casehubio/engine#1109 — feat: Local rule evaluation — per-agent decision rules ← active
+  - [ ] Batch 1: Foundation types
+    - [ ] Task 1: Foundation types + RuleSpace + RuleConfig
+  - [ ] Batch 2: Registry + Wiring
+    - [ ] Task 2: RuleRegistry
+    - [ ] Task 3: DefaultRuleSpace + WorkerRuntime wiring
+  - [ ] Batch 3: Pipeline + Lifecycle
+    - [ ] Task 4: Pipeline integration + lifecycle cleanup + CLAUDE.md
 - [ ] casehubio/engine#1110 — feat: Convergence detection & termination — emergent completion, runaway & collusion prevention
 - [ ] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment
 - [ ] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence
