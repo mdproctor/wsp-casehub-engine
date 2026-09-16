@@ -11,45 +11,28 @@ Self-organizing agent coordination patterns for CaseHub — from rule-based stig
 
 ## What Happened This Session
 
-Completed #1107 (Dynamic interest registration) and designed + planned #1108 (Agent discovery & neighbor awareness).
+Executed the #1108 implementation plan (4 tasks, 2 batches). All delivered and tested.
 
-### #1107 — Dynamic Interest Registration (DONE)
+### #1108 — Agent Discovery & Neighbor Awareness (DONE)
 
-Full WorkerRuntime restructure into domain-organized coordination facets. Pre-release clean break — flat methods removed, not deprecated.
+Third WorkerRuntime coordination facet — pure read-only query facade over existing engine registries. No new storage. Proximity is emergent from shared activity.
 
 Key deliverables:
-- **WorkerRuntime faceting:** `signals()` returns `SignalSpace`, `interests()` returns `InterestSpace`. Flat methods (`depositSignal`, `perceiveSignals`, `registerObserver`) removed entirely.
-- **InterestDeclaration sealed hierarchy:** 5 permits — `KeyThreshold`, `KeyCorrelation`, `TemporalSequence`, `SignalThreshold`, `JqInterest`. Each maps 1:1 to a classical observer. `JqInterest` gated by `ObservationConfig.allowJqInterests` (default true) for compliance.
-- **InterestRegistration:** Immutable handle with engine-generated ID. Deregister by ID.
-- **InterestLandscape:** Anonymous aggregate view (keyObserverCounts, signalObserverCounts, interestTypeCounts, totalObserverCount). Available on both `InterestSpace.landscape()` and `ObservationContext.interestLandscape()` (8th field).
-- **DefaultSignalSpace** extracted from DefaultWorkerRuntime. **DefaultInterestSpace** creates observers from declarations.
-- **ObservationRegistry extensions:** `registerObserver()` returns String instanceId (was boolean). `deregisterByInstanceId()`. `computeLandscape()`.
-- **ObservationConfig** gains 4th field `allowJqInterests`. YAML: `allowJqInterests:` under `observationConfig:`.
-- **Audit event types:** `INTEREST_REGISTERED`, `INTEREST_DEREGISTERED` (publishing deferred with PHEROMONE events).
+- **Neighbor record** (`api/spi/observation/`) — `(agentId, capabilities, currentStatus, bindingName, relations)`. Full identity exposed for coordination.
+- **NeighborRelation enum** — `COACTIVE`, `SHARED_INTEREST`, `SHARED_SIGNAL`, `COMPLEMENTARY`.
+- **NeighborSpace interface** (`api/engine/`) — 4 named query methods: `active()` (PlanItemStore), `withSharedInterests()` (ObservationRegistry key overlap), `withSharedSignals()` (SignalRegistry source overlap), `complementary()` (producedKeys vs watchedKeys).
+- **Signal source tracking** — `Signal` gains `Set<String> sources` (9th field). `SignalRegistry.deposit()` merges sources on reinforcement. `getAllSignals()` added. Backward-compatible 8-arg constructor.
+- **DefaultNeighborSpace** (`runtime-core/internal/observation/`) — all 4 query methods implemented. Self-exclusion on all methods.
+- **WorkerRuntime.neighbors()** — third facet accessor, default `NOOP`.
+- **WorkerRuntimeFactory** — gains `PlanItemStore` injection, creates `DefaultNeighborSpace` per invocation. Both Quarkus (`RuntimeBeans`) and Spring (`RuntimeManualConfig`) wiring updated.
 
-5 tasks, 2 batches, 99 tests passing across api/common-core/runtime-core.
+4 commits, 18 files changed, 29 new tests across api/common-core/runtime-core — all green.
 
-### #1108 — Agent Discovery & Neighbor Awareness (DESIGNED + PLANNED)
+## Queue (7 remaining)
 
-Design spec and implementation plan written. Not yet implemented.
+Active: #1109 — Local rule evaluation — per-agent decision rules
 
-Architecture: `NeighborSpace` is a pure read-only query facade over existing engine registries. No new storage. Proximity is emergent from shared activity.
-
-Key design decisions (D32-D36):
-- **NeighborSpace facet** — third WorkerRuntime facet. Four named query methods: `active()`, `withSharedInterests()`, `withSharedSignals()`, `complementary()`.
-- **Neighbor record** — agentId + capabilities + status + bindingName + relations. Full identity exposed.
-- **NeighborRelation enum** — COACTIVE, SHARED_INTEREST, SHARED_SIGNAL, COMPLEMENTARY.
-- **Signal source tracking** — `Signal` gains `Set<String> sources` for multi-depositor tracking.
-- **DefaultNeighborSpace** queries PlanItemStore, ObservationRegistry, SignalRegistry, CaseDefinition.
-
-Implementation plan: 4 tasks in 2 batches. Ready for execution.
-
-## Queue (8 remaining)
-
-Active: #1108 — Agent discovery & neighbor awareness
-
-Batch 1 remaining: #1108 (discovery)
-Batches 2-6: #1109-#1115 unchanged from initial plan — see `.plan`.
+Remaining: #1109-#1115. No design spec or implementation plan exists for #1109 yet — next session starts with brainstorming.
 
 ## Repos in Slot
 
@@ -77,6 +60,6 @@ Batches 2-6: #1109-#1115 unchanged from initial plan — see `.plan`.
 
 ## Next Session
 
-1. Execute #1108 implementation plan (4 tasks, 2 batches)
-2. Advance queue to #1109 (Local rule evaluation)
-3. Continue through the epic
+1. Brainstorm + design #1109 (Local rule evaluation)
+2. Write implementation plan
+3. Execute and advance queue
