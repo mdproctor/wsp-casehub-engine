@@ -11,28 +11,31 @@ Self-organizing agent coordination patterns for CaseHub — from rule-based stig
 
 ## What Happened This Session
 
-Executed the #1108 implementation plan (4 tasks, 2 batches). All delivered and tested.
+Completed #1109 (Local rule evaluation) — full design→implement→close cycle. Brainstormed from first principles, wrote 8 design decisions (D37-D44), design spec, implementation plan (3 batches, 4 tasks), executed all tasks with TDD, 29 new tests all green.
 
-### #1108 — Agent Discovery & Neighbor Awareness (DONE)
+### #1109 — Local Rule Evaluation (DONE)
 
-Third WorkerRuntime coordination facet — pure read-only query facade over existing engine registries. No new storage. Proximity is emergent from shared activity.
+Fourth WorkerRuntime coordination facet — per-agent condition→action rules that turn observation into autonomous action. Closes the stigmergy perceive→decide→act loop.
 
 Key deliverables:
-- **Neighbor record** (`api/spi/observation/`) — `(agentId, capabilities, currentStatus, bindingName, relations)`. Full identity exposed for coordination.
-- **NeighborRelation enum** — `COACTIVE`, `SHARED_INTEREST`, `SHARED_SIGNAL`, `COMPLEMENTARY`.
-- **NeighborSpace interface** (`api/engine/`) — 4 named query methods: `active()` (PlanItemStore), `withSharedInterests()` (ObservationRegistry key overlap), `withSharedSignals()` (SignalRegistry source overlap), `complementary()` (producedKeys vs watchedKeys).
-- **Signal source tracking** — `Signal` gains `Set<String> sources` (9th field). `SignalRegistry.deposit()` merges sources on reinforcement. `getAllSignals()` added. Backward-compatible 8-arg constructor.
-- **DefaultNeighborSpace** (`runtime-core/internal/observation/`) — all 4 query methods implemented. Self-exclusion on all methods.
-- **WorkerRuntime.neighbors()** — third facet accessor, default `NOOP`.
-- **WorkerRuntimeFactory** — gains `PlanItemStore` injection, creates `DefaultNeighborSpace` per invocation. Both Quarkus (`RuntimeBeans`) and Spring (`RuntimeManualConfig`) wiring updated.
+- **Foundation types** (`api/spi/observation/`) — `LocalRule`, `RuleAction` (sealed: DepositSignal, RegisterInterest, DeregisterInterest, WriteContext), `RuleCondition` (sealed: ExpressionCondition, PredicateCondition), `RuleContext`, `RuleFiring`, `RuleRegistration`, `RuleConfig`
+- **RuleSpace interface** (`api/engine/`) — 4th WorkerRuntime facet: `register()`, `deregister()`, `mine()`, `lastFired()`
+- **RuleRegistry** (`common-core/internal/observation/`) — per-case per-agent rule storage with deduplication, maxPerCase cap, per-cycle firing replacement. `@ApplicationScoped`, `Resettable`.
+- **DefaultRuleSpace** (`runtime-core/internal/observation/`) — delegates to RuleRegistry with case/agent/binding scoping
+- **LocalRuleEvaluator** (`runtime-core/internal/observation/`) — per-agent all-fire evaluation with priority ordering, maxActionsPerCycle enforcement
+- **Pipeline integration** — `localRules()` runs after `observations()` in `CaseContextChangedEventHandler`. Batched WriteContext actions with single CONTEXT_CHANGED.
+- **Lifecycle cleanup** — CaseStatusChangedHandler (evictByCase), ScopedWorkerTerminationHandler (unregisterByBinding)
+- **WorkerRuntime wiring** — DefaultWorkerRuntime 14-arg constructor, WorkerRuntimeFactory creates DefaultRuleSpace per invocation with resolved RuleConfig
 
-4 commits, 18 files changed, 29 new tests across api/common-core/runtime-core — all green.
+Design note: interim design, expected to be revisited when Drools vol2 integration provides a more sophisticated rule evaluation engine. Action model supports coordination-only actions (best practice) and CaseContext writes (for bridging coordination state to domain state when needed).
 
-## Queue (7 remaining)
+5 commits, 18 new files, 29 new tests across api/common-core/runtime-core — all green.
 
-Active: #1109 — Local rule evaluation — per-agent decision rules
+## Queue (6 remaining)
 
-Remaining: #1109-#1115. No design spec or implementation plan exists for #1109 yet — next session starts with brainstorming.
+Active: #1110 — Convergence detection & termination — emergent completion, runaway & collusion prevention
+
+Remaining: #1110-#1115. No design spec or implementation plan exists for #1110 yet — next session starts with brainstorming.
 
 ## Repos in Slot
 
@@ -51,15 +54,17 @@ Remaining: #1109-#1115. No design spec or implementation plan exists for #1109 y
 | Design spec (#1106) | `wsp/specs/issue-1104-hive-mind/2026-09-16-signal-pheromone-model-design.md` |
 | Design spec (#1107) | `wsp/specs/issue-1104-hive-mind/2026-09-16-dynamic-interest-registration-design.md` |
 | Design spec (#1108) | `wsp/specs/issue-1104-hive-mind/2026-09-16-agent-discovery-neighbor-awareness-design.md` |
+| Design spec (#1109) | `wsp/specs/issue-1104-hive-mind/2026-09-16-local-rule-evaluation-design.md` |
 | Decisions | `wsp/specs/issue-1104-hive-mind/decisions.md` |
 | Implementation plan (#1107) | `wsp/plans/2026-09-16-dynamic-interest-registration.md` |
 | Implementation plan (#1108) | `wsp/plans/2026-09-16-agent-discovery-neighbor-awareness.md` |
+| Implementation plan (#1109) | `wsp/plans/2026-09-16-local-rule-evaluation.md` |
 | Design journal | `wsp/design/JOURNAL.md` |
 | Diary entry | `wsp/blog/2026-09-16-mdp01-ants-dont-need-a-dispatcher.md` |
 | Queue | `wsp/.plan` |
 
 ## Next Session
 
-1. Brainstorm + design #1109 (Local rule evaluation)
+1. Brainstorm + design #1110 (Convergence detection & termination)
 2. Write implementation plan
 3. Execute and advance queue
