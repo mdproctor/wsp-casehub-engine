@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1090-flaky-goal-completion-test
-state: scaffolded
+state: active
 project-sha: 93ee2152d7ccb5927d2550b97f43f2ca058eafef
 date: 2026-09-16
 issue-repo: casehubio/engine
