@@ -10,15 +10,8 @@ date: 2026-09-15
 
 ## Queue
 - [x] casehubio/engine#1105 — feat: Environment observation SPI — full-context pattern detection beyond static triggers
-- [ ] casehubio/engine#1106 — feat: Signal/pheromone model — temporal signals with decay & reinforcement in CaseContext ← active
-  - [x] Batch 1: Foundation
-    - [x] Task 1: Foundation types
-    - [x] Task 2: SignalRegistry
-  - [x] Batch 2: Integration
-    - [x] Task 3: CaseDefinition + YAML + EventTypes
-    - [x] Task 4: WorkerRuntime signal methods
-    - [x] Task 5: Pipeline integration + observer
-- [ ] casehubio/engine#1107 — feat: Dynamic interest registration — agents register observation interests at runtime
+- [x] casehubio/engine#1106 — feat: Signal/pheromone model — temporal signals with decay & reinforcement in CaseContext
+- [ ] casehubio/engine#1107 — feat: Dynamic interest registration — agents register observation interests at runtime ← active
 - [ ] casehubio/engine#1108 — feat: Agent discovery & neighbor awareness — dynamic topology
 - [ ] casehubio/engine#1109 — feat: Local rule evaluation — per-agent decision rules
 - [ ] casehubio/engine#1110 — feat: Convergence detection & termination — emergent completion, runaway & collusion prevention
@@ -27,6 +20,3 @@ date: 2026-09-15
 - [ ] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
 - [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown
 - [ ] casehubio/engine#1115 — feat: Continuous evolution loop — self-directed growth with quality gates
-
-## Deferred
-- [ ] EventLog publishing for PHEROMONE_DEPOSITED/EXPIRED (S / Med) [] — DefaultWorkerRuntime lacks EventLogRepository injection — requires plumbing SignalDepositedEvent through event bus like existing OBSERVER_REGISTERED pattern
