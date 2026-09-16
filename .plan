@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1090-flaky-goal-completion-test
-state: active
+state: closing:promoted
 project-sha: 93ee2152d7ccb5927d2550b97f43f2ca058eafef
 date: 2026-09-16
 issue-repo: casehubio/engine
@@ -11,5 +11,6 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
+evidence-era: true
 ## Queue
-- [ ] casehubio/engine#1090 — Issue #1090 ← active
+- [x] casehubio/engine#1090 — Issue #1090
