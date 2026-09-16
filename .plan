@@ -11,6 +11,13 @@ date: 2026-09-15
 ## Queue
 - [x] casehubio/engine#1105 — feat: Environment observation SPI — full-context pattern detection beyond static triggers
 - [ ] casehubio/engine#1106 — feat: Signal/pheromone model — temporal signals with decay & reinforcement in CaseContext ← active
+  - [ ] Batch 1: Foundation
+    - [ ] Task 1: Foundation types
+    - [ ] Task 2: SignalRegistry
+  - [ ] Batch 2: Integration
+    - [ ] Task 3: CaseDefinition + YAML + EventTypes
+    - [ ] Task 4: WorkerRuntime signal methods
+    - [ ] Task 5: Pipeline integration + observer
 - [ ] casehubio/engine#1107 — feat: Dynamic interest registration — agents register observation interests at runtime
 - [ ] casehubio/engine#1108 — feat: Agent discovery & neighbor awareness — dynamic topology
 - [ ] casehubio/engine#1109 — feat: Local rule evaluation — per-agent decision rules
