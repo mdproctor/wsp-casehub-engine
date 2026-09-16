@@ -1,0 +1,15 @@
+# Work Plan — issue-1090-flaky-goal-completion-test
+
+## State
+branch: issue-1090-flaky-goal-completion-test
+state: scaffolded
+project-sha: 93ee2152d7ccb5927d2550b97f43f2ca058eafef
+date: 2026-09-16
+issue-repo: casehubio/engine
+covers: 1090
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1090 — Issue #1090 ← active
