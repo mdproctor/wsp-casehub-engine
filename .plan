@@ -20,3 +20,6 @@ date: 2026-09-15
 - [ ] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
 - [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown
 - [ ] casehubio/engine#1115 — feat: Continuous evolution loop — self-directed growth with quality gates
+
+## Deferred
+- [ ] RAS bridge for cross-case pheromone signals (#1120) (S / Med) [] — Depends on EventLog publishing wiring (deferred from #1106). Relevant when swarm issues #1112-1113 are reached.
