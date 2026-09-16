@@ -10,15 +10,15 @@ date: 2026-09-15
 
 ## Queue
 - [ ] casehubio/engine#1105 — feat: Environment observation SPI — full-context pattern detection beyond static triggers ← active
-  - [ ] Batch 1: Foundation
-    - [ ] Task 1: SPI types in engine-api
-    - [ ] Task 2: ObservationRegistry and ContextHistoryBuffer
-  - [ ] Batch 2: Integration
-    - [ ] Task 3: CaseDefinition observationConfig + YAML + events
-    - [ ] Task 4: WorkerRuntime.registerObserver
-    - [ ] Task 5: Pipeline integration + lifecycle cleanup
-  - [ ] Batch 3: Observers
-    - [ ] Task 6: Classical observer implementations
+  - [x] Batch 1: Foundation
+    - [x] Task 1: SPI types in engine-api
+    - [x] Task 2: ObservationRegistry and ContextHistoryBuffer
+  - [x] Batch 2: Integration
+    - [x] Task 3: CaseDefinition observationConfig + YAML + events
+    - [x] Task 4: WorkerRuntime.registerObserver
+    - [x] Task 5: Pipeline integration + lifecycle cleanup
+  - [x] Batch 3: Observers
+    - [x] Task 6: Classical observer implementations
 - [ ] casehubio/engine#1106 — feat: Signal/pheromone model — temporal signals with decay & reinforcement in CaseContext
 - [ ] casehubio/engine#1107 — feat: Dynamic interest registration — agents register observation interests at runtime
 - [ ] casehubio/engine#1108 — feat: Agent discovery & neighbor awareness — dynamic topology
