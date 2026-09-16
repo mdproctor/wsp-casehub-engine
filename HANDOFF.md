@@ -11,17 +11,19 @@ Self-organizing agent coordination patterns for CaseHub — from rule-based stig
 
 ## What Happened This Session
 
-Designed and implemented #1105 (Environment Observation SPI) — the perception layer for stigmergic coordination. Full cycle: brainstorming (9 decisions, standard review), design spec (standard review, 2 rounds), implementation plan (6 tasks, 3 batches), execution (all tasks complete, 50 tests passing).
+Designed and implemented #1106 (Signal/pheromone model) — the temporal signal model for stigmergic coordination. Full cycle: brainstorming (9 decisions D10-D18, all quick picks), design spec (light review, 10 findings incorporated), implementation plan (5 tasks, 2 batches), execution (all tasks complete, 42 tests passing).
 
-Key design choices: observation is a separate perception layer orthogonal to dispatch; per-agent registration via WorkerRuntime; reactive evaluation after rules()/goals() in the serializer gate; BINDING-scope registration rejected (no cleanup event); observations stored in-memory, not in CaseContext (avoids feedback loops); neocortex memory integration deferred.
+Key design choices: signals live in a dedicated `SignalRegistry` (not CaseContext — avoids feedback loops per #1105 D7); exponential decay computed lazily at read time (`effectiveStrength = strength * e^(-λ * elapsed)`); name-keyed signals with max-reinforcement; `WorkerRuntime.depositSignal()`/`perceiveSignals()` as the worker API; `ObservationContext.signals()` for observer perception; signal expiry detection runs before observer-count guard (R1-04 fix); event types named `PHEROMONE_*` to avoid collision with existing `SIGNAL_*` types (R1-08).
 
-Queue advanced to #1106 (Signal/pheromone model with decay & reinforcement).
+Deferred: EventLog publishing for `PHEROMONE_DEPOSITED`/`PHEROMONE_EXPIRED` (needs event bus plumbing into `DefaultWorkerRuntime`).
 
-## Queue (10 remaining, 6 batches)
+Queue advanced to #1107 (Dynamic interest registration).
 
-Active: #1106 — Signal/pheromone model
+## Queue (9 remaining)
 
-Batch 1 remaining: #1106 (signals), #1108 (agent discovery)
+Active: #1107 — Dynamic interest registration
+
+Batch 1 remaining: #1107 (interests), #1108 (agent discovery)
 Batches 2-6: unchanged from initial plan — see `.plan`.
 
 ## Repos in Slot
@@ -37,13 +39,18 @@ Batches 2-6: unchanged from initial plan — see `.plan`.
 
 | Artifact | Path |
 |----------|------|
-| Design spec | `wsp/specs/issue-1104-hive-mind/2026-09-16-environment-observation-spi-design.md` |
+| Design spec (#1105) | `wsp/specs/issue-1104-hive-mind/2026-09-16-environment-observation-spi-design.md` |
+| Design spec (#1106) | `wsp/specs/issue-1104-hive-mind/2026-09-16-signal-pheromone-model-design.md` |
 | Decisions | `wsp/specs/issue-1104-hive-mind/decisions.md` |
-| Implementation plan | `wsp/plans/2026-09-16-environment-observation-spi.md` |
+| Implementation plan (#1106) | `wsp/plans/2026-09-16-signal-pheromone-model.md` |
 | Design journal | `wsp/design/JOURNAL.md` |
 | Diary entry | `wsp/blog/2026-09-16-mdp01-ants-dont-need-a-dispatcher.md` |
 | Queue | `wsp/.plan` |
 
+## Open Question
+
+Whether the signal model should live in a separate module (e.g. `casehub-engine-ras`) rather than engine-api/common-core. Current placement follows the `ObservationRegistry` precedent — foundation coordination primitives in the core modules. To be discussed.
+
 ## Research Foundation
 
-*Unchanged — see git show HEAD~9:HANDOFF.md §Research Foundation*
+*Unchanged — see git show HEAD~15:HANDOFF.md §Research Foundation*
