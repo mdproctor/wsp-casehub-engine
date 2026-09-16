@@ -733,3 +733,232 @@
 **Depends on:** D39-D43
 **Exploration:** quick
 **Status:** captured
+
+## D45: Pipeline integration — convergence detection as 5th phase
+
+**Choice:** Add `convergenceDetection()` as a 5th phase in `CaseContextChangedEventHandler.evaluateAndDispatch()`, running after `localRules()`. Order: `rules()` → `goals()` → `observations()` → `localRules()` → `convergenceDetection()`. The phase has access to all coordination state from the current cycle: activity metrics, signal state, observation results, plan item progress. Runs inside the `CaseEvaluationSerializer` gate — serialized per case, consistent with all other phases.
+
+**Alternatives:**
+- Inside `observations()` as engine-registered EnvironmentObservers — conflates agent perception with system-level monitoring. Observations are per-agent; convergence is per-case.
+- Separate event-driven path outside the serializer gate — loses per-cycle consistency guarantee. Convergence detection that races with evaluation can produce false positives.
+
+**Rationale:** Convergence detection is a system-level concern that observes the *aggregate* behavior of all agents and coordination state. It needs a complete picture of the current cycle — signal deposits, rule firings, context mutations, plan item progress — before making a decision. Running last in the pipeline ensures this. The phase fires synthetic GOAL_REACHED events or BUDGET_EXHAUSTED events, which integrate with existing handlers without a new termination path.
+
+**Trade-offs:** Adds latency to the evaluation cycle. Bounded — convergence detection is O(M) where M = number of tracked metrics (small, constant). No LLM calls, no external I/O.
+
+**Sources:** `CaseContextChangedEventHandler.java:246-257` (evaluateAndDispatch), `CaseEvaluationSerializer.java:35` (per-case gate), D5 (pipeline integration pattern), D42 (localRules as 4th phase)
+**Exploration:** quick
+**Status:** captured
+
+## D46: ActivityTracker — per-case cumulative metrics with sliding window rates
+
+**Choice:** New `ActivityTracker` (`common-core`, `@ApplicationScoped`, `Resettable`) tracks per-case cumulative counts and sliding-window rates for four core metrics: `totalDispatches` (worker schedule events), `totalSignalDeposits`, `totalContextMutations` (context keys changed per cycle), `totalEvaluationCycles`. Each metric also has a sliding-window rate computed from event timestamps in a bounded circular buffer. Window size configurable via `ConvergenceConfig` on `CaseDefinition` (default 60 seconds). Storage: `ConcurrentHashMap<UUID, CaseActivityState>` where `CaseActivityState` holds four `AtomicLong` counters and four `SlidingWindowCounter` instances.
+
+**Alternatives:**
+- Cumulative counts only (no rates) — sufficient for budget enforcement but insufficient for convergence rate detection. Rates are needed to detect "activity has slowed down."
+- Exponential moving average — O(1) memory but alpha tuning is non-intuitive and EMA reacts slowly to sudden changes. Sliding window is more precise for bursty swarm patterns.
+- Per-cycle delta counting — simpler but couples rate to evaluation frequency. Wall-clock sliding window is more stable across varying evaluation rates.
+
+**Rationale:** Four metrics cover the four resource dimensions where swarm pathology manifests: dispatches (agent thrashing), signals (coordination storms), context mutations (state thrashing), evaluations (evaluation re-entrant loops). Sliding-window rates give precise activity trends for convergence detection. Cumulative totals give hard budget enforcement. `SlidingWindowCounter` is a bounded circular buffer of timestamps — `record(Instant)` appends, `rate(windowDuration, now)` counts entries within the window and returns count/windowSeconds. Memory: O(maxWindowEntries) per metric per case, capped at e.g. 1000 entries. Eviction on case termination via `CaseStatusChangedHandler`, same pattern as all other per-case registries.
+
+**Trade-offs:** Four sliding windows per case × 1000 entries each = 4000 timestamps per case. Bounded and manageable. No persistence — lost on restart (consistent with D29, all coordination state is in-memory).
+
+**Sources:** `QuiescenceTracker.java` (per-case atomic state pattern), `SignalRegistry.java` (per-case ConcurrentHashMap pattern), `Resettable` interface, D29 (in-memory only)
+**Depends on:** D45 (pipeline integration — convergence phase reads rates)
+**Exploration:** quick
+**Status:** captured
+
+## D47: Instrumentation points — where metrics are recorded
+
+**Choice:** Each metric is recorded at its natural event source, inside the existing handlers:
+- `totalDispatches` — incremented in `CaseContextChangedEventHandler` when a `WorkerScheduleEvent` is published (inside `publishWorkerSchedule()`, after successful dispatch)
+- `totalSignalDeposits` — incremented in `CaseContextChangedEventHandler.observations()` when signal expiry detection runs (after deposits from `localRules()` phase), AND in `DefaultSignalSpace.deposit()` for worker-initiated deposits
+- `totalContextMutations` — incremented in `CaseContextChangedEventHandler` at cycle start, counting `event.changedKeys().size()` (or a count of keys changed in the context diff)
+- `totalEvaluationCycles` — incremented at the top of `evaluateAndDispatch()` (one per serialized evaluation)
+
+All increments are fire-and-forget — no return values, no blocking. `ActivityTracker` is injected into `CaseContextChangedEventHandler` (for evaluations, dispatches, mutations) and `DefaultSignalSpace` (for signal deposits via WorkerRuntime).
+
+**Alternatives:**
+- EventLog-based counting (query EventLog for WORKER_SCHEDULED count) — accurate but O(N) query on each evaluation cycle. Too expensive for a per-cycle check.
+- CDI event observers on existing events — decouples instrumentation from handlers but adds async overhead and loses per-cycle consistency.
+
+**Rationale:** Direct instrumentation at the event source is the most accurate and lowest-overhead approach. Each handler already knows what it's doing — adding an `activityTracker.recordDispatch(caseId)` call is a single-line addition. The tracker's sliding window handles timing; the handler just signals "this happened."
+
+**Trade-offs:** Couples ActivityTracker to CaseContextChangedEventHandler and DefaultSignalSpace. Acceptable — these are the canonical event sources for these metrics.
+
+**Sources:** `CaseContextChangedEventHandler.java:publishWorkerSchedule()`, `CaseContextChangedEventHandler.java:evaluateAndDispatch()`, `DefaultSignalSpace.java:deposit()`
+**Depends on:** D46 (ActivityTracker defines what is tracked)
+**Exploration:** quick
+**Status:** captured
+
+## D48: Budget enforcement — hard gate with case fault
+
+**Choice:** Budget enforcement is a hard gate checked at two points: (1) at the top of `evaluateAndDispatch()` for evaluation cycle budget, and (2) inside dispatch/deposit operations for their respective budgets. When any cumulative count exceeds its configured budget cap (`ConvergenceConfig.maxDispatches`, `maxSignalDeposits`, `maxContextMutations`, `maxEvaluationCycles`), the engine: (a) fires a `BUDGET_EXHAUSTED` CaseHubEventType with metadata identifying which budget was exceeded, (b) dispatches `CaseStatusChanged(FAULTED)` with reason "Budget exhausted: <metric>". Budget caps are nullable on `ConvergenceConfig` — null means no limit (backward compatible, no enforcement for cases without convergence config).
+
+**Alternatives:**
+- Advisory monitoring + alert — doesn't prevent runaway. The whole point of budget caps is to be a fail-safe.
+- Soft cap with escalation (warn at 80%, fault at 100%) — adds configuration complexity. Warning can be implemented separately as a convergence observation without coupling to the enforcement mechanism.
+
+**Rationale:** Hard gate prevents unbounded resource consumption, which is the #1 production failure mode for multi-agent systems (40% of pilots fail from coordination overhead). Faulting the case is the correct response — it surfaces the problem clearly and triggers the existing failure handling pipeline (CaseOutcomeObserver, EventLog audit, etc.). Null caps preserve backward compatibility — existing cases without convergence config are unaffected.
+
+**Trade-offs:** Hard fault is not graceful — running workers are not proactively cancelled (they complete naturally and find the case already terminal). Acceptable — `CaseStatusChangedHandler` handles cleanup. A case author who wants a warning gate can use a local rule that reads the activity metrics and reacts.
+
+**Sources:** `CaseStatusChanged` event, `CaseStatusChangedHandler.java` (terminal state handling), `maxConcurrentDispatches` (existing hard cap pattern), engine#1044 (WatchdogRecoveryBridge CANCEL_AFFECTED pattern)
+**Depends on:** D46 (ActivityTracker provides counts), D47 (instrumentation provides the counts)
+**Exploration:** quick
+**Status:** captured
+
+## D49: ConvergenceDetector — activity quiescence with sustained stability
+
+**Choice:** `ConvergenceDetector` (`runtime-core`, `@ApplicationScoped`) evaluates convergence during the 5th pipeline phase. Convergence condition: ALL four activity rates (dispatch, signal deposit, context mutation, evaluation) are below their respective thresholds simultaneously for a sustained duration (`stabilityWindow`). Per-case state tracks: `firstQuietCycle` (Instant when all rates first dropped below threshold, null when any rate exceeds), `consecutiveQuietCycles` (int). When `Duration.between(firstQuietCycle, now) >= stabilityWindow` → convergence detected. On detection: fires synthetic `GoalReachedEvent` with goal name `"_converged"` (engine-reserved, prefixed with `_`). Resets `firstQuietCycle` to prevent repeated firing (one convergence event per case lifetime).
+
+**Alternatives:**
+- Weighted composite score — harder to debug. "Which rate caused convergence?" is a common diagnostic question. Threshold-per-metric is directly inspectable.
+- Configurable expression (JQ/predicate) — maximum flexibility but opaque. Convergence is a well-defined concept — thresholds + sustained duration cover it.
+
+**Rationale:** "Everything has quieted down for long enough" is the clearest convergence signal. Each rate threshold is independently configurable — fast-changing cases (real-time monitoring) need different thresholds than slow cases (multi-day investigations). `stabilityWindow` prevents false positives from temporary lulls. Synthetic goal integration means no new termination path — the existing `GoalReachedEventHandler` handles case status transition if the CaseDefinition declares a convergence completion goal.
+
+**Trade-offs:** Single convergence firing per case. If a case "de-converges" (activity resumes after convergence), the detector won't fire again. Acceptable — convergence is a terminal detection, not a toggle. Cases that need re-evaluation should use a local rule that monitors activity rates directly.
+
+**Sources:** `GoalReachedEventHandler.java:102-148` (goal evaluation), `QuiescenceTracker.java` (per-case state pattern), D45 (pipeline phase), D46 (activity rates)
+**Depends on:** D45 (pipeline phase), D46 (ActivityTracker provides rates), D48 (budget enforcement runs before convergence)
+**Exploration:** quick
+**Status:** captured
+
+## D50: Goal integration — convergence goal kind and CaseDefinition wiring
+
+**Choice:** Convergence-triggered termination reuses `GoalBasedCompletion`. New reserved goal name `"_converged"` — the engine fires this when the `ConvergenceDetector` detects convergence. Case definitions that want convergence-based termination declare it in their completion block:
+```yaml
+completion:
+  success:
+    anyOf: [case-resolved, _converged]
+```
+The `_converged` goal is fired by the engine, not by any agent. If a CaseDefinition does not include `_converged` in its completion goals, convergence detection still runs (for monitoring/audit) but does not trigger termination. A new `CaseHubEventType.CONVERGENCE_DETECTED` is always written to EventLog regardless of whether termination fires.
+
+**Alternatives:**
+- New CaseCompletion variant (`ConvergenceCompletion`) — requires unsealing `CaseCompletion` and adding a new code path in `GoalReachedEventHandler`. More invasive.
+- Direct `CaseStatusChanged(COMPLETED)` dispatch — bypasses goal system, creates a second termination path. Fragile and harder to reason about.
+
+**Rationale:** GoalBasedCompletion is already the extensible completion mechanism. `GoalKind` is an interface (not enum), so custom kinds work. Adding a convergence goal is purely declarative — no code changes to the completion system. The `_` prefix convention distinguishes engine-fired goals from agent-fired goals.
+
+**Trade-offs:** Case authors must explicitly opt in to convergence termination by adding `_converged` to their completion goals. This is intentional — convergence detection without termination is useful for monitoring. Automatic termination on convergence would surprise case authors who don't expect it.
+
+**Sources:** `GoalBasedCompletion.java:23-56` (GoalBasedCompletion builder), `GoalKind.java:17` (interface, not enum), `GoalReachedEventHandler.java:102` (evaluateCompletion), D49 (fires synthetic goal)
+**Depends on:** D49 (ConvergenceDetector fires the goal)
+**Exploration:** quick
+**Status:** captured
+
+## D51: DiversityMonitor — output similarity tracking per binding
+
+**Choice:** `DiversityMonitor` (`runtime-core`, `@ApplicationScoped`) tracks per-binding output similarity across agents. On each successful worker completion (`WorkflowExecutionCompletedHandler` success path), stores the output key set and a content hash per key. When `recentOutputCount >= diversityMinSamples` (configurable, default 3), computes pairwise Jaccard similarity on key sets. When average Jaccard exceeds `diversityThreshold` (configurable, default 0.9) AND value hashes match for overlapping keys, fires `DIVERSITY_VIOLATION` CaseHubEventType. Per-binding sliding window of last N outputs (default 10). No cross-binding comparison — diversity is evaluated within the same capability.
+
+**Alternatives:**
+- Signal concentration monitoring — only catches collusion manifesting through signals, misses output-level convergence.
+- LLM-based semantic analysis (deferred to blocks) — engine provides metrics, blocks provides intelligence. Future extension via observer SPI.
+
+**Rationale:** Key-set Jaccard + value hash is classical, deterministic, and O(K×N²) where K = output keys and N = window size (small). Detects structurally identical outputs — the price-fixing equivalent where all agents produce the same answer without coordinating. Per-binding scoping makes the comparison meaningful — agents working on the same capability should produce diverse approaches. `diversityMinSamples` prevents false positives when only 1-2 agents have run.
+
+**Trade-offs:** Structural similarity only — semantically equivalent but structurally different outputs are not detected. Acceptable for v1 — LLM-backed semantic analysis is a natural blocks extension. Value hash comparison is exact-match — near-duplicates with minor field variations pass. Mitigated by the Jaccard threshold on key sets catching most near-duplicates.
+
+**Sources:** `WorkflowExecutionCompletedHandler.java` (success path, output access), `ConflictResolver.java` (output key handling precedent), engine#1110 issue spec (anti-collusion requirements)
+**Depends on:** D45 (pipeline runs after outputs are recorded), D46 (ActivityTracker pattern for per-case state)
+**Exploration:** quick
+**Status:** captured
+
+## D52: ConvergenceConfig — per-case configuration
+
+**Choice:** `ConvergenceConfig` record in `engine-api` under `io.casehub.api.model.convergence`:
+```java
+ConvergenceConfig(
+    // Budget caps (null = no limit)
+    Integer maxDispatches,
+    Integer maxSignalDeposits,
+    Integer maxContextMutations,
+    Integer maxEvaluationCycles,
+    // Convergence thresholds (rates per second)
+    Double dispatchRateThreshold,       // default 0.1
+    Double signalDepositRateThreshold,  // default 0.1
+    Double contextMutationRateThreshold,// default 0.1
+    Double evaluationRateThreshold,     // default 0.5
+    // Timing
+    Duration stabilityWindow,           // default 30 seconds
+    Duration rateWindow,                // default 60 seconds (sliding window size)
+    // Diversity
+    Double diversityThreshold,          // default 0.9
+    Integer diversityMinSamples,        // default 3
+    Integer diversityWindowSize,        // default 10
+    // Master switch
+    boolean enabled                     // default false
+)
+```
+`CaseDefinition` gains `convergenceConfig` (nullable, null = disabled). Builder: `.convergenceConfig(ConvergenceConfig)`. YAML: `convergenceConfig:` block under `spec:`. `enabled: false` default means existing cases are completely unaffected — opt-in only.
+
+**Alternatives:**
+- Separate config records per concern (BudgetConfig, ConvergenceThresholdsConfig, DiversityConfig) — more granular but more configuration surface area for the user. One record is simpler to declare in YAML.
+- Config on individual bindings — convergence is a case-level concern, not per-binding.
+
+**Rationale:** Single configuration record follows the `ObservationConfig`, `SignalConfig`, `RuleConfig` pattern. All convergence-related settings in one place. `enabled: false` default preserves backward compatibility — zero impact on existing cases. Individual null caps mean each budget dimension can be independently enabled.
+
+**Trade-offs:** One large record. Acceptable — the fields group naturally (budgets, rates, timing, diversity, switch). YAML nesting keeps it readable.
+
+**Sources:** `ObservationConfig.java` (record pattern), `SignalConfig.java` (record pattern), `RuleConfig.java` (record pattern), `CaseDefinition` (config surface)
+**Depends on:** D46 (defines what metrics exist), D49 (defines what thresholds mean), D51 (defines diversity parameters)
+**Exploration:** quick
+**Status:** captured
+
+## D53: Module placement — convergence types in api/model/convergence, infrastructure in common-core and runtime-core
+
+**Choice:** `ConvergenceConfig` in `io.casehub.api.model.convergence`. `ActivityTracker` and `SlidingWindowCounter` in `io.casehub.engine.common.internal.convergence`. `ConvergenceDetector` and `DiversityMonitor` in `io.casehub.engine.internal.convergence` (runtime-core). Follows the established pattern: value types in api, mutable state management in common-core, handler/detection logic in runtime-core.
+
+**Alternatives:** None — direct analog of D4 (observation), D17 (signals), D36 (neighbors), D44 (rules) placement.
+
+**Rationale:** Consistent with every prior module placement decision in this epic.
+
+**Sources:** D4, D17, D36, D44 (module placement precedents)
+**Depends on:** D46, D49, D51, D52 (defines what types exist)
+**Exploration:** quick
+**Status:** captured
+
+## D54: Audit — CONVERGENCE_DETECTED, BUDGET_EXHAUSTED, DIVERSITY_VIOLATION event types
+
+**Choice:** Three new `CaseHubEventType` values:
+- `CONVERGENCE_DETECTED` — fired when all activity rates drop below threshold for the stability window. Metadata: `dispatchRate`, `signalDepositRate`, `contextMutationRate`, `evaluationRate`, `stabilityDuration`, `totalDispatches`, `totalSignalDeposits`, `totalContextMutations`, `totalEvaluationCycles`.
+- `BUDGET_EXHAUSTED` — fired when any cumulative budget cap is exceeded. Metadata: `exhaustedMetric`, `currentCount`, `budgetCap`.
+- `DIVERSITY_VIOLATION` — fired when output diversity drops below threshold. Metadata: `bindingName`, `averageJaccard`, `matchingOutputCount`, `totalSamples`, `affectedAgents`.
+
+All three are written to EventLog immediately when detected. `CONVERGENCE_DETECTED` is always written (even if the case does not have `_converged` in its completion goals — pure audit). `BUDGET_EXHAUSTED` is written before the case is faulted.
+
+**Alternatives:** None — follows the established audit pattern from D16 (pheromone), D27 (interest), D44 (rules).
+
+**Sources:** `CaseHubEventType.java`, D16 (audit pattern), D27 (audit pattern)
+**Depends on:** D49, D48, D51 (define the detection events)
+**Exploration:** quick
+**Status:** captured
+
+## D55: Lifecycle — case termination eviction + Resettable
+
+**Choice:** `CaseStatusChangedHandler` calls `activityTracker.evictByCase(caseId)` and `diversityMonitor.evictByCase(caseId)` on terminal case status. Both implement `Resettable` for demo/test replay. Same pattern as `SignalRegistry`, `ObservationRegistry`, `RuleRegistry`, `ContextHistoryBuffer`.
+
+**Alternatives:** None — established lifecycle pattern.
+
+**Sources:** `CaseStatusChangedHandler.java` (terminal eviction), `Resettable` interface, D18 (signal lifecycle), D44 (rule lifecycle)
+**Depends on:** D46 (ActivityTracker), D51 (DiversityMonitor)
+**Exploration:** quick
+**Status:** captured
+
+## D56: WorkerRuntime surfacing — convergence metrics as read-only view
+
+**Choice:** No new WorkerRuntime facet for convergence metrics. Agents should not directly read or influence convergence detection — it is a system-level concern. Convergence metrics are visible to agents indirectly: (1) through observations (a classical observer can watch for `CONVERGENCE_DETECTED` events), (2) through context signals (budget warnings can be written to context by local rules). The `ActivityTracker` is engine-internal infrastructure, not an agent-facing API. If future issues (#1111-#1115) need agent-visible metrics, a read-only `MetricsSpace` facet can be added without changing the tracker.
+
+**Alternatives:**
+- Add `MetricsSpace` facet now — provides `metrics() → CaseActivitySnapshot` with rate/count views. More transparent to agents but exposes system-level concern at the agent level.
+- Add metrics to RuleContext — local rules could condition on activity rates. Useful but conflates coordination rules with system monitoring.
+
+**Rationale:** Convergence detection is orthogonal to agent coordination. Agents coordinate via signals, observations, interests, neighbors, and rules. The engine monitors the collective behavior and intervenes when necessary. Exposing metrics to agents creates a feedback loop where agents could game the convergence detector (e.g., depositing a signal to prevent convergence detection).
+
+**Trade-offs:** Agents cannot proactively respond to convergence metrics. They can only respond to the engine's interventions (faulted case, convergence goal). Acceptable — the engine is the authority on convergence, not the agents.
+
+**Sources:** D19 (faceted architecture), D32 (NeighborSpace — read-only facade precedent), engine#1110 issue spec
+**Depends on:** D46 (ActivityTracker is the infrastructure being surfaced or not)
+**Exploration:** quick
+**Status:** captured
