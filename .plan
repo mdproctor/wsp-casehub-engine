@@ -27,3 +27,6 @@ date: 2026-09-15
 - [ ] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
 - [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown
 - [ ] casehubio/engine#1115 — feat: Continuous evolution loop — self-directed growth with quality gates
+
+## Deferred
+- [ ] EventLog publishing for PHEROMONE_DEPOSITED/EXPIRED (S / Med) [] — DefaultWorkerRuntime lacks EventLogRepository injection — requires plumbing SignalDepositedEvent through event bus like existing OBSERVER_REGISTERED pattern
