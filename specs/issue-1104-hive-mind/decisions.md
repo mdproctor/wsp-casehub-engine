@@ -521,3 +521,86 @@
 **Depends on:** D7 (materialization), D5 (pipeline integration)
 **Exploration:** quick (surfaced by review R1-15)
 **Status:** captured
+
+## D32: NeighborSpace architecture — query facade over existing engine data
+
+**Choice:** `NeighborSpace` is a pure read-only query facade that computes neighbor awareness on-demand from existing engine registries (PlanItemStore, ScopedWorkerRegistry, ObservationRegistry, SignalRegistry). No new storage system. Proximity is emergent from shared activity: agents watching the same keys are observationally proximate, agents depositing the same signals are coordinationally proximate, agents executing on the same case are coactive, agents whose outputs feed another's inputs are complementary. Third WorkerRuntime facet: `default NeighborSpace neighbors() { return NeighborSpace.NOOP; }`. `DefaultNeighborSpace` (runtime-core) queries existing registries. Eidos can provide `EnhancedNeighborSpace` (capability-space proximity scoring) via the same facet interface when on the classpath.
+
+**Alternatives:**
+- Activity-only (no proximity) — agents only see who is on their case, no interest/signal overlap analysis
+- Full in engine (including capability-space math) — duplicates eidos vector similarity computation
+- SPI-only (no implementation) — delivers no working behavior until eidos provides implementation
+
+**Rationale:** The engine already has all the data needed for activity-based neighbor discovery. A query facade avoids new storage while providing useful neighbor awareness immediately. Emergent proximity (from shared activity) is more actionable than abstract capability similarity — it captures what agents are actually doing, not what they're declared capable of. The facet pattern from D19 makes the upgrade path to eidos-enriched proximity transparent.
+
+**Trade-offs:** No capability-space vector similarity until eidos integration. Emergent proximity may miss agents that are capability-similar but not yet active on the case. Acceptable — active agents are the ones you can coordinate with.
+
+**Sources:** `PlanItemStore.java` (common-core), `ScopedWorkerRegistry.java` (common-core), `ObservationRegistry.java` (common-core), `SignalRegistry.java` (common-core), `WorkerRuntime.java` (api/engine), D19 (faceted architecture), engine#1108, arXiv:2504.00587 (AgentNet dynamic topology)
+**Exploration:** quick
+**Status:** captured
+
+## D33: Neighbor data model — identity + capabilities + status + relations
+
+**Choice:** `Neighbor(String agentId, Set<String> capabilities, TaskStatus currentStatus, String bindingName, Set<NeighborRelation> relations)` — bounded view of a neighboring agent. `NeighborRelation` enum: `COACTIVE` (active on same case), `SHARED_INTEREST` (watching ≥1 same key), `SHARED_SIGNAL` (depositing same signal), `COMPLEMENTARY` (my outputs feed their observations or vice versa). A neighbor can have multiple relations. `agentId` is the worker name — full identity exposed because agents need to know WHO to coordinate with (deposit targeted signals, register complementary interests, avoid duplicate work).
+
+**Alternatives:**
+- Anonymous with correlation ID — harder to use for direct coordination
+- Configurable visibility (FULL/ANONYMOUS per case) — added complexity for an unclear use case at this stage
+
+**Rationale:** InterestLandscape (#1107 D24) is anonymous because it answers "what is the collective watching?" (aggregate). NeighborSpace answers "who is near me?" (individual) — you can't coordinate with an anonymous aggregate. Identity is necessary for self-organization.
+
+**Trade-offs:** Full identity exposure means agents can make decisions based on specific other agents' identities (identity coupling). Mitigated: agents should coordinate via signals and interests (stigmergy), not by hardcoding agent-specific logic.
+
+**Sources:** `InterestLandscape.java` (anonymous aggregate precedent), `Worker.java` (worker-api, name field), D24 (InterestLandscape anonymity rationale), engine#1108
+**Depends on:** D32 (NeighborSpace architecture)
+**Exploration:** quick
+**Status:** captured
+
+## D34: NeighborSpace query API — four named methods
+
+**Choice:** Four focused query methods on `NeighborSpace`: `active()` (coactive neighbors on same case), `withSharedInterests()` (agents watching ≥1 same key), `withSharedSignals()` (agents depositing same signals), `complementary()` (agents whose outputs feed my inputs or vice versa). Each returns `List<Neighbor>`. Named methods are discoverable by LLM agents. YAGNI — add query composition (NeighborQuery builder) when #1111/#1112 demand it.
+
+**Alternatives:**
+- Single `discover(NeighborQuery)` with builder — more flexible but adds complexity for v1
+- Unified `all(NeighborRelation...)` with relation filter — composable but less self-documenting
+
+**Rationale:** Pre-release means we can refactor freely when the swarm issues (#1111-#1112) reveal more complex query needs. Four named methods cover the four relation types cleanly. LLM agents work better with explicit method names than builder patterns.
+
+**Trade-offs:** No ad-hoc query composition. If an agent wants "neighbors that are both coactive AND have shared interests," it must call both methods and intersect. Acceptable for v1.
+
+**Sources:** `InterestSpace.java` (named method pattern), D32 (NeighborSpace architecture), engine#1108
+**Depends on:** D32 (NeighborSpace architecture), D33 (Neighbor data model)
+**Exploration:** quick
+**Status:** captured
+
+## D35: SignalRegistry source tracking — Set<String> sources on Signal
+
+**Choice:** `Signal` gains `Set<String> sources` — immutable set of all agent IDs that have deposited or reinforced the signal. `deposit()` adds the depositor to the set (in addition to updating `lastSource` for backward compat). `sources` enables the "shared signal neighbors" query: find signals where `sources` contains both the calling agent and another agent. `Set.copyOf()` on read for immutability.
+
+**Alternatives:**
+- Use `lastSource` only — loses multi-depositor information, can't compute signal-based proximity
+- Append-only depositor log with timestamps — more detailed but unbounded storage per signal
+
+**Rationale:** Signals are the primary coordination mechanism in stigmergy. Knowing which agents are depositing the same signals is high-value proximity data. The set is bounded by the number of agents on a case (small). `lastSource` stays for audit (most recent depositor) while `sources` captures the full depositor set.
+
+**Trade-offs:** Minor memory increase per Signal (Set<String> vs single String). Bounded by per-case agent count. Acceptable.
+
+**Sources:** `Signal.java` (api/model/signal), `SignalRegistry.java` (common-core), D12 (signal identity), D32 (NeighborSpace data sources), engine#1108
+**Depends on:** D32 (NeighborSpace architecture — signal-based proximity needs source tracking)
+**Exploration:** quick
+**Status:** captured
+
+## D36: Module placement — NeighborSpace follows D23 pattern
+
+**Choice:** `NeighborSpace` in `io.casehub.api.engine` (alongside `SignalSpace`, `InterestSpace`). `Neighbor` and `NeighborRelation` in `io.casehub.api.spi.observation` (neighbor awareness is part of the observation domain — agents observing their social environment). `DefaultNeighborSpace` in `runtime-core` at `io.casehub.engine.internal.observation`. Follows D23 exactly.
+
+**Alternatives:** None considered — established pattern.
+
+**Rationale:** Facet interfaces are runtime surfaces (same nature as WorkerRuntime). Neighbor types are observation-domain artifacts (agents observing their social environment). Implementations in runtime-core.
+
+**Trade-offs:** `api/spi/observation` package grows wider. Acceptable — all observation-related types belong together.
+
+**Sources:** D23 (module placement pattern), D19 (faceted architecture), engine#1108
+**Depends on:** D32 (NeighborSpace architecture), D33 (Neighbor data model)
+**Exploration:** quick
+**Status:** captured
