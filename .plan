@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1094-fix-casememoryobserver
-state: scaffolded
+state: active
 project-sha: a060b749e06ca4f306fee8fc6767def7837e23e7
 date: 2026-09-16
 issue-repo: casehubio/engine
