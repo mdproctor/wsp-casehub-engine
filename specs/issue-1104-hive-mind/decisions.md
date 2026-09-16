@@ -299,3 +299,171 @@
 **Depends on:** D10 (registry storage), D15 (maxSignalsPerCase bound), D16 (expiry audit)
 **Exploration:** quick
 **Status:** captured
+
+## D19: WorkerRuntime faceting — SignalSpace + InterestSpace
+
+**Choice:** Full restructure of WorkerRuntime coordination surface into domain-organized facets. Two facet interfaces: `SignalSpace` (deposit, perceive — moved from flat methods) and `InterestSpace` (registerInterest, deregisterInterest, myInterests, interestLandscape, registerObserver — new plus moved). Existing flat methods (`depositSignal`, `perceiveSignals`, `registerObserver`) deprecated with delegates to facets. `default` methods on WorkerRuntime return `NOOP` implementations. Future issues add new facets: `NeighborSpace` (#1108), `RuleSpace` (#1109).
+
+**Alternatives:**
+- Keep flat WorkerRuntime — simple but god interface by #1112 (20+ methods across perception, communication, coordination, self-awareness, social awareness)
+- Single CoordinationSurface facet — simpler top-level but the single facet grows into the same god interface problem
+- Flat now, facet later — pragmatic but defers architectural commitment; user chose to commit now
+
+**Rationale:** The Hive Mind epic (#1107-#1115) will add significant coordination surface. Two facets map to two clear domains: signals (shared environment state) and interests (observation management). Each is cohesive. Domain-organized facets avoid premature ISP splitting while preventing the god interface. LLM agents discover methods within a focused facet.
+
+**Trade-offs:** Extra indirection (`runtime.signals().deposit()` vs `runtime.depositSignal()`). Commits to facet boundaries before #1111 (stigmergy) reveals how the domains interact — risk of wrong boundary. Mitigated: facet interfaces can be merged or split later without breaking consumers (add `extends` or move methods).
+
+**Pre-release revision:** Since the project is pre-release, flat methods (`depositSignal`, `perceiveSignals`, `registerObserver`) are REMOVED from WorkerRuntime entirely — no deprecated delegates, no migration bridges. Facets are the only path. All existing call sites updated. Clean break.
+
+**Sources:** `WorkerRuntime.java` (engine-api), `DefaultWorkerRuntime.java` (runtime-core), `LifecycleScope` (api/model), engine#1105 (registerObserver), engine#1106 (depositSignal/perceiveSignals), engine#1108-#1115 (future surface growth)
+**Exploration:** quick
+**Status:** revised — pre-release: removed deprecated delegates, clean break
+
+## D20: InterestDeclaration sealed hierarchy — five permits with JQ gate
+
+**Choice:** `InterestDeclaration` is a sealed interface with five permits: `KeyThreshold` (key, operator, threshold), `KeyCorrelation` (keys, jqCondition), `TemporalSequence` (steps, window), `SignalThreshold` (signalName, operator, threshold), and `JqInterest` (expression, watchedKeys). Each of the first four maps 1:1 to a classical observer. `JqInterest` is a general-purpose catchall that creates a `CorrelationObserver` internally but with arbitrary JQ logic. `JqInterest` registration is gated by `ObservationConfig.allowJqInterests()` (boolean, default `true`) — throws `IllegalArgumentException` when `false`. Compliance teams in regulated domains (AML, clinical) set `allowJqInterests: false` to restrict agents to the four auditable typed permits. `registerObserver()` on `InterestSpace` remains as the low-level escape hatch for programmatic observers that don't fit any interest type.
+
+**Alternatives:**
+- Four permits only — clean 1:1 mapping but forces complex agent logic through the registerObserver escape hatch
+- Three permits (merge signal into key threshold) — simpler hierarchy but conflates context keys and signal names
+- Four permits without gate — misses the compliance requirement
+
+**Rationale:** Five types give full expressiveness. The four typed permits are fully auditable — you can inspect exactly what an agent watches, what keys, what thresholds. The JQ catchall provides flexibility for unregulated domains. The config gate makes it a per-case-definition policy decision, consistent with `ObservationConfig`'s existing role as the observation policy surface. `registerObserver()` escape hatch is ungated (it's the engine-internal API, not agent-facing interest registration).
+
+**Trade-offs:** JQ gate enforcement is at registration time only — if the config changes after registration, existing JQ observers continue running. Acceptable — config changes don't retroactively invalidate live case behavior. The five-type vocabulary may need extension for future interest patterns (e.g. rate-of-change) — the sealed hierarchy would need a new permit, which is a source-compatible addition.
+
+**Sources:** `ThresholdObserver.java`, `CorrelationObserver.java`, `TemporalSequenceObserver.java`, `SignalStrengthObserver.java` (runtime-core), `ObservationConfig.java` (engine-api), engine#1107
+**Depends on:** D19 (faceted architecture — interests live on InterestSpace)
+**Exploration:** quick
+**Status:** captured
+
+## D21: Interest lifecycle — InterestRegistration handle with deregister by ID
+
+**Choice:** `InterestSpace.register(InterestDeclaration)` returns `InterestRegistration(String interestId, InterestDeclaration declaration, Instant registeredAt)` — an immutable value record. `interestId` is engine-generated (follows `ObservationRegistry`'s `observerType-N` pattern). Deregistration via `InterestSpace.deregister(String interestId)`. `InterestSpace.mine()` returns `List<InterestRegistration>`.
+
+**Alternatives:**
+- Deregister by declaration equality — ambiguous when same agent registers same interest twice
+- Mutable InterestHandle with update()/deregister() — lifecycle coupling between handle and registry
+
+**Rationale:** Immutable records, string-based deregistration, no mutable state. Consistent with platform patterns. Serializable for REINVOKED worker state accumulation.
+
+**Trade-offs:** No in-place update — agent must deregister + register to change an interest. Acceptable for v1.
+
+**Sources:** `ObservationRegistry.java:60` (instanceId pattern), engine#1107
+**Depends on:** D19 (InterestSpace facet), D20 (InterestDeclaration types)
+**Exploration:** quick
+**Status:** captured
+
+## D22: myInterests() returns List<InterestRegistration>
+
+**Choice:** `InterestSpace.mine()` returns `List<InterestRegistration>` — reuses the registration record type. Agent already has the type from `register()`. Simple, consistent.
+
+**Alternatives:**
+- List<InterestSummary> with observation stats — requires per-interest stats tracking not yet in the registry
+- Map<String, InterestDeclaration> keyed by ID — less natural for iteration
+
+**Rationale:** Reuse existing type. If per-interest stats are needed later, `InterestRegistration` can gain optional fields.
+
+**Trade-offs:** None significant.
+
+**Sources:** engine#1107
+**Depends on:** D21 (InterestRegistration type)
+**Exploration:** quick
+**Status:** captured
+
+## D23: Module placement — facets in api/engine, interest types in api/spi/observation
+
+**Choice:** Pre-release clean design. Facet interfaces (`SignalSpace`, `InterestSpace`) in `io.casehub.api.engine` alongside `WorkerRuntime`. Interest types (`InterestDeclaration`, `InterestRegistration`, `InterestLandscape`) in `io.casehub.api.spi.observation` alongside `EnvironmentObserver`. Signal types unchanged in `io.casehub.api.model.signal`. Implementations: `DefaultSignalSpace` in `runtime-core/internal/signal/`, `DefaultInterestSpace` in `runtime-core/internal/observation/`. `DefaultWorkerRuntime` creates both facet implementations and returns them from `signals()` and `interests()`.
+
+**Alternatives:**
+- Facets in domain packages (SignalSpace in api/model/signal) — mixes behavioral interfaces with value records
+- New api/coordination package — more packages than necessary
+
+**Rationale:** Follows codebase convention: `api/engine` = runtime interfaces, `api/spi` = domain SPIs, `api/model` = value types. Facet interfaces are runtime surfaces (same nature as WorkerRuntime). Interest types are observation domain artifacts. `DefaultWorkerRuntime` gets slimmer — delegates coordination to focused facet implementations.
+
+**Trade-offs:** `api/engine` package grows from 1 to 3 files (WorkerRuntime, SignalSpace, InterestSpace). Future facets (#1108 NeighborSpace, #1109 RuleSpace) grow it to 5. Still manageable.
+
+**Sources:** `api/engine/WorkerRuntime.java`, `api/spi/observation/` package, `api/model/signal/` package, engine#1107
+**Depends on:** D19 (faceted architecture), D20 (InterestDeclaration types)
+**Exploration:** quick
+**Status:** captured
+
+## D24: InterestLandscape computation — on-demand from registry
+
+**Choice:** `InterestLandscape` is computed on-demand from `ObservationRegistry` data. `InterestSpace.landscape()` (worker runtime) computes at each call — O(N) where N ≤ `maxObserversPerCase` (20). `ObservationContext.interestLandscape()` (observer evaluation) is computed once per evaluation cycle by the handler and passed as a pre-computed snapshot. No caching in the registry.
+
+**Alternatives:**
+- Cached per evaluation cycle in registry — cache invalidation complexity not justified for 20-entry aggregation
+- Materialized on registration change — over-engineered for a read that's O(20)
+
+**Rationale:** Cheap computation, bounded input size. Same pattern as `perceive()` on `SignalRegistry`.
+
+**Trade-offs:** Repeated worker calls to `landscape()` within one execution recompute each time. Acceptable — bounded cost, no correctness issue.
+
+**Sources:** `ObservationRegistry.java:89-101` (getObservers iteration pattern), engine#1107
+**Depends on:** D19 (InterestSpace facet), D23 (placement)
+**Exploration:** quick
+**Status:** captured
+
+## D25: ObservationContext gains interestLandscape() — 8th field
+
+**Choice:** `ObservationContext` record gains `InterestLandscape interestLandscape` as the 8th field. Backward-compatible 7-arg and 6-arg constructors pass `InterestLandscape.EMPTY`. Handler computes the landscape once per evaluation cycle and passes into the `ObservationContext` constructor. Consistent with how `signals()` (7th field) was added in #1106.
+
+**Alternatives:** None considered — direct extension of the established pattern.
+
+**Rationale:** Observers can factor in collective attention during evaluation. Same extension pattern used twice before.
+
+**Trade-offs:** Record grows wider. Acceptable — `ObservationContext` is constructed once per cycle, not per observer.
+
+**Sources:** `ObservationContext.java:23-41` (existing 7-arg record), `CaseContextChangedEventHandler.java:1230-1238` (context construction site), engine#1106 (signals() precedent)
+**Depends on:** D14 (observation integration), D24 (landscape computation)
+**Exploration:** quick
+**Status:** captured
+
+## D26: Scope enforcement — same as registerObserver
+
+**Choice:** `InterestSpace.register(InterestDeclaration)` enforces the same scope rule as `registerObserver()`: BINDING scope rejected with `IllegalStateException`, only COMPOUND or CASE scope allowed. Check is in `DefaultInterestSpace.register()` — looks up the binding's `LifecycleScope` from `CaseDefinition` via the same path as `DefaultWorkerRuntime.registerObserver()`.
+
+**Alternatives:** None — interests create observers, same lifecycle constraints apply.
+
+**Rationale:** Interests create observers under the hood. BINDING-scoped workers execute once and disappear — temporal patterns and sustained observation require COMPOUND or CASE scope. Same validation, same error message.
+
+**Trade-offs:** None.
+
+**Sources:** `DefaultWorkerRuntime.java:293-304` (existing scope check), engine#1105 D2 (scope rationale)
+**Depends on:** D19 (InterestSpace facet), D20 (InterestDeclaration types)
+**Exploration:** quick
+**Status:** captured
+
+## D27: Audit — INTEREST_REGISTERED and INTEREST_DEREGISTERED event types
+
+**Choice:** Two new `CaseHubEventType` values: `INTEREST_REGISTERED` (metadata: interestId, interestType, agentId, declaration summary) and `INTEREST_DEREGISTERED` (metadata: interestId, agentId). EventLog publishing deferred to the same wiring pass as `PHEROMONE_DEPOSITED`/`PHEROMONE_EXPIRED` from #1106 — both need event bus plumbing into `DefaultWorkerRuntime` / the facet implementations.
+
+**Alternatives:**
+- Publish immediately via injected EventLogRepository — requires persistence dependency in the facet implementation, couples registration to storage
+- No audit — loses traceability for compliance
+
+**Rationale:** Consistent with #1106 deferral. The event types exist in the enum for schema completeness; publishing wiring is a cross-cutting concern for all runtime-side events.
+
+**Trade-offs:** Events not published until wiring is added. EventLog metadata schema defined now for forward compat.
+
+**Sources:** `CaseHubEventType.java`, `PHEROMONE_DEPOSITED`/`PHEROMONE_EXPIRED` (deferred audit from #1106), engine#1107
+**Depends on:** D19 (InterestSpace facet)
+**Exploration:** quick
+**Status:** captured
+
+## D28: YAML support — not in scope for v1
+
+**Choice:** No YAML syntax for declaring interests. Interests are runtime-registered by agents via `InterestSpace.register()`. Static declaration of "what to observe" is already handled by `ContextChangeTrigger` on bindings. Dynamic interest registration (#1107) is inherently runtime — agents decide what to observe based on their own state and goals.
+
+**Alternatives:**
+- YAML `defaultInterests:` block on CaseDefinition — pre-registers interests at case start. Could be useful but conflates static triggers with dynamic interests
+- YAML per-worker interests — pre-wires observation interests per worker definition. Overly prescriptive for self-organization.
+
+**Rationale:** The entire point of #1107 is dynamic registration. YAML is static. If default interests become needed, it's a follow-up.
+
+**Trade-offs:** Agents must programmatically register interests — no declarative shortcut. Acceptable for the self-organization use case.
+
+**Sources:** engine#1107 issue description ("agents register observation interests at runtime"), `ContextChangeTrigger` (existing static trigger mechanism)
+**Exploration:** quick
+**Status:** captured
