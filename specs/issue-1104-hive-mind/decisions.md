@@ -604,3 +604,20 @@
 **Depends on:** D32 (NeighborSpace architecture), D33 (Neighbor data model)
 **Exploration:** quick
 **Status:** captured
+
+## D37: Rule action scope — coordination + context writes
+
+**Choice:** Approach B — Rules can perform coordination-only actions (deposit signals, register/deregister interests, emit conclusions) AND write specific keys to the CaseContext working layer. Context writes bridge coordination state back into domain state, triggering `CONTEXT_CHANGED` and enabling binding dispatch. Coordination-only actions are best practice for most use cases; context writes are available when rules need to influence case progression directly.
+
+**Alternatives:**
+- Coordination only — rules stay entirely in the coordination layer; binding dispatch driven exclusively by external context changes. Simpler but breaks the stigmergy loop: rules can detect coordination patterns but can't cause the case to act without an external context change arriving.
+- Full dispatch — rules can request worker scheduling directly, creating a second dispatch path alongside binding triggers. Over-powered and architecturally complex.
+
+**Rationale:** The stigmergy loop requires perceive→decide→act→modify environment. If rules can only deposit signals (coordination-only), the "act" step never reaches domain state — signals are invisible to binding conditions. Context writes close the loop: rule detects a coordination pattern → writes a key to working layer → `CONTEXT_CHANGED` fires → binding with a matching `when` condition dispatches a worker. This is indirect coordination through environment modification — the definition of stigmergy. Context writes are applied after all rules have been evaluated (batched), with a single `CONTEXT_CHANGED` published post-evaluation to avoid re-entrant evaluation within the serializer gate.
+
+**Trade-offs:** Context writes create a path from coordination state to domain state, which means rules can indirectly cause binding dispatch. This risks feedback loops (rule writes → binding fires → worker runs → context changes → rule fires → ...). Mitigated by: (1) one-shot evaluation per cycle (rules evaluate once, no intra-cycle chaining), (2) batched writes applied after all rules complete, (3) bindings can guard against re-triggering with `when` conditions that check for rule-written keys. Best practice guidance: use coordination-only actions by default, context writes only when the coordination pattern needs to influence case progression.
+
+**Sources:** D7 (observation materialization — no CaseContext writes), D5 (pipeline integration), D10 (signal storage — not in CaseContext), engine#1109, engine#1111 (stigmergy requires environment modification), SwarmSys (arXiv:2510.10047)
+**Depends on:** D5 (pipeline integration), D10 (signal storage), D19 (faceted architecture)
+**Exploration:** quick
+**Status:** captured
