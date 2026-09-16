@@ -163,3 +163,139 @@
 **Depends on:** D7 (materialization pattern)
 **Exploration:** quick
 **Status:** captured
+
+## D11: Decay model — Exponential decay at read time
+
+**Choice:** `effectiveStrength = initialStrength * e^(-λ * elapsed)` where `λ = ln(2) / halfLife` and `elapsed = now - lastReinforced`. Decay is never physically applied — the stored signal retains its original strength and timestamp. Every read computes the perceived strength lazily. `halfLife` is configurable per-case via `SignalConfig` on `CaseDefinition`. Sub-minute granularity (Duration, not days).
+
+**Alternatives:**
+- Discrete-step decay on each evaluation cycle (`strength *= (1-α)` per cycle) — couples decay rate to evaluation frequency, fast-changing cases decay faster than slow ones
+- Clock-based periodic decay via scheduler — over-engineered for a pure perception operation
+
+**Rationale:** Mathematically equivalent to continuous evaporation. Stateless — no mutation of stored values. Decouples decay from evaluation frequency. Half-life parameterization is intuitive ("loses half its strength every 5 minutes") and consistent with CBR's `temporalDecayHalfLifeDays` model already in the platform.
+
+**Trade-offs:** Every read pays the `exp()` computation — acceptable since it's O(1) per signal and the registry bounds signal count per case. Signals that have decayed below threshold are still stored (never physically deleted) — requires effective-zero filtering at read time.
+
+**Sources:** `CbrConfig.temporalDecayHalfLifeDays` (CBR temporal decay precedent), `DispositionSignalStore` (eidos signal decay pattern), engine#1106 issue spec (ACO formula), arXiv:2512.10166
+**Depends on:** D10 (registry-based storage enables lazy read-time computation)
+**Exploration:** quick
+**Status:** captured
+
+## D12: Signal identity — Name-keyed with reinforcement
+
+**Choice:** A signal is a single value per `(caseId, signalName)`. When multiple agents write the same signal name, the write is a reinforcement: strength is set to `max(currentEffective, newStrength)`, timestamp resets to now, and `reinforcementCount` increments. `lastSource` (agent ID) is tracked for audit. This makes heavily-trafficked signals persist longer — exactly the ACO behavior.
+
+**Alternatives:**
+- Per-agent signal instances `(caseId, signalName, agentId)` with aggregation — more faithful to multi-ant pheromone, but aggregation strategy becomes a sub-decision, N entries per signal per agent
+- Append-only signal log — maximally faithful but unbounded storage, O(N) reads
+
+**Rationale:** What matters for coordination is the aggregate signal strength, not who deposited it. A single value with reinforcement captures the essential behavior — busy paths stay strong, abandoned paths decay. `reinforcementCount` gives enough audit trail without per-agent decomposition. Per-agent decomposition becomes relevant for swarm-level analysis (#1112) and can be layered on later.
+
+**Trade-offs:** Loses individual agent contribution history. If two agents reinforce and then one "retracts," there's no mechanism to reduce strength other than natural decay. Acceptable — pheromone trails don't support retraction in the biological model either.
+
+**Sources:** engine#1106 issue spec (reinforcement model), ACO literature (pheromone deposit/evaporation), `DispositionSignalStore` (eidos uses per-agent signals — different use case, personality is inherently per-agent)
+**Depends on:** D10 (registry storage), D11 (read-time decay)
+**Exploration:** quick
+**Status:** captured
+
+## D13: Worker API — WorkerRuntime methods for deposit and perception
+
+**Choice:** `WorkerRuntime` (engine-api) gains `depositSignal(String name, double strength)` and `perceiveSignals() → Map<String, PerceivedSignal>`. `depositSignal` deposits or reinforces a signal (per D12). `perceiveSignals` returns only signals above the effective-zero threshold, with `effectiveStrength`, `reinforcementCount`, `lastSource`, `age` on `PerceivedSignal`. `DefaultWorkerRuntime` delegates to injected `SignalRegistry`.
+
+**Alternatives:**
+- Dedicated `SignalService` CDI bean — requires CDI injection in worker functions; workers currently only receive `WorkerScope`/`WorkerRuntime` as parameters
+- Signal deposit via `WorkerResult` metadata — doesn't support mid-execution perception or multi-deposit within a single worker run
+
+**Rationale:** `WorkerRuntime` is the established coordination surface — `registerObserver()` already lives there from #1105. Adding signal methods keeps the pattern consistent. Workers already cast `WorkerScope` to `WorkerRuntime` for engine methods, so no new injection mechanism is needed.
+
+**Trade-offs:** `WorkerRuntime` grows wider (two more methods). Acceptable — it's the coordination API surface for agents, and these are fundamental coordination primitives. `default` methods on the interface with no-op returns preserve backward compat.
+
+**Sources:** `WorkerRuntime.java` (registerObserver, execute, spawnCase), `DefaultWorkerRuntime` (runtime delegation pattern), D2 (registration via WorkerRuntime precedent), engine#1106
+**Depends on:** D10 (registry storage), D11 (decay model), D12 (reinforcement mechanics)
+**Exploration:** quick
+**Status:** captured
+
+## D14: Observation integration — ObservationContext gains signals() accessor
+
+**Choice:** `ObservationContext` (engine-api record) gains `Map<String, PerceivedSignal> signals()`. The `observations()` method in `CaseContextChangedEventHandler` reads from `SignalRegistry`, applies decay and effective-zero filtering, and passes the result into the `ObservationContext` constructor. Observers inspect `signals()` alongside `snapshot()` — no separate signal-change detection mechanism.
+
+**Alternatives:**
+- Separate `SignalObserver` interface with `watchedSignals()` — duplicates observation pipeline infrastructure
+- Inject `SignalRegistry` into observers directly — leaks engine-common internals into engine-api SPI types
+
+**Rationale:** Minimal extension — one new field on an existing record. Observers already have full context access; adding the signal view is the natural extension. Signal-aware classical observers (e.g., `SignalStrengthObserver`) follow the existing `ThresholdObserver` pattern.
+
+**Trade-offs:** Signals are evaluated for all observers on every cycle, even those that don't use them. Acceptable — reading from the registry and filtering is O(S) where S is bounded by per-case signal count (small). Observers that don't care about signals simply ignore the field.
+
+**Sources:** `ObservationContext.java` (existing record), `CaseContextChangedEventHandler.java:1168` (observations() method), `ThresholdObserver.java` (classical observer pattern), D1 (observer SPI), D10 (registry storage)
+**Depends on:** D10 (signals in registry), D11 (decay at read time), D1 (observer SPI design)
+**Exploration:** quick
+**Status:** captured
+
+## D15: Configuration — SignalConfig on CaseDefinition
+
+**Choice:** `SignalConfig` record in engine-api: `SignalConfig(Duration defaultHalfLife, double effectiveZeroThreshold, int maxSignalsPerCase)`. Defaults: `halfLife = 5 minutes`, `effectiveZeroThreshold = 0.01`, `maxSignalsPerCase = 100`. Per-signal half-life override via `depositSignal(String name, double strength, Duration halfLife)` overload — falls back to case-level default when not provided. YAML: `signalConfig:` block under `spec:`. Follows `ObservationConfig` pattern.
+
+**Alternatives:**
+- Per-signal-name configuration in CaseDefinition YAML — overly rigid; stigmergy is emergent, agents should create ad-hoc signals dynamically
+- No configuration, hardcoded defaults — doesn't allow tuning for different case types (fast-turnaround vs multi-day cases need different decay rates)
+
+**Rationale:** Case-level defaults with per-signal override at deposit time gives the right balance. Dynamic signal creation remains possible — no pre-declaration required. Effective-zero threshold prevents unbounded growth of dead signals polluting the perception view. Pattern follows `ObservationConfig` exactly.
+
+**Trade-offs:** Per-signal half-life override is only available at deposit time (via `WorkerRuntime`), not in YAML. Acceptable — YAML declares the system defaults, workers tune at runtime. `maxSignalsPerCase` bounds memory even in swarm scenarios (#1112).
+
+**Sources:** `ObservationConfig.java` (record pattern), `CaseDefinition` (config surface), `CbrConfig.temporalDecayHalfLifeDays` (precedent for temporal config), engine#1106
+**Depends on:** D10 (registry storage), D11 (decay model)
+**Exploration:** quick
+**Status:** captured
+
+## D16: Audit — EventLog for deposit and effective-zero expiry
+
+**Choice:** Two new `CaseHubEventType` values: `SIGNAL_DEPOSITED` (on every deposit/reinforcement — metadata: `signalName`, `strength`, `reinforcementCount`, `source`, `halfLife`) and `SIGNAL_EXPIRED` (when a signal crosses effective-zero threshold during a read — metadata: `signalName`, `finalStrength`, `totalReinforcementCount`, `lifetimeMs`). `SIGNAL_EXPIRED` is fired lazily once during the `observations()` pipeline and the signal is marked as expired in the registry. No EventLog on perception reads.
+
+**Alternatives:**
+- Deposit only, no expiry tracking — loses ability to audit signal lifetimes and diagnose swarm behavior
+- Full audit (deposit, reinforce, perceive, expire) — prohibitively noisy; perception events fire N×M per cycle
+
+**Rationale:** Deposit events capture coordination intent. Expiry events close the audit loop — signal lifetimes are reconstructible from `DEPOSITED → EXPIRED` pairs. Perception is a read operation; the observation pipeline already has its own audit path (`OBSERVATION_DETECTED`).
+
+**Trade-offs:** Expiry detection is lazy (only fires when the `observations()` pipeline runs). A signal could be effectively zero between evaluation cycles without an immediate event. Acceptable — signals are a coordination tool, not a real-time alerting mechanism.
+
+**Sources:** `CaseHubEventType` (existing event type pattern), `OBSERVER_REGISTERED`/`OBSERVATION_DETECTED` (observation audit precedent from #1105), engine#1106
+**Depends on:** D10 (registry storage), D11 (decay model), D5 (pipeline integration)
+**Exploration:** quick
+**Status:** captured
+
+## D17: Module placement — api/model + common/internal split
+
+**Choice:** `Signal` (stored value type), `PerceivedSignal` (read model), `SignalConfig` in `engine-api` under `io.casehub.api.model.signal`. `SignalRegistry` in `engine-common` under `io.casehub.engine.common.internal.signal`. `WorkerRuntime` method additions in `engine-api` (existing file). Deposit event publishing, expiry detection, and handler integration in `runtime`. Package is `api.model.signal` (not `api.spi`) — signals are model types consumed by workers, not an SPI that workers implement.
+
+**Alternatives:**
+- Everything in engine-common — violates SPI placement rule; `PerceivedSignal` is returned via `WorkerRuntime` (engine-api) so must be in engine-api
+- New module `casehub-engine-signal` — overkill for foundation types
+
+**Rationale:** Direct analog of D4 (observation placement). SPI/model types in api, mutable state management in common, handler integration in runtime. `PerceivedSignal` crosses the engine-api boundary (returned by `WorkerRuntime`) so must live in engine-api.
+
+**Trade-offs:** None significant — follows established pattern exactly.
+
+**Sources:** D4 (observation module placement), SPI placement rule in CLAUDE.md, `io.casehub.api.spi.observation` package (observation precedent)
+**Depends on:** D10 (registry), D13 (WorkerRuntime API)
+**Exploration:** quick
+**Status:** captured
+
+## D18: Lifecycle — Case termination eviction + Resettable
+
+**Choice:** `CaseStatusChangedHandler` calls `signalRegistry.evictByCase(caseId)` on terminal case status (COMPLETED, FAULTED, CANCELLED) — same pattern as `ObservationRegistry.unregisterByCase()` and `ContextHistoryBuffer.evict()`. `SignalRegistry implements Resettable` for demo/test replay. No compound-scoped signal cleanup — signals are case-scoped coordination primitives. Expired signals (below effective-zero) are retained with an `expired` flag until case eviction — they don't consume perception bandwidth but remain for audit.
+
+**Alternatives:**
+- Compound-scoped cleanup — breaks cross-compound coordination, which is the primary use case for stigmergy
+- No eviction, rely on decay — registry grows unboundedly across long-running cases; `maxSignalsPerCase` mitigates but doesn't eliminate for terminated cases
+
+**Rationale:** Case-scoped lifecycle is clean and consistent with all other per-case registries (`ObservationRegistry`, `ContextHistoryBuffer`, `CbrRetrievalService` cache, `CaseRecoveryStateRegistry`). Expired signals are filtered from perception views but retained for `SIGNAL_EXPIRED` audit. Case termination is the natural garbage collection point.
+
+**Trade-offs:** Long-running cases with many expired signals accumulate entries until termination. Bounded by `maxSignalsPerCase` (D15, default 100) — worst case is 100 entries with expired flags per case.
+
+**Sources:** `CaseStatusChangedHandler` (terminal state eviction pattern), `ObservationRegistry.unregisterByCase()`, `ContextHistoryBuffer.evict()`, `Resettable` interface, engine#1106
+**Depends on:** D10 (registry storage), D15 (maxSignalsPerCase bound), D16 (expiry audit)
+**Exploration:** quick
+**Status:** captured
