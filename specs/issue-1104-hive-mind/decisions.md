@@ -1,23 +1,23 @@
 ## D1: Core SPI design — Observer-function with key filtering
 
-**Choice:** Approach A — `EnvironmentObserver` is a functional interface (`observe(ObservationContext) → List<Observation>`) with declared `watchedKeys()` for evaluation optimization. Extends `NamedStrategy`.
+**Choice:** Approach A — `EnvironmentObserver` is a functional interface (`observe(ObservationContext) → List<Observation>`) with declared `watchedKeys()` for evaluation optimization. Does NOT extend `NamedStrategy` — observers are identified by `observerType()` (analogous to `NamedStrategy.id()` but not the same interface) and are NOT resolved via `EngineStrategyResolver`. They are created programmatically by workers and registered via `WorkerRuntime`.
 
 **Alternatives:**
 - Declarative pattern vocabulary (sealed hierarchy + `PatternEvaluator` chain) — closed vocabulary fights LLM extension in blocks #284
 - Stateful stream processor (`onContextChanged` + `drain`) — lifecycle complexity not justified; history buffer achieves temporal patterns without observer state
 
-**Rationale:** Maximum flexibility for both engine (classical pattern implementations) and blocks (LLM-backed observation). Key filtering provides bounded evaluation. Single interface, clean contract, consistent with platform `NamedStrategy` convention. History buffer in `ObservationContext` gives temporal capability without per-observer state.
+**Rationale:** Maximum flexibility for both engine (classical pattern implementations) and blocks (LLM-backed observation). Key filtering provides bounded evaluation. Single interface, clean contract. History buffer in `ObservationContext` gives temporal capability without per-observer state.
 
 **Trade-offs:** Unbounded observer logic could hang evaluation — need timeout enforcement. Less structured than a pattern vocabulary — observation logic is opaque to the engine (harder to audit what an observer does vs inspecting a serialized pattern).
 
 **Sources:** `CaseContext.java:26`, `ContextChangeTrigger.java:21`, `CaseEvaluationSerializer.java:23`, `CaseContextChangedEventHandler.java:252-354`, issue #1105, arXiv:2512.10166 (Emergent Collective Memory)
 
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — corrected: EnvironmentObserver does NOT extend NamedStrategy; removed inaccurate NamedStrategy convention claim from rationale
 
 ## D2: Registration mechanism — WorkerScope at dispatch
 
-**Choice:** Agents register observers through `WorkerRuntime.registerObserver(EnvironmentObserver)` during worker execution. Engine manages lifecycle — observers are scoped to the agent's `LifecycleScope` (BINDING/COMPOUND/CASE). `WorkerRuntime` (in engine-api) is the correct interface — `WorkerScope` (in worker-api) cannot reference engine-api types due to dependency direction (engine → worker, not reverse).
+**Choice:** Agents register observers through `WorkerRuntime.registerObserver(EnvironmentObserver)` during worker execution. Engine manages lifecycle — observers are scoped to the agent's `LifecycleScope` (BINDING/COMPOUND/CASE). `WorkerRuntime` (in engine-api) is the correct interface — `WorkerScope` (in worker-api) cannot reference engine-api types due to dependency direction (engine → worker, not reverse). Under D19 faceting, `registerObserver()` moves to `InterestSpace` — the flat method on `WorkerRuntime` is removed (pre-release clean break). Registration path becomes `runtime.interests().register(InterestDeclaration)` (D20) or `runtime.interests().registerObserver(EnvironmentObserver)` for programmatic observers.
 
 **Alternatives:**
 - Defer entirely to issue #1107 (Dynamic interest registration) — delays usability of observation SPI
@@ -30,7 +30,7 @@
 **Sources:** `ScopedWorkerRegistry.java:23`, `WorkerRuntime.java:24` (engine-api), `WorkerScope` (worker-api), `LifecycleScope` (api/model)
 **Depends on:** D1 (SPI design defines what is registered)
 **Exploration:** quick
-**Status:** revised — corrected `WorkerScope` to `WorkerRuntime`; `WorkerScope` (worker-api) cannot reference engine-api types
+**Status:** revised — corrected `WorkerScope` to `WorkerRuntime`; clarified that `registerObserver()` flat method is superseded by `InterestSpace.register()` under D19 faceting
 
 ## D3: History buffer — Count-bounded + time-bounded sliding window
 
@@ -77,13 +77,13 @@
 **Trade-offs:** One-cycle delay between context change and observation availability. Acceptable — observations inform strategy, not immediate dispatch. Slow observers degrade evaluation throughput for the entire case — timeout enforcement is the safety net (see D6).
 
 **Sources:** `CaseContextChangedEventHandler.java:185-203`, `CaseEvaluationSerializer.java:35-55`, issue #1104 ("Engine mechanics, blocks intelligence")
-**Depends on:** D1 (SPI design determines evaluation contract), D4 (placement determines where handler lives), D6 (thread model), D7 (materialization)
+**Depends on:** D1 (SPI design determines evaluation contract), D4 (placement determines where handler lives), D6 (thread model)
 **Exploration:** quick
-**Status:** revised — added bounded execution constraint; clarified LLM-backed observation is out of scope for serializer gate
+**Status:** revised — added bounded execution constraint; clarified LLM-backed observation is out of scope for serializer gate; removed circular D7 dependency (D5 is independent of materialization target)
 
 ## D6: Observer thread model — Synchronous, bounded execution
 
-**Choice:** All observers execute synchronously within the evaluation cycle (inside the serializer gate per D5). Observers must have bounded execution time — target <100ms per observer. The SPI contract (D1) is a synchronous functional interface; the engine calls `observe()` and uses the returned `List<Observation>` immediately. LLM-backed observation (blocks #284) does not call LLM inside the observer — the engine observer detects a fast trigger pattern, and the LLM call is dispatched as a separate worker via normal binding dispatch.
+**Choice:** All observers execute within the evaluation cycle (inside the serializer gate per D5), blocking-synchronous from the evaluator's perspective. Each observer is dispatched to a virtual thread via `CompletableFuture.supplyAsync(observer::observe, virtualThreads)` with a 100ms `orTimeout()`, then `.join()`ed back to the evaluation thread. The pipeline processes observers sequentially — each completes (or times out) before the next is evaluated. Observer code runs on the virtual thread pool: implementations must be thread-safe and should avoid `synchronized` blocks (which pin platform threads — a known virtual thread anti-pattern). The SPI contract (D1) is a synchronous functional interface; the engine calls `observe()` and uses the returned `List<Observation>` immediately. LLM-backed observation (blocks #284) does not call LLM inside the observer — the engine observer detects a fast trigger pattern, and the LLM call is dispatched as a separate worker via normal binding dispatch.
 
 **Alternatives:**
 - Asynchronous evaluation — decouples from evaluation cycle, loses deterministic ordering guarantee, indeterminate availability of results in cycle N+1
@@ -96,7 +96,7 @@
 **Sources:** `CaseEvaluationSerializer.java:23`, issue #1104 ("Engine mechanics, blocks intelligence")
 **Depends on:** D1 (SPI design), D5 (pipeline integration)
 **Exploration:** quick (surfaced by review R1-03, R1-07)
-**Status:** captured
+**Status:** revised — clarified virtual thread dispatch mechanism and thread-safety requirements for observer implementations
 
 ## D7: Observation materialization — ObservationRegistry, no CaseContext writes
 
@@ -189,14 +189,14 @@
 - Per-agent signal instances `(caseId, signalName, agentId)` with aggregation — more faithful to multi-ant pheromone, but aggregation strategy becomes a sub-decision, N entries per signal per agent
 - Append-only signal log — maximally faithful but unbounded storage, O(N) reads
 
-**Rationale:** What matters for coordination is the aggregate signal strength, not who deposited it. A single value with reinforcement captures the essential behavior — busy paths stay strong, abandoned paths decay. `reinforcementCount` gives enough audit trail without per-agent decomposition. Per-agent decomposition becomes relevant for swarm-level analysis (#1112) and can be layered on later.
+**Rationale:** `max()` preserves two orthogonal dimensions of signal quality: `effectiveStrength` represents the peak confidence of any single endorsement; `reinforcementCount` represents the breadth of consensus. Observers can weigh these independently — e.g., `effectiveStrength * log(reinforcementCount)` for consensus-weighted strength. With additive-and-clamp (`min(1.0, current + deposit)`), these dimensions collapse: 3 deposits of 0.4 saturate to 1.0, making strength meaningless and losing individual signal quality to clamping. The `max()` semantics also mean reinforcement resets the decay timestamp, so frequently-reinforced signals persist longer — consensus manifests through temporal persistence, not strength amplification. Note: this DIFFERS from classical ACO where pheromone deposit is additive (`τ ← τ + Σ Δτ`). The platform's signal model is stigmergy-inspired but not an ACO implementation — agents have varying confidence levels and the strongest endorsement should dominate strength, while consensus is captured separately via `reinforcementCount`.
 
 **Trade-offs:** Loses individual agent contribution history. If two agents reinforce and then one "retracts," there's no mechanism to reduce strength other than natural decay. Acceptable — pheromone trails don't support retraction in the biological model either.
 
 **Sources:** engine#1106 issue spec (reinforcement model), ACO literature (pheromone deposit/evaporation), `DispositionSignalStore` (eidos uses per-agent signals — different use case, personality is inherently per-agent)
 **Depends on:** D10 (registry storage), D11 (read-time decay)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — corrected inaccurate ACO claim in rationale; max() semantics defended with orthogonal-dimensions argument
 
 ## D13: Worker API — WorkerRuntime methods for deposit and perception
 
@@ -251,20 +251,20 @@
 
 ## D16: Audit — EventLog for deposit and effective-zero expiry
 
-**Choice:** Two new `CaseHubEventType` values: `SIGNAL_DEPOSITED` (on every deposit/reinforcement — metadata: `signalName`, `strength`, `reinforcementCount`, `source`, `halfLife`) and `SIGNAL_EXPIRED` (when a signal crosses effective-zero threshold during a read — metadata: `signalName`, `finalStrength`, `totalReinforcementCount`, `lifetimeMs`). `SIGNAL_EXPIRED` is fired lazily once during the `observations()` pipeline and the signal is marked as expired in the registry. No EventLog on perception reads.
+**Choice:** Two new `CaseHubEventType` values: `PHEROMONE_DEPOSITED` (on every deposit/reinforcement — metadata: `signalName`, `strength`, `reinforcementCount`, `source`, `halfLife`) and `PHEROMONE_EXPIRED` (when a signal crosses effective-zero threshold during a read — metadata: `signalName`, `finalStrength`, `totalReinforcementCount`, `lifetimeMs`). `PHEROMONE_EXPIRED` is fired lazily once during the `observations()` pipeline and the signal is marked as expired in the registry. No EventLog on perception reads.
 
 **Alternatives:**
 - Deposit only, no expiry tracking — loses ability to audit signal lifetimes and diagnose swarm behavior
 - Full audit (deposit, reinforce, perceive, expire) — prohibitively noisy; perception events fire N×M per cycle
 
-**Rationale:** Deposit events capture coordination intent. Expiry events close the audit loop — signal lifetimes are reconstructible from `DEPOSITED → EXPIRED` pairs. Perception is a read operation; the observation pipeline already has its own audit path (`OBSERVATION_DETECTED`).
+**Rationale:** Deposit events capture coordination intent. Expiry events close the audit loop — signal lifetimes are reconstructible from `PHEROMONE_DEPOSITED → PHEROMONE_EXPIRED` pairs. Perception is a read operation; the observation pipeline already has its own audit path (`OBSERVATION_DETECTED`). Event type naming uses "pheromone" (matching the stigmergic metaphor) rather than "signal" — consistent with the existing `CaseHubEventType` enum values and the companion spec.
 
 **Trade-offs:** Expiry detection is lazy (only fires when the `observations()` pipeline runs). A signal could be effectively zero between evaluation cycles without an immediate event. Acceptable — signals are a coordination tool, not a real-time alerting mechanism.
 
 **Sources:** `CaseHubEventType` (existing event type pattern), `OBSERVER_REGISTERED`/`OBSERVATION_DETECTED` (observation audit precedent from #1105), engine#1106
 **Depends on:** D10 (registry storage), D11 (decay model), D5 (pipeline integration)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — corrected event type names from SIGNAL_* to PHEROMONE_* to match codebase and companion spec
 
 ## D17: Module placement — api/model + common/internal split
 
@@ -466,4 +466,58 @@
 
 **Sources:** engine#1107 issue description ("agents register observation interests at runtime"), `ContextChangeTrigger` (existing static trigger mechanism)
 **Exploration:** quick
+**Status:** captured
+
+## D29: Coordination state persistence — in-memory only
+
+**Choice:** All coordination state is in-memory only: `ObservationRegistry` (`ConcurrentHashMap`), `SignalRegistry` (`ConcurrentHashMap`), `ContextHistoryBuffer` (`ConcurrentHashMap`). On crash, process restart, or rolling deployment, all accumulated coordination intelligence is lost. No persistence layer, no recovery mechanism for coordination state.
+
+**Alternatives:**
+- Persist to event store — coordination state reconstructible from event replay; adds latency on writes, complexity in recovery
+- Periodic snapshots to CaseContext (e.g., `_coordination.*` keys) — leverages existing persistence but risks feedback loops (per D7) and couples coordination to domain storage
+- Dedicated coordination persistence (e.g., embedded RocksDB or Redis) — full recovery at the cost of operational complexity and an additional dependency
+
+**Rationale:** Intentional "start in-memory" design consistent with the platform's current single-instance deployment model. All per-case evaluation state (goals, plan items, bindings) is similarly in-memory during the evaluation lifecycle. Coordination state follows the same model. The `Resettable` interface on all three registries supports demo/test replay. Persistence for coordination state should be addressed holistically when the platform addresses persistence for all in-memory evaluation state — not as a per-registry concern.
+
+**Trade-offs:** Long-running cases (multi-day AML investigations, clinical trials) lose accumulated coordination intelligence on restart. Bounded by the observation that the current platform has no horizontal scaling — in-memory state is consistent because there's one instance. Multi-instance deployment would require a distributed backend for all three registries. The `CaseRecoveryStateRegistry` (which handles other recovery concerns) is also in-memory, confirming this is a platform-level constraint, not a coordination-specific one.
+
+**Sources:** `ObservationRegistry.java`, `SignalRegistry.java`, `ContextHistoryBuffer.java`, `CaseRecoveryStateRegistry` (all in-memory), `Resettable` interface
+**Depends on:** D7 (materialization), D10 (signal storage)
+**Exploration:** quick (surfaced by review R1-09)
+**Status:** captured
+
+## D30: Observer deduplication — registry-level replace on re-registration
+
+**Choice:** `ObservationRegistry.registerObserver()` deduplicates by `(caseId, agentId, bindingName, observerType)`. When a registration matches an existing entry on all four keys, the existing observer is replaced (updated) rather than a new one added. This handles COMPOUND-scoped workers that re-register observers on each dispatch — the same agent/binding/type combination replaces rather than accumulates. Workers that need multiple distinct observers of the same type use distinct `observerType()` values.
+
+**Alternatives:**
+- No deduplication (current implementation) — COMPOUND workers accumulate observers on each dispatch, exhausting `maxObserversPerCase` after N dispatches. Workers must manually deregister before re-registering, which is undocumented and error-prone.
+- Dedup by `(agentId, observerType)` only — too aggressive; different bindings for the same agent should be able to register observers of the same type independently
+- Document manual deregistration responsibility — shifts lifecycle burden to the worker implementor; COMPOUND workers would need to call `unregisterByAgent()` at the start of each dispatch
+
+**Rationale:** COMPOUND-scoped workers are the primary observer registrars — they run repeatedly and observe over time. Re-registration (replace semantics) is the natural model: each dispatch refreshes the observer with potentially updated parameters. The four-key dedup preserves the ability to have multiple observers per agent (via different binding names or observer types) while preventing accumulation from repeated dispatch. The `InterestDeclaration` hierarchy (D20) generates unique observer types from declaration parameters, so typed interests naturally dedup correctly.
+
+**Trade-offs:** Workers that intentionally want two observers of the same type from the same binding must use distinct `observerType()` values. This is a constraint, but a well-motivated one — distinct observations should have distinct types for audit clarity.
+
+**Sources:** `ObservationRegistry.java:38-62` (current registration without dedup), `ObservationRegistry.ObserverRegistration` (instanceId generation), D9 (maxObserversPerCase cap)
+**Depends on:** D2 (registration mechanism), D9 (cardinality cap)
+**Exploration:** quick (surfaced by review R1-10)
+**Status:** captured
+
+## D31: Observation replacement semantics — full replace per cycle
+
+**Choice:** Observations produced by observers in cycle N are fully replaced by observations from cycle N+1. `ObservationRegistry.storeObservations()` uses `put()` which overwrites the previous list. There is no accumulation, trending, or confidence building across cycles within the registry. An observation that is present in cycle N and absent in cycle N+1 vanishes.
+
+**Alternatives:**
+- Accumulate with decay — observations persist across cycles with diminishing confidence, similar to signal decay. Requires observation-level decay model and increases registry memory proportionally to observation history depth.
+- Sliding window — retain observations from the last K cycles. Rules can inspect temporal observation trends. Adds a K×N storage multiplier and complicates the query interface.
+- Explicit expiry — observations persist until explicitly removed or a configurable TTL expires. Requires per-observation lifecycle management.
+
+**Rationale:** Observations are instantaneous perception — what the observer detects RIGHT NOW. An observer that detects "suspicious pattern" in cycle N and doesn't detect it in cycle N+1 should not leave a residual trace in the observation registry. Temporal reasoning across cycles is the responsibility of the observer itself (which has access to the history buffer) and of local rules (#1109). The observation SPI produces point-in-time observations; higher-level reasoning (trending, confidence building) happens in the consumption layer, not the production layer. This separation keeps the registry simple and avoids the sub-decisions that accumulation would require (decay model, window size, eviction policy).
+
+**Trade-offs:** Local rules (#1109) cannot react to observations that occurred in a previous cycle unless the observer re-detects them. Combined with the one-cycle delay (D5), this means a pattern must be present for at least two consecutive cycles to be both observed and acted upon. Acceptable — transient patterns that appear for exactly one cycle are noise, not signal.
+
+**Sources:** `ObservationRegistry.storeObservations()` (put semantics), D5 (one-cycle delay), D7 (observation materialization)
+**Depends on:** D7 (materialization), D5 (pipeline integration)
+**Exploration:** quick (surfaced by review R1-15)
 **Status:** captured
