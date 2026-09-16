@@ -1,0 +1,15 @@
+# Work Plan — issue-1100-build-fixes
+
+## State
+branch: issue-1100-build-fixes
+state: scaffolded
+project-sha: 10924304cece4c539129f7a9b096f1f6312fcebd
+date: 2026-09-16
+issue-repo: casehubio/engine
+covers: 1100,1101,1102
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1100 — Issue #1100 ← active
