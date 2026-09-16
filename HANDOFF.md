@@ -11,20 +11,45 @@ Self-organizing agent coordination patterns for CaseHub — from rule-based stig
 
 ## What Happened This Session
 
-Designed and implemented #1106 (Signal/pheromone model) — the temporal signal model for stigmergic coordination. Full cycle: brainstorming (9 decisions D10-D18, all quick picks), design spec (light review, 10 findings incorporated), implementation plan (5 tasks, 2 batches), execution (all tasks complete, 42 tests passing).
+Completed #1107 (Dynamic interest registration) and designed + planned #1108 (Agent discovery & neighbor awareness).
 
-Key design choices: signals live in a dedicated `SignalRegistry` (not CaseContext — avoids feedback loops per #1105 D7); exponential decay computed lazily at read time (`effectiveStrength = strength * e^(-λ * elapsed)`); name-keyed signals with max-reinforcement; `WorkerRuntime.depositSignal()`/`perceiveSignals()` as the worker API; `ObservationContext.signals()` for observer perception; signal expiry detection runs before observer-count guard (R1-04 fix); event types named `PHEROMONE_*` to avoid collision with existing `SIGNAL_*` types (R1-08).
+### #1107 — Dynamic Interest Registration (DONE)
 
-Deferred: EventLog publishing for `PHEROMONE_DEPOSITED`/`PHEROMONE_EXPIRED` (needs event bus plumbing into `DefaultWorkerRuntime`).
+Full WorkerRuntime restructure into domain-organized coordination facets. Pre-release clean break — flat methods removed, not deprecated.
 
-Queue advanced to #1107 (Dynamic interest registration).
+Key deliverables:
+- **WorkerRuntime faceting:** `signals()` returns `SignalSpace`, `interests()` returns `InterestSpace`. Flat methods (`depositSignal`, `perceiveSignals`, `registerObserver`) removed entirely.
+- **InterestDeclaration sealed hierarchy:** 5 permits — `KeyThreshold`, `KeyCorrelation`, `TemporalSequence`, `SignalThreshold`, `JqInterest`. Each maps 1:1 to a classical observer. `JqInterest` gated by `ObservationConfig.allowJqInterests` (default true) for compliance.
+- **InterestRegistration:** Immutable handle with engine-generated ID. Deregister by ID.
+- **InterestLandscape:** Anonymous aggregate view (keyObserverCounts, signalObserverCounts, interestTypeCounts, totalObserverCount). Available on both `InterestSpace.landscape()` and `ObservationContext.interestLandscape()` (8th field).
+- **DefaultSignalSpace** extracted from DefaultWorkerRuntime. **DefaultInterestSpace** creates observers from declarations.
+- **ObservationRegistry extensions:** `registerObserver()` returns String instanceId (was boolean). `deregisterByInstanceId()`. `computeLandscape()`.
+- **ObservationConfig** gains 4th field `allowJqInterests`. YAML: `allowJqInterests:` under `observationConfig:`.
+- **Audit event types:** `INTEREST_REGISTERED`, `INTEREST_DEREGISTERED` (publishing deferred with PHEROMONE events).
 
-## Queue (9 remaining)
+5 tasks, 2 batches, 99 tests passing across api/common-core/runtime-core.
 
-Active: #1107 — Dynamic interest registration
+### #1108 — Agent Discovery & Neighbor Awareness (DESIGNED + PLANNED)
 
-Batch 1 remaining: #1107 (interests), #1108 (agent discovery)
-Batches 2-6: unchanged from initial plan — see `.plan`.
+Design spec and implementation plan written. Not yet implemented.
+
+Architecture: `NeighborSpace` is a pure read-only query facade over existing engine registries. No new storage. Proximity is emergent from shared activity.
+
+Key design decisions (D32-D36):
+- **NeighborSpace facet** — third WorkerRuntime facet. Four named query methods: `active()`, `withSharedInterests()`, `withSharedSignals()`, `complementary()`.
+- **Neighbor record** — agentId + capabilities + status + bindingName + relations. Full identity exposed.
+- **NeighborRelation enum** — COACTIVE, SHARED_INTEREST, SHARED_SIGNAL, COMPLEMENTARY.
+- **Signal source tracking** — `Signal` gains `Set<String> sources` for multi-depositor tracking.
+- **DefaultNeighborSpace** queries PlanItemStore, ObservationRegistry, SignalRegistry, CaseDefinition.
+
+Implementation plan: 4 tasks in 2 batches. Ready for execution.
+
+## Queue (8 remaining)
+
+Active: #1108 — Agent discovery & neighbor awareness
+
+Batch 1 remaining: #1108 (discovery)
+Batches 2-6: #1109-#1115 unchanged from initial plan — see `.plan`.
 
 ## Repos in Slot
 
@@ -41,16 +66,17 @@ Batches 2-6: unchanged from initial plan — see `.plan`.
 |----------|------|
 | Design spec (#1105) | `wsp/specs/issue-1104-hive-mind/2026-09-16-environment-observation-spi-design.md` |
 | Design spec (#1106) | `wsp/specs/issue-1104-hive-mind/2026-09-16-signal-pheromone-model-design.md` |
+| Design spec (#1107) | `wsp/specs/issue-1104-hive-mind/2026-09-16-dynamic-interest-registration-design.md` |
+| Design spec (#1108) | `wsp/specs/issue-1104-hive-mind/2026-09-16-agent-discovery-neighbor-awareness-design.md` |
 | Decisions | `wsp/specs/issue-1104-hive-mind/decisions.md` |
-| Implementation plan (#1106) | `wsp/plans/2026-09-16-signal-pheromone-model.md` |
+| Implementation plan (#1107) | `wsp/plans/2026-09-16-dynamic-interest-registration.md` |
+| Implementation plan (#1108) | `wsp/plans/2026-09-16-agent-discovery-neighbor-awareness.md` |
 | Design journal | `wsp/design/JOURNAL.md` |
 | Diary entry | `wsp/blog/2026-09-16-mdp01-ants-dont-need-a-dispatcher.md` |
 | Queue | `wsp/.plan` |
 
-## Open Question
+## Next Session
 
-Signal model stays engine-internal (intra-case coordination). For cross-case signal visibility, a `casehub-ras-engine-bridge` module could observe PHEROMONE_DEPOSITED/EXPIRED events and surface them as RAS CloudEvents — same architecture as `casehub-work-engine-adapter`. RAS ganglia would then detect cross-case signal convergence (e.g., "three cases deposited the same signal within 5 minutes") without engine needing RAS internals. Depends on EventLog publishing being wired first (deferred item above).
-
-## Research Foundation
-
-*Unchanged — see git show HEAD~15:HANDOFF.md §Research Foundation*
+1. Execute #1108 implementation plan (4 tasks, 2 batches)
+2. Advance queue to #1109 (Local rule evaluation)
+3. Continue through the epic
