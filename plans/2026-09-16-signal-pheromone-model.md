@@ -42,7 +42,7 @@
 - Consumes: nothing (foundation types)
 - Produces:
   - `Signal(String name, double strength, Instant firstDeposited, Instant lastReinforced, Duration halfLife, String lastSource, int reinforcementCount, boolean expired)` — stored value type
-  - `PerceivedSignal(String name, double effectiveStrength, int reinforcementCount, String lastSource, Duration age)` — read model
+  - `PerceivedSignal(String name, double effectiveStrength, int reinforcementCount, String lastSource, Duration age)` — read model with validation (`effectiveStrength ∈ [0.0, 1.0]`)
   - `SignalConfig(Duration defaultHalfLife, double effectiveZeroThreshold, int maxSignalsPerCase)` — per-case config
   - `SignalDecay.effectiveStrength(double strength, Instant lastReinforced, Duration halfLife, Instant now) → double` — static utility
 
@@ -253,7 +253,14 @@ public record PerceivedSignal(
     double effectiveStrength,
     int reinforcementCount,
     String lastSource,
-    Duration age) {}
+    Duration age) {
+
+  public PerceivedSignal {
+    if (effectiveStrength < 0.0 || effectiveStrength > 1.0)
+      throw new IllegalArgumentException(
+          "effectiveStrength must be in [0.0, 1.0], got: " + effectiveStrength);
+  }
+}
 ```
 
 - [ ] **Step 7: Implement SignalConfig record**
@@ -339,8 +346,11 @@ git commit -m "feat: add Signal foundation types (Signal, PerceivedSignal, Signa
 - Consumes: `Signal`, `PerceivedSignal`, `SignalConfig`, `SignalDecay` (from Task 1)
 - Produces:
   - `deposit(UUID caseId, String name, double strength, Duration halfLife, String source, int maxPerCase) → boolean`
-  - `perceive(UUID caseId, double effectiveZeroThreshold) → Map<String, PerceivedSignal>`
-  - `findNewlyExpired(UUID caseId, double effectiveZeroThreshold) → List<Signal>`
+  - `deposit(UUID caseId, String name, double strength, Duration halfLife, String source, int maxPerCase, Instant now) → boolean` — test overload with explicit timestamp
+  - `perceive(UUID caseId, double effectiveZeroThreshold) → Map<String, PerceivedSignal>` — delegates to `perceive(caseId, threshold, Instant.now())`
+  - `perceive(UUID caseId, double effectiveZeroThreshold, Instant now) → Map<String, PerceivedSignal>` — deterministic overload
+  - `findNewlyExpired(UUID caseId, double effectiveZeroThreshold) → List<Signal>` — delegates to `findNewlyExpired(caseId, threshold, Instant.now())`
+  - `findNewlyExpired(UUID caseId, double effectiveZeroThreshold, Instant now) → List<Signal>` — deterministic overload
   - `markExpired(UUID caseId, String name) → void`
   - `evictByCase(UUID caseId) → void`
   - `signalCount(UUID caseId) → int`
@@ -623,22 +633,23 @@ git commit -m "feat: add SignalRegistry with deposit, perceive, expiry, and evic
 
 **Files:**
 - Modify: `api/src/main/java/io/casehub/api/model/CaseDefinition.java` — add `signalConfig` field, getter, setter, builder method
-- Modify: `api/src/main/java/io/casehub/api/model/converter/CaseDefinitionYamlMapper.java` — parse `signalConfig:` YAML block
-- Modify: `api/src/main/java/io/casehub/api/model/event/CaseHubEventType.java` — add `SIGNAL_DEPOSITED`, `SIGNAL_EXPIRED`
+- Modify: `schema/src/main/resources/schema/CaseDefinition.yaml` — add `signalConfig` property to `CaseDefinitionSpec`
+- Modify: `api/src/main/java/io/casehub/api/model/converter/YamlCaseDefinitionConverter.java` — add `convertSignalConfig()` + call from `convertSpec()`
+- Modify: `api/src/main/java/io/casehub/api/model/event/CaseHubEventType.java` — add `PHEROMONE_DEPOSITED`, `PHEROMONE_EXPIRED`
+- Create: `api/src/test/resources/signal-config-test.yaml`
 - Test: `api/src/test/java/io/casehub/api/model/converter/CaseDefinitionYamlMapperSignalConfigTest.java`
-- Create: `api/src/test/resources/definitions/signal-config-test.yaml`
 
 **Interfaces:**
 - Consumes: `SignalConfig` (from Task 1)
 - Produces:
   - `CaseDefinition.getSignalConfig() → SignalConfig` (returns defaults when null)
   - `CaseDefinition.Builder.signalConfig(SignalConfig) → Builder`
-  - `CaseHubEventType.SIGNAL_DEPOSITED`
-  - `CaseHubEventType.SIGNAL_EXPIRED`
+  - `CaseHubEventType.PHEROMONE_DEPOSITED`
+  - `CaseHubEventType.PHEROMONE_EXPIRED`
 
 - [ ] **Step 1: Write YAML test fixture**
 
-Create `api/src/test/resources/definitions/signal-config-test.yaml`:
+Create `api/src/test/resources/signal-config-test.yaml` (flat, not in a subdirectory — matches existing pattern like `concurrency-budget-test.yaml`):
 
 ```yaml
 spec:
@@ -671,7 +682,6 @@ import static org.assertj.core.api.Assertions.*;
 
 import io.casehub.api.model.CaseDefinition;
 import io.casehub.api.model.signal.SignalConfig;
-import java.io.InputStream;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
@@ -679,7 +689,8 @@ class CaseDefinitionYamlMapperSignalConfigTest {
 
   @Test
   void signalConfig_parsedFromYaml() {
-    CaseDefinition def = loadDefinition("signal-config-test.yaml");
+    CaseDefinition def = CaseDefinitionYamlMapper.load(
+        getClass().getClassLoader().getResourceAsStream("signal-config-test.yaml"));
     SignalConfig config = def.getSignalConfig();
     assertThat(config.defaultHalfLife()).isEqualTo(Duration.ofMinutes(10));
     assertThat(config.effectiveZeroThreshold()).isEqualTo(0.05);
@@ -688,7 +699,8 @@ class CaseDefinitionYamlMapperSignalConfigTest {
 
   @Test
   void signalConfig_absent_returnsDefaults() {
-    CaseDefinition def = loadDefinition("basic-test.yaml");
+    CaseDefinition def = CaseDefinitionYamlMapper.load(
+        getClass().getClassLoader().getResourceAsStream("concurrency-budget-test.yaml"));
     SignalConfig config = def.getSignalConfig();
     assertThat(config.defaultHalfLife()).isEqualTo(Duration.ofMinutes(5));
     assertThat(config.effectiveZeroThreshold()).isEqualTo(0.01);
@@ -703,12 +715,6 @@ class CaseDefinitionYamlMapperSignalConfigTest {
         .signalConfig(config)
         .build();
     assertThat(def.getSignalConfig()).isEqualTo(config);
-  }
-
-  private static CaseDefinition loadDefinition(String filename) {
-    InputStream is = CaseDefinitionYamlMapperSignalConfigTest.class
-        .getResourceAsStream("/definitions/" + filename);
-    return CaseDefinitionYamlMapper.fromYaml(is);
   }
 }
 ```
@@ -745,23 +751,53 @@ public Builder signalConfig(io.casehub.api.model.signal.SignalConfig signalConfi
 ```
 5. In `build()`: `caseHubDefinition.setSignalConfig(signalConfig);`
 
-- [ ] **Step 5: Add YAML parsing for signalConfig**
+- [ ] **Step 5: Add signalConfig to JSON schema + converter**
 
-In `CaseDefinitionYamlMapper`, add parsing logic after the `observationConfig` parsing block. Look for `signalConfig` node under `spec`:
+Three changes for the YAML pipeline:
+
+1. **JSON schema** — add `signalConfig` property to `CaseDefinitionSpec` in `schema/src/main/resources/schema/CaseDefinition.yaml` (alongside `observation`):
+```yaml
+signalConfig:
+  type: object
+  unevaluatedProperties: false
+  properties:
+    defaultHalfLife:
+      type: string
+    effectiveZeroThreshold:
+      type: number
+      minimum: 0
+      maximum: 1
+    maxSignalsPerCase:
+      type: integer
+      minimum: 1
+```
+
+2. **Regenerate records** — run `mvn compile -pl codegen,api -q` to regenerate `YamlCaseSpec` with the new `signalConfig` field (auto-generated as `JsonNode signalConfig`).
+
+3. **Converter** — add `convertSignalConfig()` to `YamlCaseDefinitionConverter.java` (after `convertObservation()` at line 1141), and call from `convertSpec()` (after the `observation` call at line 335):
 
 ```java
-JsonNode signalConfigNode = specNode.get("signalConfig");
-if (signalConfigNode != null) {
-  Duration halfLife = signalConfigNode.has("defaultHalfLife")
-      ? Duration.parse(signalConfigNode.get("defaultHalfLife").asText())
-      : SignalConfig.DEFAULT_HALF_LIFE;
-  double threshold = signalConfigNode.has("effectiveZeroThreshold")
-      ? signalConfigNode.get("effectiveZeroThreshold").asDouble()
-      : SignalConfig.DEFAULT_EFFECTIVE_ZERO_THRESHOLD;
-  int maxSignals = signalConfigNode.has("maxSignalsPerCase")
-      ? signalConfigNode.get("maxSignalsPerCase").asInt()
-      : SignalConfig.DEFAULT_MAX_SIGNALS_PER_CASE;
-  builder.signalConfig(new SignalConfig(halfLife, threshold, maxSignals));
+// In convertSpec() — after observation:
+if (spec.signalConfig() != null)
+  def.setSignalConfig(convertSignalConfig(spec.signalConfig()));
+
+// New private method:
+private static io.casehub.api.model.signal.SignalConfig convertSignalConfig(
+    com.fasterxml.jackson.databind.JsonNode node) {
+  java.time.Duration defaultHalfLife =
+      node.has("defaultHalfLife")
+          ? java.time.Duration.parse(node.get("defaultHalfLife").asText())
+          : io.casehub.api.model.signal.SignalConfig.DEFAULT_HALF_LIFE;
+  double effectiveZeroThreshold =
+      node.has("effectiveZeroThreshold")
+          ? node.get("effectiveZeroThreshold").asDouble()
+          : io.casehub.api.model.signal.SignalConfig.DEFAULT_EFFECTIVE_ZERO_THRESHOLD;
+  int maxSignalsPerCase =
+      node.has("maxSignalsPerCase")
+          ? node.get("maxSignalsPerCase").asInt()
+          : io.casehub.api.model.signal.SignalConfig.DEFAULT_MAX_SIGNALS_PER_CASE;
+  return new io.casehub.api.model.signal.SignalConfig(
+      defaultHalfLife, effectiveZeroThreshold, maxSignalsPerCase);
 }
 ```
 
@@ -770,8 +806,8 @@ if (signalConfigNode != null) {
 Use `ide_edit_member` to add two enum constants to `CaseHubEventType`:
 
 ```java
-SIGNAL_DEPOSITED,
-SIGNAL_EXPIRED
+PHEROMONE_DEPOSITED,
+PHEROMONE_EXPIRED
 ```
 
 - [ ] **Step 7: Run tests to verify they pass**
@@ -787,8 +823,8 @@ Expected: All tests PASS
 - [ ] **Step 9: Commit**
 
 ```bash
-git add api/
-git commit -m "feat: add signalConfig to CaseDefinition + YAML parsing + SIGNAL_DEPOSITED/EXPIRED event types Refs #1106"
+git add api/ schema/
+git commit -m "feat: add signalConfig to CaseDefinition + YAML schema/converter + PHEROMONE_DEPOSITED/EXPIRED event types Refs #1106"
 ```
 
 ### Task 4: WorkerRuntime signal methods + DefaultWorkerRuntime
@@ -800,7 +836,7 @@ git commit -m "feat: add signalConfig to CaseDefinition + YAML parsing + SIGNAL_
 - Test: `runtime/src/test/java/io/casehub/engine/internal/executor/DefaultWorkerRuntimeSignalTest.java`
 
 **Interfaces:**
-- Consumes: `SignalRegistry` (Task 2), `SignalConfig` (Task 1), `CaseDefinition.getSignalConfig()` (Task 3), `CaseHubEventType.SIGNAL_DEPOSITED` (Task 3)
+- Consumes: `SignalRegistry` (Task 2), `SignalConfig` (Task 1), `CaseDefinition.getSignalConfig()` (Task 3), `CaseHubEventType.PHEROMONE_DEPOSITED` (Task 3)
 - Produces:
   - `WorkerRuntime.depositSignal(String name, double strength)` — default no-op
   - `WorkerRuntime.depositSignal(String name, double strength, Duration halfLife)` — default no-op
@@ -915,8 +951,23 @@ public void depositSignal(String name, double strength) {
 @Override
 public void depositSignal(String name, double strength, Duration halfLife) {
   if (signalRegistry == null) return;
-  signalRegistry.deposit(caseId, name, strength, halfLife, workerName,
+  int prevCount = signalRegistry.signalCount(caseId);
+  boolean accepted = signalRegistry.deposit(caseId, name, strength, halfLife, workerName,
       signalConfig.maxSignalsPerCase());
+  if (accepted && eventDispatcher != null) {
+    boolean reinforced = signalRegistry.signalCount(caseId) == prevCount;
+    Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+    metadata.put("signalName", name);
+    metadata.put("strength", strength);
+    metadata.put("reinforcementCount", signalRegistry.perceive(caseId,
+        signalConfig.effectiveZeroThreshold()).getOrDefault(name,
+        new PerceivedSignal(name, strength, 1, workerName, Duration.ZERO))
+        .reinforcementCount());
+    metadata.put("source", workerName);
+    metadata.put("halfLifeMs", halfLife.toMillis());
+    metadata.put("reinforced", reinforced);
+    eventDispatcher.dispatch(caseId, CaseHubEventType.PHEROMONE_DEPOSITED, metadata);
+  }
 }
 
 // In perceiveSignals():
@@ -929,9 +980,10 @@ public Map<String, PerceivedSignal> perceiveSignals() {
 
 - [ ] **Step 4: Update WorkerRuntimeFactory**
 
-1. Add `SignalRegistry signalRegistry` field and constructor parameter
-2. In the 6-arg `create()` (with workerName, bindingName): pass `signalRegistry` to `DefaultWorkerRuntime`
-3. Look up `SignalConfig` from `CaseDefinition` via `definitionRegistry` in the factory, or pass a default
+1. Add `SignalRegistry signalRegistry` field and constructor parameter (the factory already holds `definitionRegistry`)
+2. In the 6-arg `create()` (with workerName, bindingName): resolve `SignalConfig` from `CaseDefinition` via `caseInstanceCache.get(caseId)` → `caseInstance.getCaseMetaModel()` → `definitionRegistry.getCaseDefinition(...)` → `definition.getSignalConfig()`. If lookup fails (cache miss), use `SignalConfig.defaults()`.
+3. Pass both `signalRegistry` and resolved `signalConfig` to the `DefaultWorkerRuntime` 15-arg constructor
+4. The 10-arg constructor delegates to the 15-arg with `null, null, null, null, null` (two new fields are null — signal methods no-op when `signalRegistry == null`)
 
 - [ ] **Step 5: Complete test helper and run tests**
 
@@ -963,7 +1015,7 @@ git commit -m "feat: add depositSignal/perceiveSignals to WorkerRuntime + Defaul
 - Modify: `runtime/src/test/java/io/casehub/engine/internal/engine/EngineResetServiceTest.java` — verify `SignalRegistry` is reset
 
 **Interfaces:**
-- Consumes: `SignalRegistry` (Task 2), `SignalConfig` (Task 1), `CaseDefinition.getSignalConfig()` (Task 3), `CaseHubEventType.SIGNAL_EXPIRED` (Task 3), `PerceivedSignal` (Task 1)
+- Consumes: `SignalRegistry` (Task 2), `SignalConfig` (Task 1), `CaseDefinition.getSignalConfig()` (Task 3), `CaseHubEventType.PHEROMONE_EXPIRED` (Task 3), `PerceivedSignal` (Task 1)
 - Produces:
   - `ObservationContext.signals() → Map<String, PerceivedSignal>`
   - `SignalStrengthObserver.of(String signalName, ThresholdObserver.Operator operator, double threshold)`
@@ -1159,11 +1211,12 @@ Expected: All 5 tests PASS
 In `CaseContextChangedEventHandler`:
 
 1. `SignalRegistry` is already injected (field exists from constructor)
-2. In `observations()` method, before building `ObservationContext`:
+2. In `observations()` method, add signal expiry detection BEFORE the observer-count early return guard (line 1172). Signal expiry is independent of observers — it must run even when no observers are registered:
    - Read `SignalConfig` from definition: `SignalConfig signalConfig = definition.getSignalConfig();`
    - Perceive signals: `Map<String, PerceivedSignal> signals = signalRegistry.perceive(caseInstance.getUuid(), signalConfig.effectiveZeroThreshold());`
-   - Detect expiry: iterate `signalRegistry.findNewlyExpired(caseId, threshold)`, for each publish `SIGNAL_EXPIRED` EventLog and call `markExpired()`
-3. Pass `signals` as the 7th argument to `ObservationContext` constructor
+   - Detect expiry: iterate `signalRegistry.findNewlyExpired(caseId, threshold)`, for each publish `PHEROMONE_EXPIRED` EventLog and call `markExpired()`
+   - These three steps go BEFORE `if (observationRegistry.observerCount(...) == 0) return;`
+3. After the observer-count guard, pass `signals` as the 7th argument to `ObservationContext` constructor
 
 - [ ] **Step 7: Add eviction to CaseStatusChangedHandler**
 

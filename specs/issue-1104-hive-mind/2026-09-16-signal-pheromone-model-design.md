@@ -38,7 +38,7 @@ observations() pipeline (CaseContextChangedEventHandler)
   ├── reads from SignalRegistry
   ├── computes effectiveStrength = strength * e^(-λ * elapsed)
   ├── filters below effectiveZeroThreshold
-  ├── fires SIGNAL_EXPIRED for newly-expired signals
+  ├── fires PHEROMONE_EXPIRED for newly-expired signals
   └── passes Map<String, PerceivedSignal> into ObservationContext
         │
         ▼
@@ -59,7 +59,7 @@ CaseEvaluationSerializer (per-case gate)
                 │
                 ├── read signals from SignalRegistry
                 ├── compute effective strengths, filter expired
-                ├── fire SIGNAL_EXPIRED events (lazy)
+                ├── fire PHEROMONE_EXPIRED events (lazy)
                 ├── build ObservationContext with signals()
                 └── evaluate observers (unchanged from #1105)
 ```
@@ -104,7 +104,7 @@ public record Signal(
 ```
 
 - `strength` — the deposited/reinforced strength at `lastReinforced` time (not current perceived strength)
-- `firstDeposited` — timestamp of initial signal creation; used for `lifetimeMs` in `SIGNAL_EXPIRED` audit
+- `firstDeposited` — timestamp of initial signal creation; used for `lifetimeMs` in `PHEROMONE_EXPIRED` audit
 - `lastReinforced` — timestamp of last deposit/reinforcement; decay is computed from this
 - `halfLife` — per-signal decay rate; defaults to `SignalConfig.defaultHalfLife` when not specified at deposit time
 - `lastSource` — agent ID of the most recent depositor (audit only)
@@ -121,7 +121,14 @@ public record PerceivedSignal(
     double effectiveStrength,
     int reinforcementCount,
     String lastSource,
-    Duration age) {}
+    Duration age) {
+
+  public PerceivedSignal {
+    if (effectiveStrength < 0.0 || effectiveStrength > 1.0)
+      throw new IllegalArgumentException(
+          "effectiveStrength must be in [0.0, 1.0], got: " + effectiveStrength);
+  }
+}
 ```
 
 - `effectiveStrength` — `strength * e^(-λ * elapsed)` where `λ = ln(2) / halfLife.toMillis()` and `elapsed = now - lastReinforced`
@@ -177,10 +184,7 @@ public class SignalRegistry implements Resettable {
   public Map<String, PerceivedSignal> perceive(UUID caseId,
       double effectiveZeroThreshold);
 
-  // Read a single signal's raw state (for expiry detection)
-  public Signal getRaw(UUID caseId, String name);
-
-  // Mark a signal as expired (after SIGNAL_EXPIRED event is fired)
+  // Mark a signal as expired (after PHEROMONE_EXPIRED event is fired)
   public void markExpired(UUID caseId, String name);
 
   // Find signals that have crossed below threshold since last check
@@ -238,7 +242,7 @@ default Map<String, PerceivedSignal> perceiveSignals() { return Map.of(); }
 - `perceiveSignals()` — returns all signals above effective-zero threshold for the current case
 
 `DefaultWorkerRuntime` implementation delegates to `SignalRegistry`:
-- `depositSignal` calls `registry.deposit(caseId, name, strength, halfLife, workerName, maxPerCase)` and publishes `SIGNAL_DEPOSITED` EventLog
+- `depositSignal` calls `registry.deposit(caseId, name, strength, halfLife, workerName, maxPerCase)` and publishes `PHEROMONE_DEPOSITED` EventLog
 - `perceiveSignals` calls `registry.perceive(caseId, threshold)`
 
 ## Observation Integration
@@ -261,8 +265,9 @@ Backward-compatible 6-arg constructor passes `Map.of()`.
 In `CaseContextChangedEventHandler.observations()`:
 1. Read `SignalConfig` from `CaseDefinition` (or defaults)
 2. Call `signalRegistry.perceive(caseId, threshold)` to get active signals
-3. Call `signalRegistry.findNewlyExpired(caseId, threshold)` — for each newly expired signal, publish `SIGNAL_EXPIRED` EventLog and call `markExpired()`
-4. Pass signals map into `ObservationContext` constructor
+3. Call `signalRegistry.findNewlyExpired(caseId, threshold)` — for each newly expired signal, publish `PHEROMONE_EXPIRED` EventLog and call `markExpired()`
+4. Steps 1-3 run BEFORE the `observerCount == 0` early-return guard — signal expiry detection is independent of observer registration
+5. Pass signals map into `ObservationContext` constructor (after the guard)
 
 ### SignalStrengthObserver (classical observer)
 
@@ -301,7 +306,7 @@ public final class SignalStrengthObserver implements EnvironmentObserver {
 
 Two new `CaseHubEventType` values:
 
-### SIGNAL_DEPOSITED
+### PHEROMONE_DEPOSITED
 Published by `DefaultWorkerRuntime.depositSignal()`.
 
 Metadata:
@@ -318,7 +323,7 @@ Metadata:
 
 `reinforced: true` when the signal already existed; `false` for new signals.
 
-### SIGNAL_EXPIRED
+### PHEROMONE_EXPIRED
 Published lazily by the `observations()` pipeline when a signal crosses below `effectiveZeroThreshold`.
 
 Metadata:
