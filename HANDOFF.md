@@ -16,7 +16,7 @@ Merged PR #1116 (neocortex upstream drift fixes). Closed PR #1093 as superseded.
 | Priority | Item | Notes |
 |----------|------|-------|
 | 1 | Fix CI | "Build and Publish" workflow red — pre-existing. `ActionGateIntegrationTest` has 85 CDI deployment errors from upstream SNAPSHOT drift. Needs dedicated session. |
-| 2 | Slot 197 | Hive mind epic. Open CLI in `slots/197/engine`, run `work`. Active: #1105 (Environment observation SPI). |
+| 2 | Slot 197 | Hive mind epic. Already underway in a separate session. |
 
 ## Cross-Repo
 
