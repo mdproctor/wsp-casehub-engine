@@ -49,7 +49,7 @@ Batches 2-6: unchanged from initial plan — see `.plan`.
 
 ## Open Question
 
-Whether the signal model should live in a separate module (e.g. `casehub-engine-ras`) rather than engine-api/common-core. Current placement follows the `ObservationRegistry` precedent — foundation coordination primitives in the core modules. To be discussed.
+Signal model stays engine-internal (intra-case coordination). For cross-case signal visibility, a `casehub-ras-engine-bridge` module could observe PHEROMONE_DEPOSITED/EXPIRED events and surface them as RAS CloudEvents — same architecture as `casehub-work-engine-adapter`. RAS ganglia would then detect cross-case signal convergence (e.g., "three cases deposited the same signal within 5 minutes") without engine needing RAS internals. Depends on EventLog publishing being wired first (deferred item above).
 
 ## Research Foundation
 
