@@ -621,3 +621,115 @@
 **Depends on:** D5 (pipeline integration), D10 (signal storage), D19 (faceted architecture)
 **Exploration:** quick
 **Status:** captured
+
+## D38: Condition model — dual (expression + lambda)
+
+**Choice:** Rule conditions support two models: `ExpressionEvaluator` conditions (JQ/MVEL against a combined JSON view of coordination state — observations, signals, neighbors, context) and `Predicate<RuleContext>` lambdas (Java DSL, full type safety). YAML-declared rules use expression-based conditions. Java DSL can use either. The combined JSON view for expression evaluation assembles observations, perceived signals, active neighbors, interest landscape, context snapshot, and changed keys into a single JSON document.
+
+**Alternatives:**
+- Expression-only — all conditions are ExpressionEvaluator instances. Lambda conditions wrapped via LambdaExpressionEvaluator lose type safety and become opaque.
+- Predicate-only — all conditions are lambdas. No YAML support, no auditability.
+
+**Rationale:** Dual model covers both needs: auditable expression conditions for compliance domains (AML, clinical) where you need to inspect exactly what a rule evaluates, and flexible lambdas for complex agent logic that doesn't fit expression syntax. Expression conditions are serializable (storable in EventLog, reconstructible from YAML). Lambda conditions are runtime-only. The existing `ExpressionEngineRegistry` infrastructure supports the expression path without new evaluation machinery.
+
+**Trade-offs:** Two condition code paths. Mitigated: both converge to a boolean result; the evaluation pipeline dispatches based on condition type, like the existing binding trigger evaluation.
+
+**Sources:** `ExpressionEngine.java:36`, `ExpressionEngineRegistry` (existing infrastructure), ADR-0009 (per-expression override), D20 (InterestDeclaration sealed hierarchy — precedent for typed + catch-all), engine#1109
+**Depends on:** D37 (action scope — conditions must evaluate against coordination state that includes what actions can target)
+**Exploration:** quick
+**Status:** captured
+
+## D39: Rule model and firing semantics — per-agent, all-fire, one-shot
+
+**Choice:** Per-agent rule evaluation with all-matching-fire semantics. `LocalRule(String id, RuleCondition condition, List<RuleAction> actions, int priority)`. Each agent's rules are evaluated independently — no cross-agent rule interaction. ALL matching rules fire per cycle (priority determines execution order, not selection). One-shot per cycle — no intra-cycle chaining. Refraction is implicit via the one-cycle delay (D5). This differs from Drools' match-resolve-act model where conflict resolution selects one rule from the conflict set. In swarm systems, conflict resolution happens at the environment level (signal reinforcement/decay), not at the rule engine level.
+
+**Alternatives:**
+- Match-resolve-act (Drools model) — conflict resolution selects highest-priority matching rule, only one fires per cycle. More controlled but fights swarm semantics where multiple simultaneous behaviors are desirable.
+- Rule chaining within a cycle — rules fire, modify state, re-evaluate. Powerful but risks infinite loops and violates the one-cycle delay principle from D5.
+
+**Rationale:** Swarm agents follow multiple behavioral rules simultaneously (forage AND avoid danger AND follow pheromone gradient). All-fire matches this biological model. Priority-as-ordering (not selection) means context writes from higher-priority rules are overwritten by lower-priority rules on the same key — last-writer-wins, which is consistent with `ConflictResolver.LAST_WRITER_WINS`. Future Drools integration can provide a `RuleEvaluationStrategy` that replaces all-fire with match-resolve-act for domains that need it.
+
+**Trade-offs:** Multiple rules writing the same context key: last-priority-wins. Agents must manage their own rule sets to avoid conflicting actions. Acceptable — per-agent isolation means conflicts are within one agent's rule set, not across agents.
+
+**Sources:** SwarmSys (arXiv:2510.10047 — multiple simultaneous roles), D5 (one-cycle delay), `ConflictResolver.LAST_WRITER_WINS` (existing conflict model), engine#1109, engine#445 (Drools — different model for different purpose)
+**Depends on:** D37 (action scope), D38 (condition model)
+**Exploration:** quick
+**Status:** captured
+
+## D40: RuleContext — coordination fact space
+
+**Choice:** `RuleContext` record carries the agent's full local perception: `observations` (List<Observation>, this agent's observations from current cycle), `signals` (Map<String, PerceivedSignal>, above threshold), `contextSnapshot` (JsonNode, working layer), `changedKeys` (Set<String>), `landscape` (InterestLandscape), `agentId`, `tenancyId`, `caseId`. For expression-based conditions (D38), assembled into a combined JSON document with top-level keys `observations`, `signals`, `context`, `changedKeys`, `landscape`. Neighbors deliberately excluded from the automatic context — the four NeighborSpace queries have different semantics and cost; agents needing neighbor data use lambda conditions with explicit calls.
+
+**Alternatives:**
+- Include all four neighbor views — expensive to compute for every rule evaluation cycle when most rules don't use neighbor data.
+- Minimal context (observations + signals only) — insufficient for rules that need to condition on domain state (e.g., "if observation X AND context.status == 'active'").
+
+**Rationale:** The RuleContext mirrors what an agent can perceive: observations (what patterns were detected), signals (what coordination state exists), context (what domain state exists), landscape (what others are watching), and changed keys (what just happened). This is exactly the swarm agent's local perception. Neighbors are a pull model (query when needed) not a push model (always computed).
+
+**Trade-offs:** Lambda conditions needing neighbor data must inject NeighborSpace or use captured references. Acceptable — neighbor-dependent rules are a minority case.
+
+**Sources:** `ObservationContext.java` (8-field record precedent), D14 (signals in ObservationContext), D25 (interestLandscape in ObservationContext), engine#1109
+**Depends on:** D38 (condition model — determines how RuleContext is consumed), D32 (NeighborSpace — excluded from automatic context)
+**Exploration:** quick
+**Status:** captured
+
+## D41: RuleAction sealed hierarchy — four permits
+
+**Choice:** `RuleAction` is a sealed interface with four permits: `DepositSignal(String name, double strength, @Nullable Duration halfLife)`, `RegisterInterest(InterestDeclaration declaration)`, `DeregisterInterest(String interestId)`, `WriteContext(String key, JsonNode value)`. Each action type maps directly to an existing engine operation: signal deposit → `SignalRegistry.deposit()`, interest registration/deregistration → `ObservationRegistry`, context write → `WritableLayer.set()` via `ConflictResolver.LAST_WRITER_WINS`. `RuleCondition` is also sealed: `ExpressionCondition(ExpressionEvaluator evaluator)` | `PredicateCondition(Predicate<RuleContext> predicate)`.
+
+**Alternatives:**
+- Add EmitConclusion(type, data) as a fifth action — structured output for other agents. Overlaps with signals (inter-agent communication) and context writes (structured data). Deferred until a concrete use case distinguishes conclusions from signals.
+- Add RequestDispatch(capabilityName) — directly request worker scheduling. Rejected in D37 — context writes bridge to dispatch indirectly via binding triggers.
+
+**Rationale:** Four actions cover the stigmergy loop: deposit signals (announce findings), register interests (adapt perception), deregister interests (stop watching), write context (influence case progression). Each action is auditable (data record, not lambda). Each maps to an existing operation with established semantics. Extensible: new sealed permits can be added when new coordination primitives emerge.
+
+**Trade-offs:** No "remove context key" action. An agent wanting to clear a key writes `NullNode.instance`. No "modify signal" action (e.g., reduce strength) — agents can only deposit (which reinforces). Signal reduction happens via natural decay. Both are intentional simplifications.
+
+**Sources:** `SignalRegistry.deposit()`, `ObservationRegistry.registerObserver()`, `WritableLayerImpl.set()`, D37 (action scope), D20 (InterestDeclaration sealed hierarchy — precedent)
+**Depends on:** D37 (action scope — WriteContext enabled by option 2), D38 (condition model — RuleCondition sealed)
+**Exploration:** quick
+**Status:** captured
+
+## D42: Pipeline integration — after observations, batched context writes
+
+**Choice:** `localRules()` runs after `observations()` in `CaseContextChangedEventHandler.evaluateAndDispatch()`. Evaluation order: `rules()` → `goals()` → `observations()` → `localRules()`. Within `localRules()`: (1) build `RuleContext` per agent from registries, (2) evaluate all agents' rules independently, (3) collect all `RuleAction`s, (4) execute coordination actions immediately (signal deposits, interest changes), (5) batch all `WriteContext` actions, (6) apply batched writes in a single pass after all rules complete, (7) if any writes occurred, publish one `CONTEXT_CHANGED` event (queued by `CaseEvaluationSerializer.drainPending()` for the next evaluation cycle). Per-agent rule evaluation timeout: 100ms via `CompletableFuture.orTimeout()` on virtual threads — same pattern as observer evaluation (D6).
+
+**Alternatives:**
+- Before observations — rules wouldn't have access to current-cycle observations. Breaks the observe→decide→act pipeline.
+- Parallel with observations — race conditions between observation storage and rule reads.
+- Context writes applied immediately per agent — ordering between agents becomes significant, harder to reason about.
+
+**Rationale:** After observations ensures rules see current-cycle observations. Batched writes prevent inter-agent ordering effects and ensure a single clean `CONTEXT_CHANGED`. The serializer's `drainPending()` naturally handles the re-evaluation cycle — no special plumbing needed. Virtual thread dispatch with timeout follows the established observer pattern.
+
+**Trade-offs:** All context writes from all agents are batched — if two agents write the same key, last-writer-wins (agent ordering within the batch is undefined). Acceptable — per-agent isolation means agents should write to different keys. Agents sharing keys must coordinate via signals.
+
+**Sources:** `CaseContextChangedEventHandler.java:243-253` (existing pipeline), `CaseEvaluationSerializer.java:35-55` (drainPending), D5 (pipeline integration), D6 (observer thread model)
+**Depends on:** D37 (context writes), D39 (one-shot semantics), D41 (action types)
+**Exploration:** quick
+**Status:** captured
+
+## D43: RuleSpace facet and RuleRegistry
+
+**Choice:** `RuleSpace` is the 4th WorkerRuntime facet. Interface: `register(LocalRule) → RuleRegistration`, `deregister(String ruleId)`, `mine() → List<RuleRegistration>`, `lastFired() → List<RuleFiring>`. `RuleRegistration` record: `(String ruleId, LocalRule rule, Instant registeredAt)`. `RuleFiring` record: `(String ruleId, List<RuleAction> executedActions, Instant firedAt)`. `RuleRegistry` (`common-core`, `@ApplicationScoped`, `Resettable`) stores per-case, per-agent rules and per-cycle firing results. `ConcurrentHashMap<UUID, Map<String, List<LocalRule>>>` for rules (keyed by caseId → agentId → rules), `ConcurrentHashMap<UUID, Map<String, List<RuleFiring>>>` for firings (replaced per cycle, like `ObservationRegistry.storeObservations()`). Scope enforcement same as observers: BINDING rejected, COMPOUND/CASE only. Deduplication by `(caseId, agentId, bindingName, ruleId)`. `DefaultRuleSpace` in `runtime-core/internal/observation/`, wired via `WorkerRuntimeFactory`.
+
+**Alternatives:** None — direct extension of the established facet pattern (D19, D23, D36).
+
+**Rationale:** Follows the InterestSpace/SignalSpace/NeighborSpace pattern exactly. `lastFired()` gives agents visibility into their own rule behavior for adaptive decision-making. Per-cycle firing replacement matches `ObservationRegistry.storeObservations()` semantics.
+
+**Sources:** `InterestSpace.java` (facet pattern), `ObservationRegistry.java` (registry pattern), `WorkerRuntimeFactory.java` (wiring pattern), D19 (faceted architecture), D23 (module placement)
+**Depends on:** D39 (rule model), D41 (action types)
+**Exploration:** quick
+**Status:** captured
+
+## D44: Configuration, audit, lifecycle, module placement
+
+**Choice:** `RuleConfig` record on `CaseDefinition`: `maxRulesPerCase` (default 50), `maxActionsPerCycle` (default 100), `ruleEvaluationTimeoutMs` (default 100). YAML: `ruleConfig:` block under `spec:`. Audit: `CaseHubEventType.RULE_FIRED` (metadata: `agentId`, `ruleId`, `actions[]`, `priority`) and `RULE_REGISTERED` (metadata: `agentId`, `ruleId`, `conditionType`). Lifecycle: `CaseStatusChangedHandler` calls `ruleRegistry.evictByCase()` on terminal status. `ScopedWorkerTerminationHandler` calls `ruleRegistry.unregisterByBinding()` on `COMPOUND_COMPLETED`. Module placement follows D23/D36: `RuleSpace` in `api/engine/`, rule types (`LocalRule`, `RuleAction`, `RuleCondition`, `RuleContext`, `RuleFiring`, `RuleConfig`, `RuleRegistration`) in `api/spi/observation/`, `RuleRegistry` + `DefaultRuleSpace` in `common-core/internal/observation/` and `runtime-core/internal/observation/`. No YAML rule declaration in v1 — rules are runtime-registered by agents via `RuleSpace.register()`. Static YAML rules are a natural extension for v2.
+
+**Alternatives:** None — follows established patterns exactly.
+
+**Rationale:** Configuration pattern matches `ObservationConfig` and `SignalConfig`. Audit pattern matches `OBSERVER_REGISTERED`/`OBSERVATION_DETECTED` and `PHEROMONE_DEPOSITED`. Lifecycle pattern matches all other per-case registries. Module placement follows the observation domain grouping.
+
+**Sources:** `ObservationConfig.java`, `SignalConfig.java`, `CaseHubEventType.java`, `CaseStatusChangedHandler.java`, D23 (module placement), D36 (NeighborSpace placement)
+**Depends on:** D39-D43
+**Exploration:** quick
+**Status:** captured
