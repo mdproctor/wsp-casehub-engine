@@ -77,7 +77,7 @@ public interface InterestSpace {
 
     InterestSpace NOOP = new InterestSpace() {
         @Override public InterestRegistration register(InterestDeclaration interest) {
-            return null;
+            return new InterestRegistration("noop-0", interest, Instant.now());
         }
         @Override public boolean registerObserver(EnvironmentObserver observer) {
             return false;
@@ -105,9 +105,13 @@ public sealed interface InterestDeclaration
             InterestDeclaration.SignalThreshold,
             InterestDeclaration.JqInterest {
 
+    enum ComparisonOperator { GT, LT, GTE, LTE, EQ }
+
+    record SequenceStep(String key, String valuePredicate) {}
+
     record KeyThreshold(
         String key,
-        ThresholdObserver.Operator operator,
+        ComparisonOperator operator,
         double threshold
     ) implements InterestDeclaration {}
 
@@ -117,13 +121,13 @@ public sealed interface InterestDeclaration
     ) implements InterestDeclaration {}
 
     record TemporalSequence(
-        List<TemporalSequenceObserver.SequenceStep> steps,
+        List<SequenceStep> steps,
         Duration window
     ) implements InterestDeclaration {}
 
     record SignalThreshold(
         String signalName,
-        ThresholdObserver.Operator operator,
+        ComparisonOperator operator,
         double threshold
     ) implements InterestDeclaration {}
 
@@ -134,14 +138,14 @@ public sealed interface InterestDeclaration
 }
 ```
 
-**Observer mapping:** `register()` creates the corresponding observer internally:
+**Observer mapping:** `register()` creates the corresponding observer internally. `ComparisonOperator` (api-level) maps to `ThresholdObserver.Operator` (runtime-core) at the boundary — both are identical enums, the api-level type avoids a dependency direction violation (api cannot depend on runtime):
 
 | InterestDeclaration | Created Observer |
 |---------------------|-----------------|
-| `KeyThreshold` | `ThresholdObserver.of(key, operator, threshold)` |
+| `KeyThreshold` | `ThresholdObserver.of(key, mapOperator(operator), threshold)` |
 | `KeyCorrelation` | `CorrelationObserver.of(keys, jqCondition)` |
-| `TemporalSequence` | `TemporalSequenceObserver.of(steps, window)` |
-| `SignalThreshold` | `SignalStrengthObserver.of(signalName, operator, threshold)` |
+| `TemporalSequence` | `TemporalSequenceObserver.of(mapSteps(steps), window)` |
+| `SignalThreshold` | `SignalStrengthObserver.of(signalName, mapOperator(operator), threshold)` |
 | `JqInterest` | `CorrelationObserver.of(watchedKeys, expression)` |
 
 **JQ gate:** `JqInterest` registration checks `ObservationConfig.allowJqInterests()`. When `false`, throws `IllegalArgumentException`. The four typed permits are always allowed — they are fully auditable (keys, operators, thresholds are inspectable). Compliance teams in regulated domains set `allowJqInterests: false` per case definition.
