@@ -1,0 +1,31 @@
+# Work Plan — issue-1104-hive-mind
+
+## State
+branch: issue-1104-hive-mind
+state: active
+issue-repo: casehubio/engine
+covers: casehubio/engine#1105
+Current: casehubio/engine#1105 — feat: Environment observation SPI — full-context pattern detection beyond static triggers
+date: 2026-09-15
+
+## Queue
+- [ ] casehubio/engine#1105 — feat: Environment observation SPI — full-context pattern detection beyond static triggers ← active
+  - [ ] Batch 1: Foundation
+    - [ ] Task 1: SPI types in engine-api
+    - [ ] Task 2: ObservationRegistry and ContextHistoryBuffer
+  - [ ] Batch 2: Integration
+    - [ ] Task 3: CaseDefinition observationConfig + YAML + events
+    - [ ] Task 4: WorkerRuntime.registerObserver
+    - [ ] Task 5: Pipeline integration + lifecycle cleanup
+  - [ ] Batch 3: Observers
+    - [ ] Task 6: Classical observer implementations
+- [ ] casehubio/engine#1106 — feat: Signal/pheromone model — temporal signals with decay & reinforcement in CaseContext
+- [ ] casehubio/engine#1107 — feat: Dynamic interest registration — agents register observation interests at runtime
+- [ ] casehubio/engine#1108 — feat: Agent discovery & neighbor awareness — dynamic topology
+- [ ] casehubio/engine#1109 — feat: Local rule evaluation — per-agent decision rules
+- [ ] casehubio/engine#1110 — feat: Convergence detection & termination — emergent completion, runaway & collusion prevention
+- [ ] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment
+- [ ] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence
+- [ ] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
+- [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown
+- [ ] casehubio/engine#1115 — feat: Continuous evolution loop — self-directed growth with quality gates
