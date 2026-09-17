@@ -1016,3 +1016,30 @@ All three are written to EventLog immediately when detected. `CONVERGENCE_DETECT
 **Sources:** `ObservationRegistry.getObservers()` (ConcurrentHashMap iteration), D6 (parallel evaluation)
 **Exploration:** quick (surfaced by R1-15)
 **Status:** captured — made explicit from implicit non-determinism
+
+## D60: Stigmergy execution model architecture — three-layer blend
+
+**Choice:** The StigmergyExecutionModel is a composition of three layers, each addressing a different concern:
+
+1. **StigmergyConfig** (configuration) — A unified config record on `CaseDefinition` that provides coordinated defaults for all coordination SPIs (signals, rules, convergence, budget, observation) and declares the agent population. Its presence activates stigmergy mode. YAML: `stigmergyConfig:` block.
+
+2. **StigmergyStrategy** (dispatch) — A named `PlanningStrategy` (`"stigmergy"`) that manages agent population dispatch. On first cycle: dispatches all declared agents as COMPOUND-scoped workers. On subsequent cycles: monitors agent health via existing registry queries. Provides the lifecycle hook point (called every evaluation cycle by `PlanningStrategyLoopControl.select()`). Extends to dynamic population scaling in #1113.
+
+3. **StigmergyCoordinator** (lifecycle) — An `@ApplicationScoped, Resettable` bean that tracks active agent state per case, publishes lifecycle events (`STIGMERGY_AGENT_JOINED`, etc.), and provides population-level queries. The strategy delegates to the coordinator for population state. Convergence detection can query it for agent-level quiescence.
+
+Agents use existing WorkerRuntime facets (`signals()`, `interests()`, `neighbors()`, `rules()`) — no new facet. The existing 5-phase evaluation pipeline already drives the perceive→decide→act cycle — no new pipeline phase. Declarative YAML for individual interests/rules is deferred to a follow-up (per D28, D44).
+
+**Alternatives:**
+- PlanningStrategy only — captures dispatch but not configuration or lifecycle coordination. Case author must configure 5+ separate config blocks manually.
+- Configuration pattern only — no new runtime type, minimal code. But no lifecycle tracking, no validation, no hook point for population management.
+- Runtime lifecycle manager only — tracks agents but doesn't integrate with the strategy resolution system. No natural dispatch hook.
+- Single class doing all three — violates SRP, harder to test, harder to extend independently.
+
+**Rationale:** Stigmergy is a coordination model (fourth axis beyond the unified execution model's structure/dispatch/technique). It touches dispatch (agents need to be dispatched), configuration (SPIs need coherent defaults), and post-dispatch lifecycle (agents perceive, decide, act). The three-layer decomposition maps one layer per concern. Each layer is independently testable and extensible.
+
+**Trade-offs:** Three new types vs. one. Mitigated: each is focused and small. The strategy layer is thin (trivial dispatch logic for v1) but provides the hook point for #1113 dynamic population management without architectural change.
+
+**Sources:** Unified execution model spec §2.3 (composable strategies), §2.7 (orthogonal axes), §3.1 (stigmergy as choreographed dispatch), engine#604 (original stigmergy issue), engine#1111, arXiv:2608.26081 (SwarmWorld cognition/consequence split), D19 (faceted WorkerRuntime), D45-D56 (convergence decisions)
+**Depends on:** D19 (faceted architecture), D45 (pipeline integration), D48 (budget enforcement), D49 (convergence detection)
+**Exploration:** deep-analysis (first-principles derivation of coordination as fourth axis)
+**Status:** captured
