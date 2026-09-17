@@ -18,11 +18,11 @@ date: 2026-09-15
   - [x] Batch 1: Foundation
     - [x] Task 1: Config records + CaseHubEventType
     - [x] Task 2: SlidingWindowCounter + ActivityTracker
-  - [ ] Batch 2: Pipeline
-    - [ ] Task 3: ConvergenceDetector + BudgetEnforcer + wiring
-  - [ ] Batch 3: Output
-    - [ ] Task 4: OutputConvergenceMonitor
-    - [ ] Task 5: YAML schema + converter + CLAUDE.md
+  - [x] Batch 2: Pipeline
+    - [x] Task 3: ConvergenceDetector + BudgetEnforcer + wiring
+  - [x] Batch 3: Output
+    - [x] Task 4: OutputConvergenceMonitor
+    - [x] Task 5: YAML schema + converter + CLAUDE.md
 - [ ] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment
 - [ ] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence
 - [ ] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
