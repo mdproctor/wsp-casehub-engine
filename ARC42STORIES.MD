@@ -15,9 +15,9 @@
 
 `casehub-engine` is the hybrid choreography+blackboard orchestration engine. It executes CasePlanModel definitions — declarative goal+binding case definitions expressed in YAML — by evaluating binding conditions against an accumulated CaseContext (the blackboard) and dispatching work when conditions are satisfied.
 
-Core capabilities: `CasePlanModel` (YAML definition: goals, bindings, capabilities), `CaseHubReactor` (event-loop reactor — evaluates binding conditions on CaseContext change), `CaseContextChangedEvent` (fired on every blackboard update — triggers reactor), `GoalReachedEvent` (fired when a goal condition is satisfied), `WAITING` state (durable suspension pending async result — survives restarts via PendingWorkRegistry), `CaseLedgerEntry` (per-binding-dispatch audit record via casehub-ledger integration), `TrustWeightedAgentStrategy` (via casehub-engine-ledger — selects agents by Bayesian trust score), `YamlCaseHub` (base class for loading YAML CasePlanModels from classpath).
+Core capabilities: `CaseDefinition` (YAML/Java definition: goals, bindings, capabilities), `CaseHubReactor` (event-loop reactor — evaluates binding conditions on CaseContext change), `CaseContextChangedEvent` (fired on every blackboard update — triggers reactor), `GoalReachedEvent` (fired when a goal condition is satisfied), `WAITING` state (durable suspension pending async result — survives restarts via PendingWorkRegistry), `CaseLedgerEntry` (per-binding-dispatch audit record via casehub-ledger integration), composable routing signal architecture (workload, trust, experience, personality, semantic providers), `YamlCaseHub` (base class for loading YAML case definitions from classpath).
 
-Module structure: `api` (CasePlanModel, CaseContext, CaseHubRuntime SPI, binding condition types), `core` (reactor, event handlers, goal evaluator), `blackboard` (CaseContext implementation, event bus), `persistence-memory` (in-memory SPIs for @QuarkusTest), `scheduler-quartz` (Quartz-based scheduled goal evaluation), `work-adapter` (bridges casehub-work WorkItem events to engine PlanItem completion), `ledger` (CaseLedgerEntry + TrustWeightedAgentStrategy + WorkerDecisionEventCapture).
+See `docs/guides/contributor-guide.md` §Module Structure for the full module table. Key layers: foundation (`api`, `worker-api`), core (`*-core` framework-neutral modules), framework (Quarkus and Spring binding shims), optional modules (`flow`, `a2a`, `mcp`, `react`, `queue`, etc.).
 
 ### Stakeholders
 
@@ -267,8 +267,8 @@ See §1 Quality Goals for the primary scenarios.
 | `CaseContext` | Shared blackboard for a case instance. Binding conditions read it; agent outputs write to it. Append-only during case lifetime. |
 | `Binding` | A condition + capability pair. When the JQ condition evaluates true against CaseContext, the engine dispatches work to an agent with the named capability. |
 | `WAITING state` | Durable engine state when a case is suspended pending an async result (human approval, CI run). Persisted via PendingWorkRegistry. |
-| `YamlCaseHub` | Base class that loads a YAML CasePlanModel from the classpath and registers it with CasePlanModelRegistry. |
-| `TrustWeightedAgentStrategy` | Agent selection strategy — routes to the highest-trust agent meeting minimumObservations; falls back to availability in Phase 0 (BOOTSTRAP). |
+| `YamlCaseHub` | Base class that loads a YAML case definition from the classpath and registers it with `CaseDefinitionRegistry`. |
+| `ComposableAgentRoutingStrategy` | Default agent routing — blends scores from independent `RoutingSignalProvider` implementations (workload, trust, experience, personality, semantic). |
 | `NamedStrategy` | Marker interface for pluggable strategies resolved by `EngineStrategyResolver`. All per-case-selectable routing and decomposition strategies extend this. |
 | `@DefaultBean` | Quarkus CDI annotation; yields automatically to any consumer-provided `@ApplicationScoped` implementation. The universal extension mechanism for engine SPIs. |
 | `WorkerResult` | Typed worker return value carrying output, optional `PlannedAction`, and outcome semantics (`Success`, `Declined`, `Failed`, `Expired`, `Completed`). |
