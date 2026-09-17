@@ -83,7 +83,7 @@
 
 ## D6: Observer thread model — Synchronous, bounded execution
 
-**Choice:** All observers execute within the evaluation cycle (inside the serializer gate per D5), blocking-synchronous from the evaluator's perspective. Each observer is dispatched to a virtual thread via `CompletableFuture.supplyAsync(observer::observe, virtualThreads)` with a 100ms `orTimeout()`, then `.join()`ed back to the evaluation thread. The pipeline processes observers sequentially — each completes (or times out) before the next is evaluated. Observer code runs on the virtual thread pool: implementations must be thread-safe and should avoid `synchronized` blocks (which pin platform threads — a known virtual thread anti-pattern). The SPI contract (D1) is a synchronous functional interface; the engine calls `observe()` and uses the returned `List<Observation>` immediately. LLM-backed observation (blocks #284) does not call LLM inside the observer — the engine observer detects a fast trigger pattern, and the LLM call is dispatched as a separate worker via normal binding dispatch.
+**Choice:** All observers execute within the evaluation cycle (inside the serializer gate per D5), blocking-synchronous from the evaluator's perspective. All observers across all agents are dispatched concurrently to virtual threads via `CompletableFuture.supplyAsync()`, then collected with `CompletableFuture.allOf(...).orTimeout(100, MILLISECONDS).join()`. Observers run in parallel with a collective 100ms timeout — worst-case evaluation time is 100ms regardless of observer count (vs N×100ms sequential). Observer code runs on the virtual thread pool: implementations must be thread-safe and should avoid `synchronized` blocks (which pin platform threads — a known virtual thread anti-pattern). The SPI contract (D1) is a synchronous functional interface; the engine calls `observe()` and uses the returned `List<Observation>` immediately. LLM-backed observation (blocks #284) does not call LLM inside the observer — the engine observer detects a fast trigger pattern, and the LLM call is dispatched as a separate worker via normal binding dispatch.
 
 **Alternatives:**
 - Asynchronous evaluation — decouples from evaluation cycle, loses deterministic ordering guarantee, indeterminate availability of results in cycle N+1
@@ -96,7 +96,7 @@
 **Sources:** `CaseEvaluationSerializer.java:23`, issue #1104 ("Engine mechanics, blocks intelligence")
 **Depends on:** D1 (SPI design), D5 (pipeline integration)
 **Exploration:** quick (surfaced by review R1-03, R1-07)
-**Status:** revised — clarified virtual thread dispatch mechanism and thread-safety requirements for observer implementations
+**Status:** revised — R1-04: changed from sequential to parallel observer evaluation; collective 100ms timeout via CompletableFuture.allOf()
 
 ## D7: Observation materialization — ObservationRegistry, no CaseContext writes
 
@@ -183,20 +183,20 @@
 
 ## D12: Signal identity — Name-keyed with reinforcement
 
-**Choice:** A signal is a single value per `(caseId, signalName)`. When multiple agents write the same signal name, the write is a reinforcement: strength is set to `max(currentEffective, newStrength)`, timestamp resets to now, and `reinforcementCount` increments. `lastSource` (agent ID) is tracked for audit. This makes heavily-trafficked signals persist longer — exactly the ACO behavior.
+**Choice:** A signal is a single value per `(caseId, signalName)`. When multiple agents write the same signal name, the write is a reinforcement: strength is set to `max(existing.strength(), newStrength)` — comparing raw stored values, not decayed — and `halfLife` is set to `max(existing.halfLife(), newHalfLife)`. Timestamp resets to now and `reinforcementCount` increments. `lastSource` (agent ID) is tracked for audit. This makes heavily-trafficked signals persist longer — exactly the ACO behavior. Reinforcement can only increase strength and slow decay, never weaken a signal.
 
 **Alternatives:**
 - Per-agent signal instances `(caseId, signalName, agentId)` with aggregation — more faithful to multi-ant pheromone, but aggregation strategy becomes a sub-decision, N entries per signal per agent
 - Append-only signal log — maximally faithful but unbounded storage, O(N) reads
 
-**Rationale:** `max()` preserves two orthogonal dimensions of signal quality: `effectiveStrength` represents the peak confidence of any single endorsement; `reinforcementCount` represents the breadth of consensus. Observers can weigh these independently — e.g., `effectiveStrength * log(reinforcementCount)` for consensus-weighted strength. With additive-and-clamp (`min(1.0, current + deposit)`), these dimensions collapse: 3 deposits of 0.4 saturate to 1.0, making strength meaningless and losing individual signal quality to clamping. The `max()` semantics also mean reinforcement resets the decay timestamp, so frequently-reinforced signals persist longer — consensus manifests through temporal persistence, not strength amplification. Note: this DIFFERS from classical ACO where pheromone deposit is additive (`τ ← τ + Σ Δτ`). The platform's signal model is stigmergy-inspired but not an ACO implementation — agents have varying confidence levels and the strongest endorsement should dominate strength, while consensus is captured separately via `reinforcementCount`.
+**Rationale:** `max()` preserves two orthogonal dimensions of signal quality: `strength` represents the peak confidence of any single endorsement (comparing raw stored values, never decayed); `reinforcementCount` represents the breadth of consensus. Observers can weigh these independently — e.g., `effectiveStrength * log(reinforcementCount)` for consensus-weighted strength. With additive-and-clamp (`min(1.0, current + deposit)`), these dimensions collapse: 3 deposits of 0.4 saturate to 1.0, making strength meaningless and losing individual signal quality to clamping. The `max()` semantics also mean reinforcement resets the decay timestamp, so frequently-reinforced signals persist longer — consensus manifests through temporal persistence, not strength amplification. Using `max()` on halfLife means reinforcement can only slow decay, never accelerate it — an agent cannot "hijack" another agent's signal by reinforcing with a shorter halfLife. Note: this DIFFERS from classical ACO where pheromone deposit is additive (`τ ← τ + Σ Δτ`). The platform's signal model is stigmergy-inspired but not an ACO implementation — agents have varying confidence levels and the strongest endorsement should dominate strength, while consensus is captured separately via `reinforcementCount`.
 
 **Trade-offs:** Loses individual agent contribution history. If two agents reinforce and then one "retracts," there's no mechanism to reduce strength other than natural decay. Acceptable — pheromone trails don't support retraction in the biological model either.
 
 **Sources:** engine#1106 issue spec (reinforcement model), ACO literature (pheromone deposit/evaporation), `DispositionSignalStore` (eidos uses per-agent signals — different use case, personality is inherently per-agent)
 **Depends on:** D10 (registry storage), D11 (read-time decay)
 **Exploration:** quick
-**Status:** revised — corrected inaccurate ACO claim in rationale; max() semantics defended with orthogonal-dimensions argument
+**Status:** revised — R1-01/R1-02: strength comparison uses raw stored value `max(existing.strength(), newStrength)` to preserve historical peak; halfLife uses `max(existing.halfLife(), newHalfLife)` to prevent decay-rate hijacking
 
 ## D13: Worker API — WorkerRuntime methods for deposit and perception
 
@@ -373,20 +373,20 @@
 
 ## D23: Module placement — facets in api/engine, interest types in api/spi/observation
 
-**Choice:** Pre-release clean design. Facet interfaces (`SignalSpace`, `InterestSpace`) in `io.casehub.api.engine` alongside `WorkerRuntime`. Interest types (`InterestDeclaration`, `InterestRegistration`, `InterestLandscape`) in `io.casehub.api.spi.observation` alongside `EnvironmentObserver`. Signal types unchanged in `io.casehub.api.model.signal`. Implementations: `DefaultSignalSpace` in `runtime-core/internal/signal/`, `DefaultInterestSpace` in `runtime-core/internal/observation/`. `DefaultWorkerRuntime` creates both facet implementations and returns them from `signals()` and `interests()`.
+**Choice:** Pre-release clean design. Facet interfaces (`SignalSpace`, `InterestSpace`) in `io.casehub.api.engine` alongside `WorkerRuntime`. Interest types (`InterestDeclaration`, `InterestRegistration`, `InterestLandscape`) in `io.casehub.api.spi.interest`. Signal types unchanged in `io.casehub.api.model.signal`. Implementations: `DefaultSignalSpace` in `runtime-core/internal/signal/`, `DefaultInterestSpace` in `runtime-core/internal/interest/`. `DefaultWorkerRuntime` creates both facet implementations and returns them from `signals()` and `interests()`.
 
 **Alternatives:**
 - Facets in domain packages (SignalSpace in api/model/signal) — mixes behavioral interfaces with value records
 - New api/coordination package — more packages than necessary
 
-**Rationale:** Follows codebase convention: `api/engine` = runtime interfaces, `api/spi` = domain SPIs, `api/model` = value types. Facet interfaces are runtime surfaces (same nature as WorkerRuntime). Interest types are observation domain artifacts. `DefaultWorkerRuntime` gets slimmer — delegates coordination to focused facet implementations.
+**Rationale:** Follows codebase convention: `api/engine` = runtime interfaces, `api/spi` = domain SPIs, `api/model` = value types. Facet interfaces are runtime surfaces (same nature as WorkerRuntime). Each domain gets its own SPI package matching its WorkerRuntime facet: `api/spi/observation` (EnvironmentObserver, ObservationContext, Observation, ObservationConfig, ContextSnapshot), `api/spi/interest` (InterestDeclaration, InterestRegistration, InterestLandscape), `api/spi/neighbor` (Neighbor, NeighborRelation), `api/spi/rule` (LocalRule, RuleAction, RuleCondition, RuleContext, RuleFiring, RuleRegistration, RuleConfig). The import graph is meaningful — types imported from `spi.rule` are about rules, not "observation."
 
-**Trade-offs:** `api/engine` package grows from 1 to 3 files (WorkerRuntime, SignalSpace, InterestSpace). Future facets (#1108 NeighborSpace, #1109 RuleSpace) grow it to 5. Still manageable.
+**Trade-offs:** `api/engine` package grows from 1 to 5 files (WorkerRuntime, SignalSpace, InterestSpace, NeighborSpace, RuleSpace). Four SPI packages instead of one. Better navigability for a 4-facet coordination layer.
 
 **Sources:** `api/engine/WorkerRuntime.java`, `api/spi/observation/` package, `api/model/signal/` package, engine#1107
 **Depends on:** D19 (faceted architecture), D20 (InterestDeclaration types)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-08: split api/spi/observation into per-domain packages (observation, interest, neighbor, rule) matching WorkerRuntime facets
 
 ## D24: InterestLandscape computation — on-demand from registry
 
@@ -592,18 +592,18 @@
 
 ## D36: Module placement — NeighborSpace follows D23 pattern
 
-**Choice:** `NeighborSpace` in `io.casehub.api.engine` (alongside `SignalSpace`, `InterestSpace`). `Neighbor` and `NeighborRelation` in `io.casehub.api.spi.observation` (neighbor awareness is part of the observation domain — agents observing their social environment). `DefaultNeighborSpace` in `runtime-core` at `io.casehub.engine.internal.observation`. Follows D23 exactly.
+**Choice:** `NeighborSpace` in `io.casehub.api.engine` (alongside `SignalSpace`, `InterestSpace`, `RuleSpace`). `Neighbor` and `NeighborRelation` in `io.casehub.api.spi.neighbor`. `DefaultNeighborSpace` in `runtime-core` at `io.casehub.engine.internal.neighbor`. Follows D23 per-domain package split.
 
-**Alternatives:** None considered — established pattern.
+**Alternatives:** None — follows revised D23 pattern.
 
-**Rationale:** Facet interfaces are runtime surfaces (same nature as WorkerRuntime). Neighbor types are observation-domain artifacts (agents observing their social environment). Implementations in runtime-core.
+**Rationale:** Facet interfaces are runtime surfaces. Neighbor types are their own domain — neighbor awareness is not observation. Each facet's SPI types live in a matching package.
 
-**Trade-offs:** `api/spi/observation` package grows wider. Acceptable — all observation-related types belong together.
+**Trade-offs:** None significant.
 
 **Sources:** D23 (module placement pattern), D19 (faceted architecture), engine#1108
 **Depends on:** D32 (NeighborSpace architecture), D33 (Neighbor data model)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-08: Neighbor types moved to api/spi/neighbor (from api/spi/observation)
 
 ## D37: Rule action scope — coordination + context writes
 
@@ -615,12 +615,12 @@
 
 **Rationale:** The stigmergy loop requires perceive→decide→act→modify environment. If rules can only deposit signals (coordination-only), the "act" step never reaches domain state — signals are invisible to binding conditions. Context writes close the loop: rule detects a coordination pattern → writes a key to working layer → `CONTEXT_CHANGED` fires → binding with a matching `when` condition dispatches a worker. This is indirect coordination through environment modification — the definition of stigmergy. Context writes are applied after all rules have been evaluated (batched), with a single `CONTEXT_CHANGED` published post-evaluation to avoid re-entrant evaluation within the serializer gate.
 
-**Trade-offs:** Context writes create a path from coordination state to domain state, which means rules can indirectly cause binding dispatch. This risks feedback loops (rule writes → binding fires → worker runs → context changes → rule fires → ...). Mitigated by: (1) one-shot evaluation per cycle (rules evaluate once, no intra-cycle chaining), (2) batched writes applied after all rules complete, (3) bindings can guard against re-triggering with `when` conditions that check for rule-written keys. Best practice guidance: use coordination-only actions by default, context writes only when the coordination pattern needs to influence case progression.
+**Trade-offs:** Context writes create a path from coordination state to domain state, which means rules can indirectly cause binding dispatch. This risks feedback loops (rule writes → binding fires → worker runs → context changes → rule fires → ...). Mitigated by: (1) one-shot evaluation per cycle (rules evaluate once, no intra-cycle chaining), (2) batched writes applied after all rules complete, (3) bindings can guard against re-triggering with `when` conditions that check for rule-written keys, (4) semantic identity check on batched writes — `CONTEXT_CHANGED` is suppressed when all writes produce values identical to what is already in the context (idempotent writes don't trigger re-evaluation), (5) D48 budget enforcement provides a hard backstop against unbounded cycles. Best practice guidance: use coordination-only actions by default, context writes only when the coordination pattern needs to influence case progression.
 
 **Sources:** D7 (observation materialization — no CaseContext writes), D5 (pipeline integration), D10 (signal storage — not in CaseContext), engine#1109, engine#1111 (stigmergy requires environment modification), SwarmSys (arXiv:2510.10047)
-**Depends on:** D5 (pipeline integration), D10 (signal storage), D19 (faceted architecture)
+**Depends on:** D5 (pipeline integration), D10 (signal storage), D19 (faceted architecture), D48 (budget enforcement — hard backstop against unbounded context-write cycles)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-03: added semantic identity check for batched writes to prevent idempotent-write feedback loops; added hard dependency on D48
 
 ## D38: Condition model — dual (expression + lambda)
 
@@ -647,14 +647,14 @@
 - Match-resolve-act (Drools model) — conflict resolution selects highest-priority matching rule, only one fires per cycle. More controlled but fights swarm semantics where multiple simultaneous behaviors are desirable.
 - Rule chaining within a cycle — rules fire, modify state, re-evaluate. Powerful but risks infinite loops and violates the one-cycle delay principle from D5.
 
-**Rationale:** Swarm agents follow multiple behavioral rules simultaneously (forage AND avoid danger AND follow pheromone gradient). All-fire matches this biological model. Priority-as-ordering (not selection) means context writes from higher-priority rules are overwritten by lower-priority rules on the same key — last-writer-wins, which is consistent with `ConflictResolver.LAST_WRITER_WINS`. Future Drools integration can provide a `RuleEvaluationStrategy` that replaces all-fire with match-resolve-act for domains that need it.
+**Rationale:** Swarm agents follow multiple behavioral rules simultaneously (forage AND avoid danger AND follow pheromone gradient). All-fire matches this biological model. Priority determines both execution order AND write precedence for context writes: coordination actions (signal deposits, interest changes) execute in priority order (highest first), and context writes are applied in reverse priority order so that higher-priority rules' writes take precedence on key conflicts. This is consistent with every standard rule system's expectation that "higher priority = wins conflicts." Future Drools integration can provide a `RuleEvaluationStrategy` that replaces all-fire with match-resolve-act for domains that need it.
 
-**Trade-offs:** Multiple rules writing the same context key: last-priority-wins. Agents must manage their own rule sets to avoid conflicting actions. Acceptable — per-agent isolation means conflicts are within one agent's rule set, not across agents.
+**Trade-offs:** Multiple rules writing the same context key: highest-priority-wins. Agents must manage their own rule sets to avoid conflicting actions. Acceptable — per-agent isolation means conflicts are within one agent's rule set, not across agents.
 
-**Sources:** SwarmSys (arXiv:2510.10047 — multiple simultaneous roles), D5 (one-cycle delay), `ConflictResolver.LAST_WRITER_WINS` (existing conflict model), engine#1109, engine#445 (Drools — different model for different purpose)
+**Sources:** SwarmSys (arXiv:2510.10047 — multiple simultaneous roles), D5 (one-cycle delay), engine#1109, engine#445 (Drools — different model for different purpose)
 **Depends on:** D37 (action scope), D38 (condition model)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-07: context writes applied in reverse priority order so higher-priority rules win key conflicts
 
 ## D40: RuleContext — coordination fact space
 
@@ -675,7 +675,7 @@
 
 ## D41: RuleAction sealed hierarchy — four permits
 
-**Choice:** `RuleAction` is a sealed interface with four permits: `DepositSignal(String name, double strength, @Nullable Duration halfLife)`, `RegisterInterest(InterestDeclaration declaration)`, `DeregisterInterest(String interestId)`, `WriteContext(String key, JsonNode value)`. Each action type maps directly to an existing engine operation: signal deposit → `SignalRegistry.deposit()`, interest registration/deregistration → `ObservationRegistry`, context write → `WritableLayer.set()` via `ConflictResolver.LAST_WRITER_WINS`. `RuleCondition` is also sealed: `ExpressionCondition(ExpressionEvaluator evaluator)` | `PredicateCondition(Predicate<RuleContext> predicate)`.
+**Choice:** `RuleAction` is a sealed interface with four permits: `DepositSignal(String name, double strength, @Nullable Duration halfLife)`, `RegisterInterest(InterestDeclaration declaration)`, `DeregisterInterest(String interestId)`, `WriteContext(String key, JsonNode value)`. Each action type maps directly to an existing engine operation: signal deposit → `SignalRegistry.deposit()`, interest registration/deregistration → `ObservationRegistry`, context write → `WritableLayer.set()`. `RegisterInterest` and `DeregisterInterest` throw `UnsupportedOperationException` until interest changes from rule actions are wired into the handler context — explicit failure over silent no-op. `RuleCondition` is also sealed: `ExpressionCondition(ExpressionEvaluator evaluator)` | `PredicateCondition(Predicate<RuleContext> predicate)`. `ExpressionCondition` throws `UnsupportedOperationException` until expression wiring is complete — explicit failure over silent `false`.
 
 **Alternatives:**
 - Add EmitConclusion(type, data) as a fifth action — structured output for other agents. Overlaps with signals (inter-agent communication) and context writes (structured data). Deferred until a concrete use case distinguishes conclusions from signals.
@@ -688,11 +688,11 @@
 **Sources:** `SignalRegistry.deposit()`, `ObservationRegistry.registerObserver()`, `WritableLayerImpl.set()`, D37 (action scope), D20 (InterestDeclaration sealed hierarchy — precedent)
 **Depends on:** D37 (action scope — WriteContext enabled by option 2), D38 (condition model — RuleCondition sealed)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-05: RegisterInterest/DeregisterInterest throw UnsupportedOperationException instead of silent no-op; ExpressionCondition throws instead of returning false
 
 ## D42: Pipeline integration — after observations, batched context writes
 
-**Choice:** `localRules()` runs after `observations()` in `CaseContextChangedEventHandler.evaluateAndDispatch()`. Evaluation order: `rules()` → `goals()` → `observations()` → `localRules()`. Within `localRules()`: (1) build `RuleContext` per agent from registries, (2) evaluate all agents' rules independently, (3) collect all `RuleAction`s, (4) execute coordination actions immediately (signal deposits, interest changes), (5) batch all `WriteContext` actions, (6) apply batched writes in a single pass after all rules complete, (7) if any writes occurred, publish one `CONTEXT_CHANGED` event (queued by `CaseEvaluationSerializer.drainPending()` for the next evaluation cycle). Per-agent rule evaluation timeout: 100ms via `CompletableFuture.orTimeout()` on virtual threads — same pattern as observer evaluation (D6).
+**Choice:** `localRules()` runs after `observations()` in `CaseContextChangedEventHandler.evaluateAndDispatch()`. Evaluation order: `rules()` → `goals()` → `observations()` → `localRules()`. Within `localRules()`: (1) build `RuleContext` per agent from registries, (2) evaluate all agents' rules concurrently — each agent's rules dispatched to a virtual thread via `CompletableFuture.supplyAsync()`, collected with `CompletableFuture.allOf(...).orTimeout(100, MILLISECONDS).join()` (parallel per-agent, same pattern as D6 parallel observers), (3) collect all `RuleAction`s, (4) execute coordination actions immediately (signal deposits, interest changes), (5) batch all `WriteContext` actions, (6) apply batched writes in a single pass after all rules complete, with semantic identity check — each write is compared against the current context value and only applied if different, (7) if any writes actually changed a value, publish one `CONTEXT_CHANGED` event (queued by `CaseEvaluationSerializer.drainPending()` for the next evaluation cycle). Idempotent writes are suppressed — if no value actually changes, no `CONTEXT_CHANGED` fires.
 
 **Alternatives:**
 - Before observations — rules wouldn't have access to current-cycle observations. Breaks the observe→decide→act pipeline.
@@ -701,12 +701,12 @@
 
 **Rationale:** After observations ensures rules see current-cycle observations. Batched writes prevent inter-agent ordering effects and ensure a single clean `CONTEXT_CHANGED`. The serializer's `drainPending()` naturally handles the re-evaluation cycle — no special plumbing needed. Virtual thread dispatch with timeout follows the established observer pattern.
 
-**Trade-offs:** All context writes from all agents are batched — if two agents write the same key, last-writer-wins (agent ordering within the batch is undefined). Acceptable — per-agent isolation means agents should write to different keys. Agents sharing keys must coordinate via signals.
+**Trade-offs:** All context writes from all agents are batched — if two agents write the same key, last-writer-wins (agent ordering within the batch is undefined). Acceptable — per-agent isolation means agents should write to different keys. Agents sharing keys must coordinate via signals. The semantic identity check prevents idempotent-write feedback loops (a rule that always writes the same value won't cause infinite re-evaluation cycles).
 
 **Sources:** `CaseContextChangedEventHandler.java:243-253` (existing pipeline), `CaseEvaluationSerializer.java:35-55` (drainPending), D5 (pipeline integration), D6 (observer thread model)
 **Depends on:** D37 (context writes), D39 (one-shot semantics), D41 (action types)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-03/R1-04: parallel per-agent evaluation; semantic identity check on batched writes to prevent feedback loops
 
 ## D43: RuleSpace facet and RuleRegistry
 
@@ -723,16 +723,16 @@
 
 ## D44: Configuration, audit, lifecycle, module placement
 
-**Choice:** `RuleConfig` record on `CaseDefinition`: `maxRulesPerCase` (default 50), `maxActionsPerCycle` (default 100), `ruleEvaluationTimeoutMs` (default 100). YAML: `ruleConfig:` block under `spec:`. Audit: `CaseHubEventType.RULE_FIRED` (metadata: `agentId`, `ruleId`, `actions[]`, `priority`) and `RULE_REGISTERED` (metadata: `agentId`, `ruleId`, `conditionType`). Lifecycle: `CaseStatusChangedHandler` calls `ruleRegistry.evictByCase()` on terminal status. `ScopedWorkerTerminationHandler` calls `ruleRegistry.unregisterByBinding()` on `COMPOUND_COMPLETED`. Module placement follows D23/D36: `RuleSpace` in `api/engine/`, rule types (`LocalRule`, `RuleAction`, `RuleCondition`, `RuleContext`, `RuleFiring`, `RuleConfig`, `RuleRegistration`) in `api/spi/observation/`, `RuleRegistry` + `DefaultRuleSpace` in `common-core/internal/observation/` and `runtime-core/internal/observation/`. No YAML rule declaration in v1 — rules are runtime-registered by agents via `RuleSpace.register()`. Static YAML rules are a natural extension for v2.
+**Choice:** `RuleConfig` record on `CaseDefinition`: `maxRulesPerCase` (default 50), `maxActionsPerCycle` (default 100), `ruleEvaluationTimeoutMs` (default 100). YAML: `ruleConfig:` block under `spec:`. Audit: `CaseHubEventType.RULE_FIRED` (metadata: `agentId`, `ruleId`, `actions[]`, `priority`) and `RULE_REGISTERED` (metadata: `agentId`, `ruleId`, `conditionType`). Lifecycle: `CaseStatusChangedHandler` calls `ruleRegistry.evictByCase()` on terminal status. `ScopedWorkerTerminationHandler` calls `ruleRegistry.unregisterByBinding()` on `COMPOUND_COMPLETED`. Module placement follows revised D23: `RuleSpace` in `api/engine/`, rule types (`LocalRule`, `RuleAction`, `RuleCondition`, `RuleContext`, `RuleFiring`, `RuleConfig`, `RuleRegistration`) in `api/spi/rule/`, `RuleRegistry` in `common-core/internal/rule/`, `DefaultRuleSpace` in `runtime-core/internal/rule/`. No YAML rule declaration in v1 — rules are runtime-registered by agents via `RuleSpace.register()`. Static YAML rules are a natural extension for v2.
 
 **Alternatives:** None — follows established patterns exactly.
 
-**Rationale:** Configuration pattern matches `ObservationConfig` and `SignalConfig`. Audit pattern matches `OBSERVER_REGISTERED`/`OBSERVATION_DETECTED` and `PHEROMONE_DEPOSITED`. Lifecycle pattern matches all other per-case registries. Module placement follows the observation domain grouping.
+**Rationale:** Configuration pattern matches `ObservationConfig` and `SignalConfig`. Audit pattern matches `OBSERVER_REGISTERED`/`OBSERVATION_DETECTED` and `PHEROMONE_DEPOSITED`. Lifecycle pattern matches all other per-case registries. Module placement follows per-domain package convention.
 
 **Sources:** `ObservationConfig.java`, `SignalConfig.java`, `CaseHubEventType.java`, `CaseStatusChangedHandler.java`, D23 (module placement), D36 (NeighborSpace placement)
 **Depends on:** D39-D43
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-08: rule types moved to api/spi/rule (from api/spi/observation)
 
 ## D45: Pipeline integration — convergence detection as 5th phase
 
@@ -759,37 +759,38 @@
 - Exponential moving average — O(1) memory but alpha tuning is non-intuitive and EMA reacts slowly to sudden changes. Sliding window is more precise for bursty swarm patterns.
 - Per-cycle delta counting — simpler but couples rate to evaluation frequency. Wall-clock sliding window is more stable across varying evaluation rates.
 
-**Rationale:** Four metrics cover the four resource dimensions where swarm pathology manifests: dispatches (agent thrashing), signals (coordination storms), context mutations (state thrashing), evaluations (evaluation re-entrant loops). Sliding-window rates give precise activity trends for convergence detection. Cumulative totals give hard budget enforcement. `SlidingWindowCounter` is a bounded circular buffer of timestamps — `record(Instant)` appends, `rate(windowDuration, now)` counts entries within the window and returns count/windowSeconds. Memory: O(maxWindowEntries) per metric per case, capped at e.g. 1000 entries. Eviction on case termination via `CaseStatusChangedHandler`, same pattern as all other per-case registries.
+**Rationale:** Four metrics cover the four resource dimensions where swarm pathology manifests: dispatches (agent thrashing), signals (coordination storms), context mutations (state thrashing), evaluations (evaluation re-entrant loops). Sliding-window rates give precise activity trends for convergence detection. Cumulative totals give hard budget enforcement. `SlidingWindowCounter` is a bounded circular buffer of timestamps — `record(Instant)` appends, `rate(windowDuration, now)` counts entries within the window and returns count/windowSeconds. Memory bound: `maxWindowEntries` is derived from `rateWindow` — cap = `rateWindow.toSeconds() * 10` (allows up to 10 events/second before oldest entries are evicted). For the default 60s window, cap = 600. Configurable via `ConvergenceConfig.maxWindowEntries` (nullable, null = derived). Eviction on case termination via `CaseStatusChangedHandler`, same pattern as all other per-case registries.
 
-**Trade-offs:** Four sliding windows per case × 1000 entries each = 4000 timestamps per case. Bounded and manageable. No persistence — lost on restart (consistent with D29, all coordination state is in-memory).
+**Trade-offs:** Four sliding windows per case × 600 entries each (default) = 2400 timestamps per case. Bounded and manageable. At extreme event rates (>10/s), oldest entries are evicted and rate computation underestimates — acceptable since high event rates are by definition not converged. No persistence — lost on restart (consistent with D29, all coordination state is in-memory).
 
 **Sources:** `QuiescenceTracker.java` (per-case atomic state pattern), `SignalRegistry.java` (per-case ConcurrentHashMap pattern), `Resettable` interface, D29 (in-memory only)
 **Depends on:** D45 (pipeline integration — convergence phase reads rates)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — made SlidingWindowCounter cap explicit (derived from rateWindow, configurable override) per review R2-01
 
 ## D47: Instrumentation points — where metrics are recorded
 
-**Choice:** Each metric is recorded at its natural event source, inside the existing handlers:
+**Choice:** Each metric is recorded at its single canonical source:
 - `totalDispatches` — incremented in `CaseContextChangedEventHandler` when a `WorkerScheduleEvent` is published (inside `publishWorkerSchedule()`, after successful dispatch)
-- `totalSignalDeposits` — incremented in `CaseContextChangedEventHandler.observations()` when signal expiry detection runs (after deposits from `localRules()` phase), AND in `DefaultSignalSpace.deposit()` for worker-initiated deposits
+- `totalSignalDeposits` — incremented inside `SignalRegistry.deposit()` itself (single source of truth for ALL signal deposits — worker-initiated via `DefaultSignalSpace`, rule-initiated via `LocalRuleEvaluator`, and any future deposit path). `ActivityTracker` injected into `SignalRegistry`.
 - `totalContextMutations` — incremented in `CaseContextChangedEventHandler` at cycle start, counting `event.changedKeys().size()` (or a count of keys changed in the context diff)
 - `totalEvaluationCycles` — incremented at the top of `evaluateAndDispatch()` (one per serialized evaluation)
 
-All increments are fire-and-forget — no return values, no blocking. `ActivityTracker` is injected into `CaseContextChangedEventHandler` (for evaluations, dispatches, mutations) and `DefaultSignalSpace` (for signal deposits via WorkerRuntime).
+All increments are fire-and-forget — no return values, no blocking. `ActivityTracker` is injected into `CaseContextChangedEventHandler` (for evaluations, dispatches, mutations) and `SignalRegistry` (for signal deposits).
 
 **Alternatives:**
 - EventLog-based counting (query EventLog for WORKER_SCHEDULED count) — accurate but O(N) query on each evaluation cycle. Too expensive for a per-cycle check.
 - CDI event observers on existing events — decouples instrumentation from handlers but adds async overhead and loses per-cycle consistency.
+- Multiple instrumentation points for signals (both `observations()` and `DefaultSignalSpace`) — risks double-counting. Single source at `SignalRegistry.deposit()` is correct.
 
-**Rationale:** Direct instrumentation at the event source is the most accurate and lowest-overhead approach. Each handler already knows what it's doing — adding an `activityTracker.recordDispatch(caseId)` call is a single-line addition. The tracker's sliding window handles timing; the handler just signals "this happened."
+**Rationale:** Direct instrumentation at the single canonical event source is the most accurate and lowest-overhead approach. For signals specifically, `SignalRegistry.deposit()` is the only method that actually creates or reinforces signals — instrumenting there catches all deposit paths without double-counting risk.
 
-**Trade-offs:** Couples ActivityTracker to CaseContextChangedEventHandler and DefaultSignalSpace. Acceptable — these are the canonical event sources for these metrics.
+**Trade-offs:** Couples ActivityTracker to CaseContextChangedEventHandler and SignalRegistry. Acceptable — these are the canonical event sources for these metrics.
 
-**Sources:** `CaseContextChangedEventHandler.java:publishWorkerSchedule()`, `CaseContextChangedEventHandler.java:evaluateAndDispatch()`, `DefaultSignalSpace.java:deposit()`
+**Sources:** `CaseContextChangedEventHandler.java:publishWorkerSchedule()`, `CaseContextChangedEventHandler.java:evaluateAndDispatch()`, `SignalRegistry.java:deposit()`
 **Depends on:** D46 (ActivityTracker defines what is tracked)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — moved signal deposit instrumentation to SignalRegistry.deposit() as single source of truth per review R2-02
 
 ## D48: Budget enforcement — hard gate with case fault
 
@@ -801,12 +802,12 @@ All increments are fire-and-forget — no return values, no blocking. `ActivityT
 
 **Rationale:** Hard gate prevents unbounded resource consumption, which is the #1 production failure mode for multi-agent systems (40% of pilots fail from coordination overhead). Faulting the case is the correct response — it surfaces the problem clearly and triggers the existing failure handling pipeline (CaseOutcomeObserver, EventLog audit, etc.). Null caps preserve backward compatibility — existing cases without convergence config are unaffected.
 
-**Trade-offs:** Hard fault is not graceful — running workers are not proactively cancelled (they complete naturally and find the case already terminal). Acceptable — `CaseStatusChangedHandler` handles cleanup. A case author who wants a warning gate can use a local rule that reads the activity metrics and reacts.
+**Trade-offs:** Hard fault is not graceful — running workers are not proactively cancelled (they complete naturally and find the case already terminal). Acceptable — `CaseStatusChangedHandler` handles cleanup. A case author who wants a warning gate can use a local rule that reads the activity metrics and reacts. Budget enforcement precision: context mutation budget is checked at cycle start, but `localRules()` can write new context keys later in the same cycle. This means the mutation count can overshoot the budget by one cycle's worth of rule writes before the next cycle's check catches it. Accepted imprecision — budget caps are order-of-magnitude safety nets (e.g. max 10,000 mutations), not precise limits. One cycle of overshoot is negligible.
 
 **Sources:** `CaseStatusChanged` event, `CaseStatusChangedHandler.java` (terminal state handling), `maxConcurrentDispatches` (existing hard cap pattern), engine#1044 (WatchdogRecoveryBridge CANCEL_AFFECTED pattern)
 **Depends on:** D46 (ActivityTracker provides counts), D47 (instrumentation provides the counts)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — acknowledged one-cycle overshoot imprecision for context mutation budget per review R2-03
 
 ## D49: ConvergenceDetector — activity quiescence with sustained stability
 
@@ -818,12 +819,12 @@ All increments are fire-and-forget — no return values, no blocking. `ActivityT
 
 **Rationale:** "Everything has quieted down for long enough" is the clearest convergence signal. Each rate threshold is independently configurable — fast-changing cases (real-time monitoring) need different thresholds than slow cases (multi-day investigations). `stabilityWindow` prevents false positives from temporary lulls. Synthetic goal integration means no new termination path — the existing `GoalReachedEventHandler` handles case status transition if the CaseDefinition declares a convergence completion goal.
 
-**Trade-offs:** Single convergence firing per case. If a case "de-converges" (activity resumes after convergence), the detector won't fire again. Acceptable — convergence is a terminal detection, not a toggle. Cases that need re-evaluation should use a local rule that monitors activity rates directly.
+**Trade-offs:** Single convergence firing per case. If a case "de-converges" (activity resumes after convergence), the detector won't fire again. Acceptable — convergence is a terminal detection, not a toggle. Multi-phase cases (explore → exploit, breadth-first → depth-first) should use explicit phase tracking via goals and context keys, not convergence detection. Convergence detection is the "I don't know when it's done" escape hatch for the terminal state, not a phase-transition mechanism. Note: the synthetic `GoalReachedEvent` is published on the event bus and processed by `GoalReachedEventHandler` asynchronously — convergence detection and the resulting case termination are not atomic within one evaluation cycle. A worker could complete between detection and termination. This is safe: `GoalReachedEventHandler` checks `currentState.isTerminal()` and `CaseStatusChangedHandler` uses CAS for terminal transitions, preventing duplicate transitions.
 
 **Sources:** `GoalReachedEventHandler.java:102-148` (goal evaluation), `QuiescenceTracker.java` (per-case state pattern), D45 (pipeline phase), D46 (activity rates)
 **Depends on:** D45 (pipeline phase), D46 (ActivityTracker provides rates), D48 (budget enforcement runs before convergence)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-10: clarified terminal-only semantics; R2-04: noted async goal firing with existing CAS safety
 
 ## D50: Goal integration — convergence goal kind and CaseDefinition wiring
 
@@ -833,7 +834,7 @@ completion:
   success:
     anyOf: [case-resolved, _converged]
 ```
-The `_converged` goal is fired by the engine, not by any agent. If a CaseDefinition does not include `_converged` in its completion goals, convergence detection still runs (for monitoring/audit) but does not trigger termination. A new `CaseHubEventType.CONVERGENCE_DETECTED` is always written to EventLog regardless of whether termination fires.
+The `_converged` goal is fired by the engine with `StandardGoalKind.SUCCESS` (terminal status: `COMPLETED`), not by any agent. The GoalKind determines the terminal CaseStatus if the completion block triggers on this goal. If a CaseDefinition does not include `_converged` in its completion goals, convergence detection still runs (for monitoring/audit) but does not trigger termination. A new `CaseHubEventType.CONVERGENCE_DETECTED` is always written to EventLog regardless of whether termination fires.
 
 **Alternatives:**
 - New CaseCompletion variant (`ConvergenceCompletion`) — requires unsealing `CaseCompletion` and adding a new code path in `GoalReachedEventHandler`. More invasive.
@@ -843,72 +844,75 @@ The `_converged` goal is fired by the engine, not by any agent. If a CaseDefinit
 
 **Trade-offs:** Case authors must explicitly opt in to convergence termination by adding `_converged` to their completion goals. This is intentional — convergence detection without termination is useful for monitoring. Automatic termination on convergence would surprise case authors who don't expect it.
 
-**Sources:** `GoalBasedCompletion.java:23-56` (GoalBasedCompletion builder), `GoalKind.java:17` (interface, not enum), `GoalReachedEventHandler.java:102` (evaluateCompletion), D49 (fires synthetic goal)
+**Sources:** `GoalBasedCompletion.java:23-56` (GoalBasedCompletion builder), `GoalKind.java:17` (interface, not enum), `StandardGoalKind.java` (SUCCESS → COMPLETED), `GoalReachedEventHandler.java:102` (evaluateCompletion), D49 (fires synthetic goal)
 **Depends on:** D49 (ConvergenceDetector fires the goal)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-16: specified GoalKind = StandardGoalKind.SUCCESS for _converged goal
 
-## D51: DiversityMonitor — output similarity tracking per binding
+## D51: OutputConvergenceMonitor — output similarity tracking per binding
 
-**Choice:** `DiversityMonitor` (`runtime-core`, `@ApplicationScoped`) tracks per-binding output similarity across agents. On each successful worker completion (`WorkflowExecutionCompletedHandler` success path), stores the output key set and a content hash per key. When `recentOutputCount >= diversityMinSamples` (configurable, default 3), computes pairwise Jaccard similarity on key sets. When average Jaccard exceeds `diversityThreshold` (configurable, default 0.9) AND value hashes match for overlapping keys, fires `DIVERSITY_VIOLATION` CaseHubEventType. Per-binding sliding window of last N outputs (default 10). No cross-binding comparison — diversity is evaluated within the same capability.
+**Choice:** `OutputConvergenceMonitor` (`runtime-core`, `@ApplicationScoped`) tracks per-binding output similarity across agents. On each successful worker completion (`WorkflowExecutionCompletedHandler` success path), stores the output key set and a content hash per key. When `recentOutputCount >= convergenceMinSamples` (configurable, default 3), computes pairwise Jaccard similarity on key sets. When average Jaccard exceeds `convergenceThreshold` (configurable, default 0.9) AND value hashes match for overlapping keys, fires `OUTPUT_CONVERGENCE_DETECTED` CaseHubEventType as an informational event. Per-binding sliding window of last N outputs (default 10). No cross-binding comparison — convergence is evaluated within the same capability. This is NOT an anti-collusion mechanism — it detects structural convergence, which may indicate either independent consensus (correct behavior) or groupthink (a concern). The interpretation is semantic and belongs in blocks, not the engine.
 
 **Alternatives:**
 - Signal concentration monitoring — only catches collusion manifesting through signals, misses output-level convergence.
 - LLM-based semantic analysis (deferred to blocks) — engine provides metrics, blocks provides intelligence. Future extension via observer SPI.
 
-**Rationale:** Key-set Jaccard + value hash is classical, deterministic, and O(K×N²) where K = output keys and N = window size (small). Detects structurally identical outputs — the price-fixing equivalent where all agents produce the same answer without coordinating. Per-binding scoping makes the comparison meaningful — agents working on the same capability should produce diverse approaches. `diversityMinSamples` prevents false positives when only 1-2 agents have run.
+**Rationale:** Key-set Jaccard + value hash is classical, deterministic, and O(K×N²) where K = output keys and N = window size (small). Detects structurally identical outputs. Per-binding scoping makes the comparison meaningful — agents working on the same capability may or may not produce similar outputs depending on the domain. `convergenceMinSamples` prevents false positives when only 1-2 agents have run. The informational framing (OUTPUT_CONVERGENCE_DETECTED, not DIVERSITY_VIOLATION) correctly reflects what the engine can determine: structural similarity exists. Whether that similarity indicates consensus, collusion, or groupthink is a semantic judgment that belongs in blocks.
 
 **Trade-offs:** Structural similarity only — semantically equivalent but structurally different outputs are not detected. Acceptable for v1 — LLM-backed semantic analysis is a natural blocks extension. Value hash comparison is exact-match — near-duplicates with minor field variations pass. Mitigated by the Jaccard threshold on key sets catching most near-duplicates.
 
-**Sources:** `WorkflowExecutionCompletedHandler.java` (success path, output access), `ConflictResolver.java` (output key handling precedent), engine#1110 issue spec (anti-collusion requirements)
+**Sources:** `WorkflowExecutionCompletedHandler.java` (success path, output access), `ConflictResolver.java` (output key handling precedent), engine#1110 issue spec
 **Depends on:** D45 (pipeline runs after outputs are recorded), D46 (ActivityTracker pattern for per-case state)
+**Injection note:** `OutputConvergenceMonitor` is injected into `WorkflowExecutionCompletedHandler` via `Instance<OutputConvergenceMonitor>` with `isResolvable()` guard — transparent no-op when convergence module is absent. No circular dependency — both are `@ApplicationScoped` beans in `runtime-core`. The handler is large but adding an `Instance<>` injection follows the existing pattern (e.g., `Instance<StepOutcomeObserver>`, `Instance<CaseOutcomeObserver>`).
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-06: reframed from anti-collusion/DIVERSITY_VIOLATION to informational; R2-05: clarified injection dependency and Instance<> guard pattern
 
 ## D52: ConvergenceConfig — per-case configuration
 
-**Choice:** `ConvergenceConfig` record in `engine-api` under `io.casehub.api.model.convergence`:
+**Choice:** Three independent config records in `engine-api` under `io.casehub.api.model.convergence`:
+
 ```java
-ConvergenceConfig(
-    // Budget caps (null = no limit)
-    Integer maxDispatches,
+BudgetConfig(
+    Integer maxDispatches,           // null = no limit
     Integer maxSignalDeposits,
     Integer maxContextMutations,
-    Integer maxEvaluationCycles,
-    // Convergence thresholds (rates per second)
+    Integer maxEvaluationCycles
+)
+
+ConvergenceThresholdConfig(
     Double dispatchRateThreshold,       // default 0.1
     Double signalDepositRateThreshold,  // default 0.1
     Double contextMutationRateThreshold,// default 0.1
     Double evaluationRateThreshold,     // default 0.5
-    // Timing
     Duration stabilityWindow,           // default 30 seconds
-    Duration rateWindow,                // default 60 seconds (sliding window size)
-    // Diversity
-    Double diversityThreshold,          // default 0.9
-    Integer diversityMinSamples,        // default 3
-    Integer diversityWindowSize,        // default 10
-    // Master switch
-    boolean enabled                     // default false
+    Duration rateWindow                 // default 60 seconds
+)
+
+OutputConvergenceConfig(
+    Double convergenceThreshold,     // default 0.9
+    Integer convergenceMinSamples,   // default 3
+    Integer convergenceWindowSize    // default 10
 )
 ```
-`CaseDefinition` gains `convergenceConfig` (nullable, null = disabled). Builder: `.convergenceConfig(ConvergenceConfig)`. YAML: `convergenceConfig:` block under `spec:`. `enabled: false` default means existing cases are completely unaffected — opt-in only.
+
+`CaseDefinition` gains three nullable fields: `budgetConfig`, `convergenceThresholdConfig`, `outputConvergenceConfig`. Each is independently nullable — presence activates the feature, absence disables it. No master switch needed. YAML: three separate blocks under `spec:`. A user who wants only budget enforcement configures only `budgetConfig:` — the convergence and output monitoring fields don't exist in their YAML.
 
 **Alternatives:**
-- Separate config records per concern (BudgetConfig, ConvergenceThresholdsConfig, DiversityConfig) — more granular but more configuration surface area for the user. One record is simpler to declare in YAML.
+- Single monolithic record — crammed 14+ fields serving three independent concerns. User must understand all fields to configure any one concern. The "less surface area" argument is false — the surface area is identical, just less self-documenting.
 - Config on individual bindings — convergence is a case-level concern, not per-binding.
 
-**Rationale:** Single configuration record follows the `ObservationConfig`, `SignalConfig`, `RuleConfig` pattern. All convergence-related settings in one place. `enabled: false` default preserves backward compatibility — zero impact on existing cases. Individual null caps mean each budget dimension can be independently enabled.
+**Rationale:** Each config record maps 1:1 to its concern: budget limits, activity quiescence detection, output convergence monitoring. A user enabling only budgets touches only budget fields. Presence-as-activation replaces the `enabled` master switch — more consistent with how `ObservationConfig`, `SignalConfig`, and `RuleConfig` work (they exist or they don't, no master switch on each).
 
-**Trade-offs:** One large record. Acceptable — the fields group naturally (budgets, rates, timing, diversity, switch). YAML nesting keeps it readable.
+**Trade-offs:** Three config surfaces instead of one. Acceptable — they ARE three independent concerns. YAML reads more clearly with three small blocks than one large one.
 
 **Sources:** `ObservationConfig.java` (record pattern), `SignalConfig.java` (record pattern), `RuleConfig.java` (record pattern), `CaseDefinition` (config surface)
-**Depends on:** D46 (defines what metrics exist), D49 (defines what thresholds mean), D51 (defines diversity parameters)
+**Depends on:** D46 (defines what metrics exist), D49 (defines what thresholds mean), D51 (defines output convergence parameters)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-09: split monolithic ConvergenceConfig into BudgetConfig, ConvergenceThresholdConfig, OutputConvergenceConfig; presence-as-activation replaces master switch
 
 ## D53: Module placement — convergence types in api/model/convergence, infrastructure in common-core and runtime-core
 
-**Choice:** `ConvergenceConfig` in `io.casehub.api.model.convergence`. `ActivityTracker` and `SlidingWindowCounter` in `io.casehub.engine.common.internal.convergence`. `ConvergenceDetector` and `DiversityMonitor` in `io.casehub.engine.internal.convergence` (runtime-core). Follows the established pattern: value types in api, mutable state management in common-core, handler/detection logic in runtime-core.
+**Choice:** `BudgetConfig`, `ConvergenceThresholdConfig`, `OutputConvergenceConfig` in `io.casehub.api.model.convergence`. `ActivityTracker` and `SlidingWindowCounter` in `io.casehub.engine.common.internal.convergence`. `ConvergenceDetector` and `OutputConvergenceMonitor` in `io.casehub.engine.internal.convergence` (runtime-core). Follows the established pattern: value types in api, mutable state management in common-core, handler/detection logic in runtime-core.
 
 **Alternatives:** None — direct analog of D4 (observation), D17 (signals), D36 (neighbors), D44 (rules) placement.
 
@@ -917,14 +921,14 @@ ConvergenceConfig(
 **Sources:** D4, D17, D36, D44 (module placement precedents)
 **Depends on:** D46, D49, D51, D52 (defines what types exist)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-06/R1-09: DiversityMonitor renamed to OutputConvergenceMonitor; ConvergenceConfig split into three records
 
 ## D54: Audit — CONVERGENCE_DETECTED, BUDGET_EXHAUSTED, DIVERSITY_VIOLATION event types
 
 **Choice:** Three new `CaseHubEventType` values:
 - `CONVERGENCE_DETECTED` — fired when all activity rates drop below threshold for the stability window. Metadata: `dispatchRate`, `signalDepositRate`, `contextMutationRate`, `evaluationRate`, `stabilityDuration`, `totalDispatches`, `totalSignalDeposits`, `totalContextMutations`, `totalEvaluationCycles`.
 - `BUDGET_EXHAUSTED` — fired when any cumulative budget cap is exceeded. Metadata: `exhaustedMetric`, `currentCount`, `budgetCap`.
-- `DIVERSITY_VIOLATION` — fired when output diversity drops below threshold. Metadata: `bindingName`, `averageJaccard`, `matchingOutputCount`, `totalSamples`, `affectedAgents`.
+- `OUTPUT_CONVERGENCE_DETECTED` — fired when output structural similarity exceeds threshold. Informational, not judgmental. Metadata: `bindingName`, `averageJaccard`, `matchingOutputCount`, `totalSamples`, `affectedAgents`.
 
 All three are written to EventLog immediately when detected. `CONVERGENCE_DETECTED` is always written (even if the case does not have `_converged` in its completion goals — pure audit). `BUDGET_EXHAUSTED` is written before the case is faulted.
 
@@ -933,18 +937,18 @@ All three are written to EventLog immediately when detected. `CONVERGENCE_DETECT
 **Sources:** `CaseHubEventType.java`, D16 (audit pattern), D27 (audit pattern)
 **Depends on:** D49, D48, D51 (define the detection events)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-06: renamed DIVERSITY_VIOLATION to OUTPUT_CONVERGENCE_DETECTED
 
 ## D55: Lifecycle — case termination eviction + Resettable
 
-**Choice:** `CaseStatusChangedHandler` calls `activityTracker.evictByCase(caseId)` and `diversityMonitor.evictByCase(caseId)` on terminal case status. Both implement `Resettable` for demo/test replay. Same pattern as `SignalRegistry`, `ObservationRegistry`, `RuleRegistry`, `ContextHistoryBuffer`.
+**Choice:** `CaseStatusChangedHandler` calls `activityTracker.evictByCase(caseId)` and `outputConvergenceMonitor.evictByCase(caseId)` on terminal case status. Both implement `Resettable` for demo/test replay. Same pattern as `SignalRegistry`, `ObservationRegistry`, `RuleRegistry`, `ContextHistoryBuffer`.
 
 **Alternatives:** None — established lifecycle pattern.
 
 **Sources:** `CaseStatusChangedHandler.java` (terminal eviction), `Resettable` interface, D18 (signal lifecycle), D44 (rule lifecycle)
-**Depends on:** D46 (ActivityTracker), D51 (DiversityMonitor)
+**Depends on:** D46 (ActivityTracker), D51 (OutputConvergenceMonitor)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-06: DiversityMonitor → OutputConvergenceMonitor
 
 ## D56: WorkerRuntime surfacing — convergence metrics as read-only view
 
@@ -954,11 +958,61 @@ All three are written to EventLog immediately when detected. `CONVERGENCE_DETECT
 - Add `MetricsSpace` facet now — provides `metrics() → CaseActivitySnapshot` with rate/count views. More transparent to agents but exposes system-level concern at the agent level.
 - Add metrics to RuleContext — local rules could condition on activity rates. Useful but conflates coordination rules with system monitoring.
 
-**Rationale:** Convergence detection is orthogonal to agent coordination. Agents coordinate via signals, observations, interests, neighbors, and rules. The engine monitors the collective behavior and intervenes when necessary. Exposing metrics to agents creates a feedback loop where agents could game the convergence detector (e.g., depositing a signal to prevent convergence detection).
+**Rationale:** Convergence detection is a system-level supervisory function. Agents coordinate via signals, observations, interests, neighbors, and rules — these are the agent-facing coordination primitives. The engine monitors aggregate behavior and intervenes when thresholds are breached. Agents don't need to know "how close am I to the budget cap" — they need to do their work. The engine handles the safety net.
 
-**Trade-offs:** Agents cannot proactively respond to convergence metrics. They can only respond to the engine's interventions (faulted case, convergence goal). Acceptable — the engine is the authority on convergence, not the agents.
+**Trade-offs:** Agents cannot proactively respond to convergence metrics (e.g., voluntarily reduce activity when approaching a budget cap). They can only respond to the engine's interventions (faulted case, convergence goal). Acceptable — the engine is the authority on convergence, not the agents. If future issues (#1111-#1115) need agent-visible activity metrics, a read-only `MetricsSpace` facet can be added without changing the tracker infrastructure.
 
 **Sources:** D19 (faceted architecture), D32 (NeighborSpace — read-only facade precedent), engine#1110 issue spec
 **Depends on:** D46 (ActivityTracker is the infrastructure being surfaced or not)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R2-06: replaced weak gaming rationale with clearer separation-of-concerns argument
+
+## D57: Cross-case coordination scoping — per-case only
+
+**Choice:** All coordination state — signals, observations, interests, neighbors, rules — is scoped to a single case. No cross-case coordination mechanisms. Agents working across multiple cases cannot use stigmergic coordination to share findings between cases.
+
+**Alternatives:**
+- Cross-case signal namespace (e.g., global signals visible across cases) — requires distributed signal registry, changes the consistency model
+- Case-group coordination (cases in the same group share a signal namespace) — intermediate option, requires group concept
+- External coordination layer (message bus, shared database) — exists at the application level, outside engine scope
+
+**Rationale:** Per-case scoping is correct for v1 and consistent with the platform's per-case isolation model. All evaluation state (goals, plan items, bindings) is per-case. Cross-case coordination is an application-level concern that the engine should not own in v1. The per-case `ConcurrentHashMap` storage model (D29) is a data structure decision, not an architectural constraint — cross-case queries could be added over the same storage if needed. The architectural constraint is the `CaseEvaluationSerializer` gate, which serializes per-case.
+
+**Trade-offs:** Agents investigating related cases (e.g., AML network analysis) must coordinate via external mechanisms (application-level context sharing, shared database). This is the right boundary for v1 — the engine provides per-case coordination primitives, the application provides cross-case orchestration.
+
+**Sources:** D29 (in-memory only), `CaseEvaluationSerializer` (per-case gate), all coordination registries (keyed by caseId)
+**Exploration:** quick (surfaced by R1-13)
+**Status:** captured — made explicit from implicit per-case scoping
+
+## D58: Quiescent case coordination asymmetry — accepted for v1
+
+**Choice:** Signal decay is continuous (time-based), but perception only occurs during evaluation cycles. If a case goes quiescent (no context changes), signals decay mathematically but no agent perceives the decaying values. When activity resumes, accumulated coordination intelligence may have crossed the effective-zero threshold.
+
+**Alternatives:**
+- Periodic heartbeat evaluation — inject synthetic `CaseContextChangedEvent` on a timer to force perception even during quiescence. Adds operational complexity and fights the event-driven model.
+- Perception-triggered decay — signals only decay when perceived (freeze decay during quiescence). Breaks the time-based semantics and makes signals dependent on evaluation frequency.
+- Persistent coordination state — addresses the broader restart concern (D29) but doesn't fix the quiescence asymmetry.
+
+**Rationale:** This is an inherent property of event-driven perception in a time-based decay model. The asymmetry is real but bounded: case authors should configure signal halfLife proportional to the expected case activity pattern. Fast-turnaround cases use minute-scale halfLife; multi-day investigations use hour/day-scale halfLife. D29 (in-memory only) means restart during quiescence loses everything regardless — the quiescence asymmetry is a lesser concern than the restart concern.
+
+**Trade-offs:** Low-activity cases get less value from the coordination layer than high-activity cases. Acceptable for v1 — the coordination layer is most naturally useful for cases with sustained agent activity.
+
+**Sources:** D11 (exponential decay), D29 (in-memory only), `CaseContextChangedEvent` (evaluation trigger)
+**Exploration:** quick (surfaced by R1-14)
+**Status:** captured — made explicit from implicit asymmetry
+
+## D59: Observer evaluation order — non-deterministic across agents
+
+**Choice:** Within a single evaluation cycle, the order in which agents' observers are evaluated is non-deterministic (depends on `ConcurrentHashMap` iteration order of `ObservationRegistry.getObservers()`). With parallel observer evaluation (D6 revision), all observers across all agents execute concurrently, making ordering irrelevant. Within an agent, observer registration order is preserved (List ordering).
+
+**Alternatives:**
+- Deterministic ordering (sorted by agentId) — adds overhead for no correctness benefit
+- Priority-based ordering — adds complexity to the observer model
+
+**Rationale:** Under parallel evaluation (D6), all observers run concurrently with a collective timeout. Ordering is moot — there is no "first" or "last." Each agent's observations are stored independently and do not affect other agents' observation results within the same cycle. The only interaction is through the shared ObservationContext, which is immutable.
+
+**Trade-offs:** Non-reproducible execution traces (observer completion order varies between runs). Acceptable — observations are independent, so ordering doesn't affect correctness.
+
+**Sources:** `ObservationRegistry.getObservers()` (ConcurrentHashMap iteration), D6 (parallel evaluation)
+**Exploration:** quick (surfaced by R1-15)
+**Status:** captured — made explicit from implicit non-determinism
