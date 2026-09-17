@@ -15,9 +15,9 @@ date: 2026-09-15
 - [x] casehubio/engine#1108 — feat: Agent discovery & neighbor awareness — dynamic topology
 - [x] casehubio/engine#1109 — feat: Local rule evaluation — per-agent decision rules
 - [ ] casehubio/engine#1110 — feat: Convergence detection & termination — emergent completion, runaway & collusion prevention ← active
-  - [ ] Batch 1: Foundation
-    - [ ] Task 1: Config records + CaseHubEventType
-    - [ ] Task 2: SlidingWindowCounter + ActivityTracker
+  - [x] Batch 1: Foundation
+    - [x] Task 1: Config records + CaseHubEventType
+    - [x] Task 2: SlidingWindowCounter + ActivityTracker
   - [ ] Batch 2: Pipeline
     - [ ] Task 3: ConvergenceDetector + BudgetEnforcer + wiring
   - [ ] Batch 3: Output
