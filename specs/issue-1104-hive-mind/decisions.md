@@ -1043,3 +1043,56 @@ Agents use existing WorkerRuntime facets (`signals()`, `interests()`, `neighbors
 **Depends on:** D19 (faceted architecture), D45 (pipeline integration), D48 (budget enforcement), D49 (convergence detection)
 **Exploration:** deep-analysis (first-principles derivation of coordination as fourth axis)
 **Status:** captured
+
+## D61: Module placement — StigmergyStrategy requires planning module
+
+**Choice:** StigmergyStrategy lives in `planning-core` as a `NamedStrategy`, resolved by `StrategyResolver`. Cases using stigmergy need the planning module on the classpath. StigmergyConfig lives in `engine-api` (configuration type). StigmergyCoordinator lives in `runtime-core` (lifecycle management).
+
+**Alternatives:**
+- Standalone in runtime-core — would need a new LoopControl or hook in ChoreographyLoopControl. Breaks the existing pattern where all strategies live in the planning module.
+- Split with fallback — coordinator and config available without planning, strategy requires it. Added complexity for unclear benefit — if you want stigmergy, you want the full model.
+
+**Rationale:** Consistent with how sequential, HTN, and GOAP strategies work today — all require the planning module. `PlanningStrategyLoopControl` is the established mechanism for per-case strategy resolution. The planning module is already the natural home for strategy implementations.
+
+**Trade-offs:** Cases without the planning module cannot use stigmergy. Acceptable — the planning module is lightweight and stigmergy is a coordination model that benefits from planning infrastructure (compound PlanItems, population tracking via PlanItemStore).
+
+**Sources:** `PlanningStrategyLoopControl.java` (runtime), `ChoreographyLoopControl.java` (runtime), `DefaultPlanningStrategy.java` (planning-core), `StrategyResolver` (common-core)
+**Depends on:** D60 (three-layer architecture — defines what goes where)
+**Exploration:** quick
+**Status:** captured
+
+## D62: StigmergyConfig as coordinated defaults preset
+
+**Choice:** `StigmergyConfig` provides default values that fill in missing per-SPI config fields on `CaseDefinition`. If a case declares both `stigmergyConfig` AND an explicit `signalConfig`, the explicit config wins. StigmergyConfig is a "preset" — sensible stigmergy defaults without configuring 6 blocks individually. Existing config fields (`signalConfig`, `ruleConfig`, `convergenceThresholdConfig`, `budgetConfig`, `outputConvergenceConfig`, `observationConfig`) are unchanged and retain their nullable semantics.
+
+Resolution order: explicit per-SPI config > StigmergyConfig defaults > system defaults (null = disabled).
+
+**Alternatives:**
+- Wrapper that replaces individual configs — breaks backward compat for cases using individual configs alongside stigmergy
+- Activator only, no defaults — doesn't reduce configuration burden, case author still configures 6 blocks
+
+**Rationale:** Stigmergy requires all coordination SPIs working together with compatible settings. A preset gives the case author a working stigmergy setup with one config block. Power users override specific aspects without losing the rest. No breaking changes to existing config model.
+
+**Trade-offs:** Two resolution paths (preset vs explicit). Mitigated: resolution is a simple null-check per field at case initialization time. Debug: EventLog entry at case start could log effective config source per block.
+
+**Sources:** `CaseDefinition` (existing nullable config fields), `SignalConfig`, `RuleConfig`, `ConvergenceThresholdConfig`, `BudgetConfig`, `OutputConvergenceConfig`, `ObservationConfig`
+**Depends on:** D60 (StigmergyConfig is Layer 1 of the three-layer architecture)
+**Exploration:** quick
+**Status:** captured
+
+## D63: Agent model — all bindings are agents in stigmergy compound
+
+**Choice:** When a compound PlanItem's `planningStrategy` is `"stigmergy"`, ALL bindings within that compound are treated as stigmergy agents. The `StigmergyStrategy` dispatches them at case start with `COMPOUND` scope. Trigger conditions (`on:`, `when:`) on bindings are ignored — the strategy handles all dispatch decisions. If a case needs non-stigmergic bindings, they go in a different compound with a different strategy.
+
+**Alternatives:**
+- Explicit agent list in StigmergyConfig — allows mixing stigmergy and non-stigmergy bindings in the same compound. More configuration surface, blurs compound's strategy semantics.
+- Implicit via COMPOUND scope — uses existing field, but COMPOUND scope has meaning independent of stigmergy (worker persistence). Overloading it conflates two concerns.
+
+**Rationale:** The unified execution model's key principle is that strategy scopes to compound PlanItems. A compound with `planningStrategy: stigmergy` is a stigmergy compound — all its children follow stigmergy semantics. Mixed dispatch within a single compound violates the per-compound strategy model. Nesting provides the composition path: a root compound (choreography) containing a stigmergy compound (stigmergy agents) alongside normal bindings.
+
+**Trade-offs:** Triggers on stigmergy bindings are silently ignored. The strategy should log WARN if it encounters bindings with explicit triggers in a stigmergy compound. Forces the use of nested compounds for mixed-model cases — acceptable since the unified execution model already expects composition via nesting.
+
+**Sources:** Unified execution model spec §2.3 (per-compound strategy), §2.1 (compound PlanItem contains children), `PlanningStrategyLoopControl.select()`, engine#1111
+**Depends on:** D60 (three-layer architecture), D61 (planning module dependency)
+**Exploration:** quick
+**Status:** captured
