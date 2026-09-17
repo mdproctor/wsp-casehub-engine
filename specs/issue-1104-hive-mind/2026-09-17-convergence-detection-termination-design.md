@@ -70,7 +70,7 @@ Five components, all engine-internal:
 
 Bounded circular buffer of `Instant` timestamps. API: `record(Instant now)`, `rate(Duration window, Instant now) → double` (events per second within the window).
 
-Memory cap: derived from `rateWindow` as `rateWindow.toSeconds() * 10` (supports up to 10 events/second before oldest entries are evicted). Default for 60s window = 600 entries. Configurable override via `ConvergenceConfig.maxWindowEntries`.
+Memory cap: derived from `rateWindow` as `rateWindow.toSeconds() * 10` (supports up to 10 events/second before oldest entries are evicted). Default for 60s window = 600 entries. Configurable override via `ConvergenceThresholdConfig.maxWindowEntries`.
 
 At extreme event rates (>10/s), oldest entries are evicted and `rate()` underestimates — acceptable since high rates are by definition not converged.
 
@@ -98,11 +98,17 @@ Hard gate checked at two points in the evaluation pipeline:
 1. **Evaluation cycle budget** — checked at the top of `evaluateAndDispatch()`. If `totalEvaluationCycles > maxEvaluationCycles`, skip evaluation entirely.
 2. **Per-operation budgets** — dispatch and signal deposit budgets checked at their respective operation sites. Context mutation budget checked at cycle start.
 
+Each budget check is co-located with its instrumentation point:
+- **Dispatch budget** — checked inside `CaseContextChangedEventHandler.publishWorkerSchedule()`, before the `WorkerScheduleEvent` is published
+- **Signal deposit budget** — checked inside `SignalRegistry.deposit()`, before the deposit is applied
+- **Context mutation budget** — checked at the top of `evaluateAndDispatch()`, using the current cumulative count
+- **Evaluation cycle budget** — checked at the top of `evaluateAndDispatch()`, before any evaluation runs
+
 When any cumulative count exceeds its configured budget cap:
 1. Write `BUDGET_EXHAUSTED` to EventLog (metadata: `exhaustedMetric`, `currentCount`, `budgetCap`)
 2. Dispatch `CaseStatusChanged(FAULTED)` with reason "Budget exhausted: \<metric\>"
 
-Budget caps are nullable on `ConvergenceConfig` — null means no limit (backward compatible).
+Budget caps are nullable on `BudgetConfig` — null means no limit (backward compatible).
 
 **Precision note:** Context mutation budget is checked at cycle start, but `localRules()` can write new context keys later in the same cycle. One cycle's worth of rule writes can overshoot the budget. Accepted imprecision — budget caps are order-of-magnitude safety nets, not precise limits.
 
