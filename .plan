@@ -21,9 +21,9 @@ date: 2026-09-15
   - [x] Batch 2: Coordinator
     - [x] Task 2: StigmergyCoordinator
     - [x] Task 3: Runtime-wiring
-  - [ ] Batch 3: Strategy
-    - [ ] Task 4: StigmergyStrategy
-    - [ ] Task 5: Integration-test
+  - [x] Batch 3: Strategy
+    - [x] Task 4: StigmergyStrategy
+    - [x] Task 5: Integration-test
 - [ ] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence
 - [ ] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
 - [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown
