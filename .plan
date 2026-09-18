@@ -16,6 +16,14 @@ date: 2026-09-15
 - [x] casehubio/engine#1109 — feat: Local rule evaluation — per-agent decision rules
 - [x] casehubio/engine#1110 — feat: Convergence detection & termination — emergent completion, runaway & collusion prevention
 - [ ] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment ← active
+  - [ ] Batch 1: API-Types
+    - [ ] Task 1: Foundation-types
+  - [ ] Batch 2: Coordinator
+    - [ ] Task 2: StigmergyCoordinator
+    - [ ] Task 3: Runtime-wiring
+  - [ ] Batch 3: Strategy
+    - [ ] Task 4: StigmergyStrategy
+    - [ ] Task 5: Integration-test
 - [ ] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence
 - [ ] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
 - [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown
