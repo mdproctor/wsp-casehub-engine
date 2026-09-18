@@ -15,16 +15,18 @@ date: 2026-09-15
 - [x] casehubio/engine#1108 — feat: Agent discovery & neighbor awareness — dynamic topology
 - [x] casehubio/engine#1109 — feat: Local rule evaluation — per-agent decision rules
 - [x] casehubio/engine#1110 — feat: Convergence detection & termination — emergent completion, runaway & collusion prevention
-- [ ] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment ← active
-  - [x] Batch 1: API-Types
-    - [x] Task 1: Foundation-types
-  - [x] Batch 2: Coordinator
-    - [x] Task 2: StigmergyCoordinator
-    - [x] Task 3: Runtime-wiring
-  - [x] Batch 3: Strategy
-    - [x] Task 4: StigmergyStrategy
-    - [x] Task 5: Integration-test
-- [ ] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence
+- [x] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment
+- [ ] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence ← active
+  - [ ] Batch 1: API-Types
+    - [ ] Task 1: API-types
+  - [ ] Batch 2: RoleTracker
+    - [ ] Task 2: RoleTracker
+  - [ ] Batch 3: TeamDetector-Progress
+    - [ ] Task 3: TeamDetector
+    - [ ] Task 4: SwarmProgressTracker
+  - [ ] Batch 4: Wiring
+    - [ ] Task 5: Wiring-integration
+    - [ ] Task 6: Integration-test
 - [ ] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
 - [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown
 - [ ] casehubio/engine#1115 — feat: Continuous evolution loop — self-directed growth with quality gates
