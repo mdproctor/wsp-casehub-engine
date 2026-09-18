@@ -140,7 +140,7 @@
 - Hard-coded cap — not configurable for different case types with different observation needs
 - Per-agent cap — harder to enforce, doesn't address the aggregate latency problem
 
-**Rationale:** The serializer gate (D5) means every observer adds latency to the evaluation cycle. Bounding the count bounds the worst-case evaluation time (20 observers × 100ms target = 2s worst case). The cap is per-case (not per-agent) because aggregate evaluation latency is what matters. `CaseDefinition` is the natural configuration surface, consistent with existing `maxConcurrentDispatches`.
+**Rationale:** The serializer gate (D5) means observers add latency to the evaluation cycle. With parallel evaluation (D6 revision), worst-case evaluation time is the collective timeout (100ms) regardless of observer count. The per-case cap bounds memory and prevents registration exhaustion in swarm scenarios. `CaseDefinition` is the natural configuration surface, consistent with existing `maxConcurrentDispatches`.
 
 **Sources:** `CaseDefinition` (`maxConcurrentDispatches` pattern), issue #1112 (swarm scenarios)
 **Depends on:** D2 (registration mechanism), D5 (pipeline integration), D6 (thread model)
@@ -183,20 +183,20 @@
 
 ## D12: Signal identity — Name-keyed with reinforcement
 
-**Choice:** A signal is a single value per `(caseId, signalName)`. When multiple agents write the same signal name, the write is a reinforcement: strength is set to `max(existing.strength(), newStrength)` — comparing raw stored values, not decayed — and `halfLife` is set to `max(existing.halfLife(), newHalfLife)`. Timestamp resets to now and `reinforcementCount` increments. `lastSource` (agent ID) is tracked for audit. This makes heavily-trafficked signals persist longer — exactly the ACO behavior. Reinforcement can only increase strength and slow decay, never weaken a signal.
+**Choice:** A signal is a single value per `(caseId, signalName)`. When multiple agents write the same signal name, the write is a reinforcement: strength is set to `max(currentEffective, newStrength)` where `currentEffective = SignalDecay.effectiveStrength(existing.strength(), existing.lastReinforced(), existing.halfLife(), now)` — comparing the DECAYED effective strength against the new deposit strength — and `halfLife` is set to `max(existing.halfLife(), newHalfLife)`. Timestamp resets to now and `reinforcementCount` increments. `lastSource` (agent ID) is tracked for audit. This makes heavily-trafficked signals persist longer — exactly the ACO behavior. Reinforcement can only increase strength and slow decay, never weaken a signal.
 
 **Alternatives:**
 - Per-agent signal instances `(caseId, signalName, agentId)` with aggregation — more faithful to multi-ant pheromone, but aggregation strategy becomes a sub-decision, N entries per signal per agent
 - Append-only signal log — maximally faithful but unbounded storage, O(N) reads
 
-**Rationale:** `max()` preserves two orthogonal dimensions of signal quality: `strength` represents the peak confidence of any single endorsement (comparing raw stored values, never decayed); `reinforcementCount` represents the breadth of consensus. Observers can weigh these independently — e.g., `effectiveStrength * log(reinforcementCount)` for consensus-weighted strength. With additive-and-clamp (`min(1.0, current + deposit)`), these dimensions collapse: 3 deposits of 0.4 saturate to 1.0, making strength meaningless and losing individual signal quality to clamping. The `max()` semantics also mean reinforcement resets the decay timestamp, so frequently-reinforced signals persist longer — consensus manifests through temporal persistence, not strength amplification. Using `max()` on halfLife means reinforcement can only slow decay, never accelerate it — an agent cannot "hijack" another agent's signal by reinforcing with a shorter halfLife. Note: this DIFFERS from classical ACO where pheromone deposit is additive (`τ ← τ + Σ Δτ`). The platform's signal model is stigmergy-inspired but not an ACO implementation — agents have varying confidence levels and the strongest endorsement should dominate strength, while consensus is captured separately via `reinforcementCount`.
+**Rationale:** `max()` on decayed effective strength means reinforcement takes the stronger of the two effective signals: if the existing signal has decayed below the new deposit's strength, the new deposit's value wins; if the existing signal is still stronger, it retains its effective strength with a fresh timestamp. This avoids the resurrection problem where a weak reinforcement would restore a fully-decayed signal to its historical peak. `reinforcementCount` separately represents the breadth of consensus. Observers can weigh these independently — e.g., `effectiveStrength * log(reinforcementCount)` for consensus-weighted strength. With additive-and-clamp (`min(1.0, current + deposit)`), these dimensions collapse: 3 deposits of 0.4 saturate to 1.0, making strength meaningless and losing individual signal quality to clamping. The `max()` semantics also mean reinforcement resets the decay timestamp, so frequently-reinforced signals persist longer — consensus manifests through temporal persistence, not strength amplification. Using `max()` on halfLife means reinforcement can only slow decay, never accelerate it — an agent cannot "hijack" another agent's signal by reinforcing with a shorter halfLife. Note: this DIFFERS from classical ACO where pheromone deposit is additive (`τ ← τ + Σ Δτ`). The platform's signal model is stigmergy-inspired but not an ACO implementation — agents have varying confidence levels and the strongest endorsement should dominate strength, while consensus is captured separately via `reinforcementCount`.
 
 **Trade-offs:** Loses individual agent contribution history. If two agents reinforce and then one "retracts," there's no mechanism to reduce strength other than natural decay. Acceptable — pheromone trails don't support retraction in the biological model either.
 
 **Sources:** engine#1106 issue spec (reinforcement model), ACO literature (pheromone deposit/evaporation), `DispositionSignalStore` (eidos uses per-agent signals — different use case, personality is inherently per-agent)
 **Depends on:** D10 (registry storage), D11 (read-time decay)
 **Exploration:** quick
-**Status:** revised — R1-01/R1-02: strength comparison uses raw stored value `max(existing.strength(), newStrength)` to preserve historical peak; halfLife uses `max(existing.halfLife(), newHalfLife)` to prevent decay-rate hijacking
+**Status:** revised — R1-01/R1-02: halfLife uses `max(existing.halfLife(), newHalfLife)` to prevent decay-rate hijacking; ADR-R1-03: strength comparison changed to DECAYED effective value `max(currentEffective, newStrength)` — avoids resurrection of fully-decayed signals while preserving max-semantics for undecayed reinforcement
 
 ## D13: Worker API — WorkerRuntime methods for deposit and perception
 
@@ -647,14 +647,14 @@
 - Match-resolve-act (Drools model) — conflict resolution selects highest-priority matching rule, only one fires per cycle. More controlled but fights swarm semantics where multiple simultaneous behaviors are desirable.
 - Rule chaining within a cycle — rules fire, modify state, re-evaluate. Powerful but risks infinite loops and violates the one-cycle delay principle from D5.
 
-**Rationale:** Swarm agents follow multiple behavioral rules simultaneously (forage AND avoid danger AND follow pheromone gradient). All-fire matches this biological model. Priority determines both execution order AND write precedence for context writes: coordination actions (signal deposits, interest changes) execute in priority order (highest first), and context writes are applied in reverse priority order so that higher-priority rules' writes take precedence on key conflicts. This is consistent with every standard rule system's expectation that "higher priority = wins conflicts." Future Drools integration can provide a `RuleEvaluationStrategy` that replaces all-fire with match-resolve-act for domains that need it.
+**Rationale:** Swarm agents follow multiple behavioral rules simultaneously (forage AND avoid danger AND follow pheromone gradient). All-fire matches this biological model. Priority determines execution order: coordination actions (signal deposits, interest changes) execute in priority order (highest first). Context writes are deduplicated per key — when multiple rules write the same key, only the highest-priority rule's write is applied (lower-priority writes to the same key are discarded). This is unambiguous and doesn't depend on write ordering semantics. Future Drools integration can provide a `RuleEvaluationStrategy` that replaces all-fire with match-resolve-act for domains that need it.
 
-**Trade-offs:** Multiple rules writing the same context key: highest-priority-wins. Agents must manage their own rule sets to avoid conflicting actions. Acceptable — per-agent isolation means conflicts are within one agent's rule set, not across agents.
+**Trade-offs:** Multiple rules writing the same context key within a single agent: highest-priority-wins via per-key dedup. Cross-agent write conflicts for the same key: last-writer-wins with undefined agent ordering (D42). Agents sharing keys must coordinate via signals to avoid conflicting writes.
 
 **Sources:** SwarmSys (arXiv:2510.10047 — multiple simultaneous roles), D5 (one-cycle delay), engine#1109, engine#445 (Drools — different model for different purpose)
 **Depends on:** D37 (action scope), D38 (condition model)
 **Exploration:** quick
-**Status:** revised — R1-07: context writes applied in reverse priority order so higher-priority rules win key conflicts
+**Status:** revised — R1-07: context writes use priority-based ordering; ADR-R1-10: changed from ordering-dependent to per-key dedup — highest-priority rule's write per key wins, no ordering ambiguity
 
 ## D40: RuleContext — coordination fact space
 
@@ -842,12 +842,12 @@ The `_converged` goal is fired by the engine with `StandardGoalKind.SUCCESS` (te
 
 **Rationale:** GoalBasedCompletion is already the extensible completion mechanism. `GoalKind` is an interface (not enum), so custom kinds work. Adding a convergence goal is purely declarative — no code changes to the completion system. The `_` prefix convention distinguishes engine-fired goals from agent-fired goals.
 
-**Trade-offs:** Case authors must explicitly opt in to convergence termination by adding `_converged` to their completion goals. This is intentional — convergence detection without termination is useful for monitoring. Automatic termination on convergence would surprise case authors who don't expect it.
+**Trade-offs:** Case authors must explicitly opt in to convergence termination by adding `_converged` to their completion goals. This is intentional — convergence detection without termination is useful for monitoring. Automatic termination on convergence would surprise case authors who don't expect it. `StandardGoalKind.SUCCESS` is the correct kind because convergence in the stigmergy model IS the expected terminal condition — the swarm has settled. Whether that settlement represents genuine completion or deadlock is a semantic judgment that belongs to the case author's completion block (e.g., require BOTH `case-resolved` AND `_converged` for true success). The `CONVERGENCE_DETECTED` event metadata includes diagnostic context: active agent count, unmet goal names, final activity rates, and total coordination metrics — enabling operators to distinguish genuine completion from deadlocked quiescence via the audit trail.
 
 **Sources:** `GoalBasedCompletion.java:23-56` (GoalBasedCompletion builder), `GoalKind.java:17` (interface, not enum), `StandardGoalKind.java` (SUCCESS → COMPLETED), `GoalReachedEventHandler.java:102` (evaluateCompletion), D49 (fires synthetic goal)
 **Depends on:** D49 (ConvergenceDetector fires the goal)
 **Exploration:** quick
-**Status:** revised — R1-16: specified GoalKind = StandardGoalKind.SUCCESS for _converged goal
+**Status:** revised — R1-16: specified GoalKind = StandardGoalKind.SUCCESS for _converged goal; ADR-R1-09: added diagnostic metadata to CONVERGENCE_DETECTED event (active agents, unmet goals, rates)
 
 ## D51: OutputConvergenceMonitor — output similarity tracking per binding
 
@@ -926,7 +926,7 @@ OutputConvergenceConfig(
 ## D54: Audit — CONVERGENCE_DETECTED, BUDGET_EXHAUSTED, DIVERSITY_VIOLATION event types
 
 **Choice:** Three new `CaseHubEventType` values:
-- `CONVERGENCE_DETECTED` — fired when all activity rates drop below threshold for the stability window. Metadata: `dispatchRate`, `signalDepositRate`, `contextMutationRate`, `evaluationRate`, `stabilityDuration`, `totalDispatches`, `totalSignalDeposits`, `totalContextMutations`, `totalEvaluationCycles`.
+- `CONVERGENCE_DETECTED` — fired when all activity rates drop below threshold for the stability window. Metadata: `dispatchRate`, `signalDepositRate`, `contextMutationRate`, `evaluationRate`, `stabilityDuration`, `totalDispatches`, `totalSignalDeposits`, `totalContextMutations`, `totalEvaluationCycles`, `activeAgentCount`, `unmetGoalNames`.
 - `BUDGET_EXHAUSTED` — fired when any cumulative budget cap is exceeded. Metadata: `exhaustedMetric`, `currentCount`, `budgetCap`.
 - `OUTPUT_CONVERGENCE_DETECTED` — fired when output structural similarity exceeds threshold. Informational, not judgmental. Metadata: `bindingName`, `averageJaccard`, `matchingOutputCount`, `totalSamples`, `affectedAgents`.
 
@@ -958,14 +958,14 @@ All three are written to EventLog immediately when detected. `CONVERGENCE_DETECT
 - Add `MetricsSpace` facet now — provides `metrics() → CaseActivitySnapshot` with rate/count views. More transparent to agents but exposes system-level concern at the agent level.
 - Add metrics to RuleContext — local rules could condition on activity rates. Useful but conflates coordination rules with system monitoring.
 
-**Rationale:** Convergence detection is a system-level supervisory function. Agents coordinate via signals, observations, interests, neighbors, and rules — these are the agent-facing coordination primitives. The engine monitors aggregate behavior and intervenes when thresholds are breached. Agents don't need to know "how close am I to the budget cap" — they need to do their work. The engine handles the safety net.
+**Rationale:** Explicit v1 trade-off: agent-visible metrics are deferred, not rejected. Convergence detection is a system-level supervisory function. Agents coordinate via signals, observations, interests, neighbors, and rules — these are the agent-facing coordination primitives. The engine monitors aggregate behavior and intervenes when thresholds are breached. For v1, agents respond to the coordination primitives, not to system-level metrics. When swarm scenarios (#1112/#1113) demonstrate a concrete need for agent-level metric visibility, a read-only `MetricsSpace` facet with `activityRates() → Map<String, Double>` is the planned extension path — no tracker changes required.
 
 **Trade-offs:** Agents cannot proactively respond to convergence metrics (e.g., voluntarily reduce activity when approaching a budget cap). They can only respond to the engine's interventions (faulted case, convergence goal). Acceptable — the engine is the authority on convergence, not the agents. If future issues (#1111-#1115) need agent-visible activity metrics, a read-only `MetricsSpace` facet can be added without changing the tracker infrastructure.
 
 **Sources:** D19 (faceted architecture), D32 (NeighborSpace — read-only facade precedent), engine#1110 issue spec
 **Depends on:** D46 (ActivityTracker is the infrastructure being surfaced or not)
 **Exploration:** quick
-**Status:** revised — R2-06: replaced weak gaming rationale with clearer separation-of-concerns argument
+**Status:** revised — R2-06: replaced weak gaming rationale with clearer separation-of-concerns argument; ADR-R1-12: reframed as explicit v1 trade-off with planned MetricsSpace extension path
 
 ## D57: Cross-case coordination scoping — per-case only
 
@@ -1218,7 +1218,7 @@ YAML: `stigmergyConfig:` block with optional `defaults:` and `coordination:` sub
 
 For YAML: `on:` is optional when `planningStrategy: stigmergy`. For Java: Binding.builder() allows `build()` without `on()` when the binding will be added to a stigmergy compound.
 
-Implementation: the binding builder can accept `Trigger.STRATEGY_MANAGED` as a sentinel value, or the strategy can wrap trigger-less bindings internally. Implementation detail — the design decision is that triggers are optional.
+Implementation path: the case initializer automatically adds `ScopeActivatedTrigger` to bindings within a stigmergy compound when no trigger is specified. This is transparent to the YAML author — they omit `on:` and the initializer fills in the scope-activated trigger. `PlanningStrategyLoopControl.collectScopeActivatedBindings()` handles dispatch via its existing path when the compound activates. The `StigmergyStrategy.select()` focuses on health monitoring and re-dispatch, not initial dispatch. No new trigger type required.
 
 **Alternatives:**
 - Require always-true triggers — forces case authors to write `on: { contextChange: { filter: 'true' } }` on every binding. Boilerplate that contradicts the "strategy manages dispatch" principle.
@@ -1231,7 +1231,7 @@ Implementation: the binding builder can accept `Trigger.STRATEGY_MANAGED` as a s
 **Sources:** `Binding.Builder.build()`, unified execution model spec §2.2 (dispatch modes), D63 (all bindings are agents)
 **Depends on:** D63 (all bindings are agents), D65 (strategy handles dispatch)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — ADR-R1-08: specified ScopeActivatedTrigger as integration path; case initializer auto-adds trigger for trigger-less bindings in stigmergy compounds
 
 ## D70: Module placement — package structure
 
@@ -1257,3 +1257,39 @@ Implementation: the binding builder can accept `Trigger.STRATEGY_MANAGED` as a s
 **Depends on:** D60 (three-layer architecture defines what exists), D61 (planning module houses the strategy)
 **Exploration:** quick
 **Status:** captured
+
+## D71: Evaluation backpressure — per-case event coalescing in serializer
+
+**Choice:** Explicit v1 trade-off: no backpressure mechanism beyond the existing `CaseEvaluationSerializer` per-case serialization and `BudgetConfig` cumulative caps. The serializer guarantees at most one evaluation per case at a time — concurrent context changes for the same case are queued and processed sequentially. Cross-case evaluation runs concurrently on virtual threads. `BudgetConfig` caps detect and terminate runaway cases after the fact. No bounded queue, no event dropping, no coalescing of duplicate context-change events.
+
+**Alternatives:**
+- Bounded queue per case with coalesced duplicate events — drops redundant `CONTEXT_CHANGED` events when the queue is full. Reduces evaluation pressure but risks losing meaningful context changes that appear identical to duplicates.
+- Rate limiter on evaluation cycles — caps evaluation frequency per case (e.g., max 10 cycles/second). Adds latency to legitimate high-activity cases. Better suited for multi-tenant production hardening than v1 correctness.
+- Cross-case evaluation thread pool with bounded queue — limits total concurrent evaluations. The virtual thread pool already provides this implicitly — virtual threads are cheap but the underlying carrier pool is bounded by CPU count.
+
+**Rationale:** For v1, the existing mechanisms are sufficient: per-case serialization prevents concurrent evaluation, virtual threads handle cross-case concurrency efficiently, and budget enforcement provides the hard safety net. The primary risk scenario (swarm with many cases and frequent signal deposits) is bounded by `maxSignalsPerCase` × case count. Event coalescing is the natural next step when multi-tenant production workloads surface the need — the serializer's pending-event queue is the right coalescing point.
+
+**Trade-offs:** A case can queue thousands of evaluation cycles before budget enforcement stops it. Each queued evaluation runs to completion (including observer evaluation, rule evaluation, convergence detection) — wasted work when the result would be identical. Acceptable for v1 because budget enforcement catches pathological cases, and the per-case serializer prevents fan-out.
+
+**Sources:** `CaseEvaluationSerializer.java` (per-case gate), D48 (budget enforcement), D46 (ActivityTracker)
+**Depends on:** D48 (budget enforcement as backstop)
+**Exploration:** quick (surfaced by ADR R1-14)
+**Status:** captured — made explicit from implicit v1 trade-off
+
+## D72: Registry synchronization — ReentrantLock for virtual thread compatibility
+
+**Choice:** All per-case registries (`ObservationRegistry`, `RuleRegistry`) that currently use `synchronized` blocks should use `java.util.concurrent.locks.ReentrantLock` instead. This aligns with D6's own guidance that implementations "should avoid `synchronized` blocks (which pin platform threads — a known virtual thread anti-pattern)." The registry's internal synchronization should follow the same rule it imposes on observer implementations.
+
+**Alternatives:**
+- Keep `synchronized` — the critical sections are short (list add/remove), so pinning duration is brief. Pragmatically acceptable but inconsistent with D6's guidance.
+- `CopyOnWriteArrayList` for registrations — eliminates read-side locking entirely. Write-heavy scenarios (frequent registration changes in swarm mode) would degrade due to full-copy-on-write. Reads far exceed writes for observer evaluation, but registration churn in COMPOUND workers is write-heavy during setup.
+- `ReadWriteReentrantLock` — separate read and write locks. Optimal for read-heavy access patterns but adds complexity for registries where the critical sections are already short.
+
+**Rationale:** `ReentrantLock` is the minimal change that eliminates the virtual thread pinning anti-pattern. The critical sections remain short. The lock is per-case (each case has its own registration list), so contention is limited to concurrent registrations for the same case — rare in practice.
+
+**Trade-offs:** Minor API change in registry internals (synchronized → lock/unlock). No externally visible change.
+
+**Sources:** `ObservationRegistry.java` (synchronized blocks), D6 (virtual thread guidance), JEP 444 (Virtual Threads — synchronized pinning)
+**Depends on:** D6 (thread model guidance)
+**Exploration:** quick (surfaced by ADR R1-15)
+**Status:** captured — made explicit from implicit inconsistency
