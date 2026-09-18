@@ -60,7 +60,7 @@ The StigmergyExecutionModel is a composition of three layers, each addressing a 
 
 ## 1. StigmergyConfig
 
-`StigmergyConfig` (`engine-api`, `io.casehub.api.model.stigmergy`) — configuration surface that activates stigmergy mode and provides coordinated defaults.
+`StigmergyConfig` (`api`, `io.casehub.api.model.stigmergy`) — configuration surface that activates stigmergy mode and provides coordinated defaults.
 
 ### Structure
 
@@ -103,6 +103,24 @@ Example: if a case declares both `stigmergyConfig.defaults.signalHalfLife = PT5M
 
 This means a case author can write `stigmergyConfig: {}` with zero configuration to get a complete working stigmergy setup with sensible defaults. Power users override specific aspects without losing the rest.
 
+### Field Mapping: StigmergyDefaults → CaseDefinition Config Objects
+
+| StigmergyDefaults field | Target config object | Target field |
+|------------------------|---------------------|-------------|
+| `signalHalfLife` | `SignalConfig` | `defaultHalfLife` |
+| `effectiveZeroThreshold` | `SignalConfig` | `effectiveZeroThreshold` |
+| `maxSignalsPerCase` | `SignalConfig` | `maxSignalsPerCase` |
+| `maxObserversPerCase` | `ObservationConfig` | `maxObserversPerCase` |
+| `maxRulesPerCase` | `RuleConfig` | `maxRulesPerCase` |
+| `rateWindow` | `ConvergenceThresholdConfig` | `rateWindow` |
+| `stabilityWindow` | `ConvergenceThresholdConfig` | `stabilityWindow` |
+| `maxDispatches` | `BudgetConfig` | `maxDispatches` |
+| `maxEvaluationCycles` | `BudgetConfig` | `maxEvaluationCycles` |
+
+Fields not in StigmergyDefaults (e.g., `BudgetConfig.maxSignalDeposits`, `BudgetConfig.maxContextMutations`, the four individual rate thresholds on `ConvergenceThresholdConfig`) are left at their per-SPI defaults (null = no enforcement / system default). The stigmergy preset provides the most commonly needed knobs; power users use explicit per-SPI configs for full control.
+
+**Initialization guarantee:** The case initializer MUST ensure that `budgetConfig` and `convergenceThresholdConfig` are non-null for any case with `stigmergyConfig` present. If neither explicit configs nor StigmergyDefaults provide values, the initializer creates these config objects with system defaults. This prevents the `convergenceDetection()` null guard from silently skipping budget/convergence checks.
+
 ### CaseDefinition Integration
 
 `CaseDefinition` gains a nullable `stigmergyConfig` field. Its presence activates stigmergy mode. The case initializer resolves effective per-SPI configs using the resolution order above during case initialization.
@@ -140,7 +158,7 @@ Two resolution paths (preset vs explicit) add a layer of indirection. Mitigated:
 
 Registered as a `NamedStrategy` with `id() = "stigmergy"`, resolved by `StrategyResolver`. Follows the `DefaultPlanningStrategy` pattern. Cases declare `planningStrategy: stigmergy` in YAML or `CaseDefinition.builder().planningStrategy("stigmergy")` in Java.
 
-**Dependency:** Requires the planning module on the classpath. `PlanningStrategyLoopControl` (`@Alternative @Priority(10)`) activates when the planning module is present, replacing `ChoreographyLoopControl`.
+**Dependency:** Requires the planning module on the classpath. `PlanningStrategyLoopControl` activates when the planning module is present, replacing `ChoreographyLoopControl` as the active `LoopControl` implementation.
 
 ### Agent Model
 
@@ -158,7 +176,7 @@ If a binding in a stigmergy compound has an explicit trigger, the strategy logs 
 
 ### Dispatch Behavior
 
-**First cycle:** `select()` dispatches all bindings with `COMPOUND` lifecycle scope. All agents join simultaneously at case start. The coordinator is notified (`initializeCase()`), and each agent enters the `JOINING` lifecycle state.
+**First cycle:** `select()` dispatches all bindings. Bindings in the root compound (case-level `planningStrategy: stigmergy`) receive the implicit root compound's scope — effectively `CASE` lifecycle scope since the root compound spans the entire case. The case initializer adds `ScopeActivatedTrigger` to trigger-less bindings, and `PlanningStrategyLoopControl.collectScopeActivatedBindings()` dispatches them when the root compound activates at case start. All agents join simultaneously at case start. The coordinator is notified (`initializeCase()`), and each agent enters the `JOINING` lifecycle state.
 
 **Subsequent cycles:** `select()` returns an empty list (no new dispatches). The strategy monitors agent health via coordinator queries:
 - Agents stuck in `JOINING` past a timeout threshold are logged at WARN
@@ -228,7 +246,7 @@ Detects when a signal has been independently reinforced by multiple agents — t
 
 **Trigger:** `signal.sources().size() >= coordinationConfig.consensusThreshold()` (default: 2).
 
-**Computation:** O(S) where S ≤ `maxSignalsPerCase` (default 100). Reads `SignalRegistry.perceiveAll(caseId)` and checks `sources.size()` on each signal.
+**Computation:** O(S) where S ≤ `maxSignalsPerCase` (default 100). `SignalRegistry` gains a `consensusSignals(UUID caseId, int minSources)` method that returns `Map<String, Signal>` — raw Signal records (which have `sources()`) filtered to those with `sources.size() >= minSources` and above effective-zero threshold. This avoids exposing `sources` on `PerceivedSignal` (which is the worker-facing read model) while giving the coordinator the data it needs.
 
 **Event:** `SIGNAL_CONSENSUS_DETECTED` with metadata: `signalName`, `reinforcementCount`, `sources` (agent IDs), `effectiveStrength`.
 
@@ -238,7 +256,7 @@ Detects when a signal has been independently reinforced by multiple agents — t
 
 Detects pathological coordination — agents in a feedback loop, each reacting to each other's changes faster than convergence can establish. This is the early warning; `BudgetEnforcer` is the hard gate.
 
-**Trigger:** Any `ActivityTracker` rate exceeds `convergenceThreshold × coordinationConfig.stormRateMultiplier()` (default: 10x).
+**Trigger:** Any `ActivityTracker` rate exceeds its corresponding `ConvergenceThresholdConfig` threshold × `coordinationConfig.stormRateMultiplier()`. Each rate uses its own threshold: dispatch rate vs `dispatchRateThreshold × 10.0`, signal deposit rate vs `signalDepositRateThreshold × 10.0`, context mutation rate vs `contextMutationRateThreshold × 10.0`, evaluation rate vs `evaluationRateThreshold × 10.0`. The four rates have different natural baselines (evaluation at 0.5/s vs dispatch at 0.1/s), so per-rate storm thresholds are essential.
 
 **Computation:** O(1) — reads four rate values from `ActivityTracker`.
 
@@ -252,7 +270,9 @@ Detects when the swarm's collective attention is focusing on specific keys — o
 
 **Trigger:** Interest landscape hotspot score exceeds `coordinationConfig.interestHotspotThreshold()` (default: 0.6).
 
-**Computation:** O(N) where N ≤ `maxObserversPerCase` (default 20). Computes from `ObservationRegistry` interest data.
+**Hotspot score algorithm:** For each watched key, count the number of distinct agents observing it. The hotspot score for a key is `watchingAgentCount / totalActiveAgents`. A score of 1.0 means every agent watches that key. A score of 0.6 (default threshold) means 60% of agents share that interest — strong collective attention. The coordinator iterates `ObservationRegistry.getObservers(caseId)`, extracts `watchedKeys()` per observer, groups by key, and counts unique agent IDs per key.
+
+**Computation:** O(N × K) where N ≤ `maxObserversPerCase` (default 20) and K = average watched keys per observer (typically small). Single pass over observer registrations.
 
 **Event:** `INTEREST_CONVERGENCE_DETECTED` with metadata: `hotspotKeys`, `watchingAgentCount`, `hotspotScore`.
 
@@ -264,19 +284,24 @@ The `convergenceDetection()` phase in `CaseContextChangedEventHandler` already r
 
 ```
 convergenceDetection(caseInstance, caseDefinition):
-    budgetEnforcer.check(...)                    // existing
-    convergenceDetector.evaluate(...)             // existing
-
+    // Stigmergy coordination detection runs BEFORE the existing null guard,
+    // since a stigmergy case may not have explicit budgetConfig/convergenceThresholdConfig
+    // (they're filled from StigmergyDefaults during initialization, but the guard
+    // must not block coordination detection).
     if coordinator.isStigmergyCase(caseInstance.id()):
-        patterns = coordinator.detectPatterns(
-            caseInstance.id(), signalRegistry,
-            observationRegistry, activityTracker,
+        coordinator.detectPatterns(caseInstance.id(),
             caseDefinition.stigmergyConfig())
-        for pattern in patterns:
-            publishEvent(caseInstance, pattern)
+
+    // Existing — requires non-null budgetConfig or convergenceThresholdConfig
+    if budgetConfig == null && convergenceConfig == null:
+        return
+    budgetEnforcer.check(...)
+    convergenceDetector.evaluate(...)
 ```
 
-`StigmergyCoordinator` is injected into `CaseContextChangedEventHandler` via `Instance<StigmergyCoordinator>` with `isResolvable()` guard — transparent no-op when no stigmergy case is active. Follows the `Instance<OutputConvergenceMonitor>` pattern (D51).
+**Note:** Config resolution (§1) MUST ensure `budgetConfig` and `convergenceThresholdConfig` are non-null for stigmergy cases — the StigmergyDefaults provide `maxDispatches`, `maxEvaluationCycles`, and `stabilityWindow` which populate these configs. Without this guarantee, the existing budget/convergence checks would be silently skipped.
+
+`StigmergyCoordinator` is `@ApplicationScoped` in `runtime-core` with constructor-injected dependencies (`SignalRegistry`, `ObservationRegistry`, `ActivityTracker`). It is injected into `CaseContextChangedEventHandler` via `Instance<StigmergyCoordinator>` with `isResolvable()` guard — transparent no-op when no stigmergy case is active. Follows the `Instance<OutputConvergenceMonitor>` pattern (D51). `detectPatterns()` uses constructor-injected registries, not method parameters — consistent with the CDI convention used by all other infrastructure beans.
 
 ### Lifecycle
 
@@ -313,9 +338,21 @@ default void leave() {
 
 **Calling `leave()` outside stigmergy mode** is a no-op. The coordinator is not tracking the agent, so there is nothing to transition. The `default` method on `WorkerRuntime` returns immediately. This follows the established pattern where WorkerRuntime facet methods are no-ops when the backing infrastructure is absent.
 
+### Call Site: Leave as a RuleAction
+
+Since `execute()` returns before the agent enters ACTIVE state, and the `WorkerRuntime` reference is not retained after execution, agents trigger departure via a **`Leave` rule action** — the 5th permit on the `RuleAction` sealed hierarchy (extending D41):
+
+```java
+record Leave() implements RuleAction {}
+```
+
+When a rule fires a `Leave` action, the `LocalRuleEvaluator` calls `WorkerRuntime.leave()` on behalf of the agent. This gives agents a clean departure path: a rule evaluates "I've accomplished my purpose" and fires Leave. The engine handles deregistration.
+
+This extends the RuleAction hierarchy to five permits: `DepositSignal`, `RegisterInterest`, `DeregisterInterest`, `WriteContext`, `Leave`.
+
 ### RuleRegistry.unregisterByAgent()
 
-`RuleRegistry` needs a new `unregisterByAgent(UUID caseId, String agentId)` method, analogous to `ObservationRegistry.unregisterByAgent()`. This removes all rules registered by the specified agent for the specified case.
+`RuleRegistry.unregisterByAgent(UUID caseId, String agentId)` already exists — `leave()` uses it directly. No new API needed.
 
 ### JOINING → ACTIVE Transition
 
@@ -377,9 +414,9 @@ This is readable without correlating hundreds of individual SPI events.
 
 | Component | Module | Package |
 |-----------|--------|---------|
-| `StigmergyConfig`, `StigmergyDefaults`, `CoordinationConfig` | engine-api | `io.casehub.api.model.stigmergy` |
-| `AgentLifecycleState` (enum), `AgentState` (record) | engine-api | `io.casehub.api.model.stigmergy` |
-| New `CaseHubEventType` values | engine-api | `io.casehub.api.event` (existing enum) |
+| `StigmergyConfig`, `StigmergyDefaults`, `CoordinationConfig` | api | `io.casehub.api.model.stigmergy` |
+| `AgentLifecycleState` (enum), `AgentState` (record) | api | `io.casehub.api.model.stigmergy` |
+| New `CaseHubEventType` values | api | `io.casehub.api.event` (existing enum) |
 | `StigmergyCoordinator` | runtime-core | `io.casehub.engine.internal.stigmergy` |
 | `StigmergyStrategy` | planning-core | `io.casehub.engine.plan.strategy` (existing) |
 
@@ -502,6 +539,10 @@ A case can queue many evaluation cycles before budget enforcement stops it. Each
 
 Event coalescing in the serializer's pending-event queue is the natural next step when production workloads surface the need.
 
+### 8d. Crash Recovery (D29)
+
+**Explicit v1 limitation:** Stigmergy coordination state is in-memory only (per D29). On engine restart, all coordinator state is lost — agent lifecycle tracking, consensus dedup sets, storm detection state. A stigmergy case that survives a restart (case instance persisted, CaseContext persisted) loses all coordination state. Agents would need to be re-dispatched and re-register their observers and rules. This is consistent with all other coordination state (ObservationRegistry, SignalRegistry, RuleRegistry, ActivityTracker) which is also in-memory only. Stigmergy cases cannot survive engine restarts in v1.
+
 ### 8b. Virtual Thread Compatibility (D72)
 
 Per-case registries (`ObservationRegistry`, `RuleRegistry`) currently use `synchronized` blocks for internal synchronization. This pins platform threads when observers or rules run on virtual threads (D6 specifies parallel observer evaluation on virtual threads).
@@ -555,7 +596,7 @@ Cross-references to foundation SPI decisions: D1-D9 (observation), D10-D18 (sign
 
 - `CaseContextChangedEventHandler.java:228-279` — evaluation pipeline (`evaluateAndDispatch`)
 - `CaseContextChangedEventHandler.java:1384-1425` — convergence detection phase
-- `WorkerRuntime.java` — engine-api coordination surface
+- `WorkerRuntime.java` — api coordination surface
 - `DefaultWorkerRuntime.java` — runtime-core WorkerRuntime implementation
 - `WorkerRuntimeFactory.java` — factory wiring registries into runtime
 - `PlanningStrategyLoopControl.java` — per-case strategy resolution
