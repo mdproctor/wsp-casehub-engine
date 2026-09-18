@@ -40,14 +40,14 @@
 - Count-bounded only — long-running slow cases lose temporal context
 - Time-bounded only — fast-changing cases accumulate unbounded entries
 
-**Rationale:** Dual bounds give predictable memory usage (count cap) while preserving temporal relevance (time cap). Observers inspect the history for temporal patterns (sequences, trends) without maintaining their own state.
+**Rationale:** Dual bounds give predictable memory usage (count cap) while preserving temporal relevance (time cap). Observers inspect the history for temporal patterns (sequences, trends) without maintaining their own state. Default rationale: 50 entries × ~100ms per context change = ~5 seconds of temporal context — sufficient for 3–5 event correlation windows in active cases. 5-minute time cap covers temporal patterns spanning minutes of wall-clock time. Both defaults are provisional and should be validated with deployment telemetry; cases with significantly different activity patterns should configure explicitly.
 
 **Trade-offs:** Each snapshot is a shallow copy of changed keys (not full context) — limits what temporal observers can inspect to what changed in each event. Full snapshots would be prohibitively expensive.
 
 **Sources:** `CaseEvaluationSerializer.java:23`, `CaseContextChangedEvent.java`
 **Depends on:** D1 (history buffer is part of ObservationContext)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-09: documented default rationale, marked defaults as provisional pending deployment telemetry
 
 ## D4: Module placement — api/spi/observation
 
@@ -91,12 +91,12 @@
 
 **Rationale:** Engine-level observation is mechanical pattern detection — multi-key correlation, threshold crossings, temporal sequence detection. These are fast, bounded computations. The "engine mechanics, blocks intelligence" split from epic #1104 means the engine provides the detection mechanism; blocks provides the LLM intelligence that acts on detections. The observer detects; a worker dispatch handles the LLM call.
 
-**Trade-offs:** Slow observers degrade evaluation throughput. Timeout enforcement is the safety net — observers exceeding the bound are interrupted and their contribution lost for that cycle.
+**Trade-offs:** Slow observers degrade evaluation throughput. Timeout enforcement is the safety net — observers exceeding the timeout have their virtual thread interrupted via `Future.cancel(true)` and their contribution lost for that cycle. Implementation: each observer is submitted via `ExecutorService.submit(Callable)` to obtain a `Future`, collected with `future.get(100, MILLISECONDS)`, and on `TimeoutException` cancelled via `future.cancel(true)` to interrupt the virtual thread. This differs from `CompletableFuture.orTimeout()` which only completes the future exceptionally but does NOT interrupt the underlying thread — the observer would continue executing indefinitely. The SPI contract documents that observer implementations should be responsive to `Thread.interrupted()` — long-running computations should periodically check the interrupt flag, and I/O operations should use interruptible channels.
 
-**Sources:** `CaseEvaluationSerializer.java:23`, issue #1104 ("Engine mechanics, blocks intelligence")
+**Sources:** `CaseEvaluationSerializer.java:23`, issue #1104 ("Engine mechanics, blocks intelligence"), JDK `CompletableFuture.orTimeout()` javadoc (confirms no thread interruption)
 **Depends on:** D1 (SPI design), D5 (pipeline integration)
 **Exploration:** quick (surfaced by review R1-03, R1-07)
-**Status:** revised — R1-04: changed from sequential to parallel observer evaluation; collective 100ms timeout via CompletableFuture.allOf()
+**Status:** revised — R1-04: changed from sequential to parallel observer evaluation; collective 100ms timeout via CompletableFuture.allOf(); R1-02: changed timeout mechanism from CompletableFuture.orTimeout to Future.cancel(true) for actual thread interruption
 
 ## D7: Observation materialization — ObservationRegistry, no CaseContext writes
 
@@ -328,14 +328,14 @@
 - Three permits (merge signal into key threshold) — simpler hierarchy but conflates context keys and signal names
 - Four permits without gate — misses the compliance requirement
 
-**Rationale:** Five types give full expressiveness. The four typed permits are fully auditable — you can inspect exactly what an agent watches, what keys, what thresholds. The JQ catchall provides flexibility for unregulated domains. The config gate makes it a per-case-definition policy decision, consistent with `ObservationConfig`'s existing role as the observation policy surface. `registerObserver()` escape hatch is ungated (it's the engine-internal API, not agent-facing interest registration).
+**Rationale:** Five types give full expressiveness. The four typed permits are fully auditable — you can inspect exactly what an agent watches, what keys, what thresholds. The JQ catchall provides flexibility for unregulated domains. The config gate makes it a per-case-definition policy decision, consistent with `ObservationConfig`'s existing role as the observation policy surface. `registerObserver()` on `InterestSpace` is also gated by `ObservationConfig.allowProgrammaticObservers()` (default `true`). When `false`, `InterestSpace.registerObserver()` throws `IllegalStateException`. This ensures the compliance posture is consistent — either agents are restricted to typed declarations, or they have full flexibility including programmatic observers. The engine-internal `ObservationRegistry.registerObserver()` remains ungated — the gate is at the agent-facing `InterestSpace` boundary, not the engine-internal registry.
 
 **Trade-offs:** JQ gate enforcement is at registration time only — if the config changes after registration, existing JQ observers continue running. Acceptable — config changes don't retroactively invalidate live case behavior. The five-type vocabulary may need extension for future interest patterns (e.g. rate-of-change) — the sealed hierarchy would need a new permit, which is a source-compatible addition.
 
 **Sources:** `ThresholdObserver.java`, `CorrelationObserver.java`, `TemporalSequenceObserver.java`, `SignalStrengthObserver.java` (runtime-core), `ObservationConfig.java` (engine-api), engine#1107
 **Depends on:** D19 (faceted architecture — interests live on InterestSpace)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-07: added `allowProgrammaticObservers` gate on InterestSpace.registerObserver() to close the compliance escape hatch
 
 ## D21: Interest lifecycle — InterestRegistration handle with deregister by ID
 
@@ -701,12 +701,12 @@
 
 **Rationale:** After observations ensures rules see current-cycle observations. Batched writes prevent inter-agent ordering effects and ensure a single clean `CONTEXT_CHANGED`. The serializer's `drainPending()` naturally handles the re-evaluation cycle — no special plumbing needed. Virtual thread dispatch with timeout follows the established observer pattern.
 
-**Trade-offs:** All context writes from all agents are batched — if two agents write the same key, last-writer-wins (agent ordering within the batch is undefined). Acceptable — per-agent isolation means agents should write to different keys. Agents sharing keys must coordinate via signals. The semantic identity check prevents idempotent-write feedback loops (a rule that always writes the same value won't cause infinite re-evaluation cycles).
+**Trade-offs:** All context writes from all agents are batched. Cross-agent writes to the same key use deterministic priority-based dedup: the write from the highest-priority rule wins. When priorities are equal across agents, lexicographic agentId is the tiebreaker. This extends D39's intra-agent per-key dedup to the cross-agent case, making outcomes fully reproducible. When a cross-agent write conflict is detected (multiple agents writing the same key), a `CONTEXT_WRITE_CONFLICT` `CaseHubEventType` is emitted (log WARN + EventLog entry, metadata: `key`, `conflictingAgents`, `winningAgent`, `winningValue`). This makes conflicts visible for debugging without making them an error — conflicting writes are a signal to coordinate via signals, not a hard failure. The semantic identity check prevents idempotent-write feedback loops (a rule that always writes the same value won't cause infinite re-evaluation cycles).
 
 **Sources:** `CaseContextChangedEventHandler.java:243-253` (existing pipeline), `CaseEvaluationSerializer.java:35-55` (drainPending), D5 (pipeline integration), D6 (observer thread model)
 **Depends on:** D37 (context writes), D39 (one-shot semantics), D41 (action types)
 **Exploration:** quick
-**Status:** revised — R1-03/R1-04: parallel per-agent evaluation; semantic identity check on batched writes to prevent feedback loops
+**Status:** revised — R1-03/R1-04: parallel per-agent evaluation; semantic identity check on batched writes to prevent feedback loops; R1-01: deterministic cross-agent write dedup (highest-priority-wins, agentId tiebreaker) + CONTEXT_WRITE_CONFLICT event
 
 ## D43: RuleSpace facet and RuleRegistry
 
@@ -859,13 +859,13 @@ The `_converged` goal is fired by the engine with `StandardGoalKind.SUCCESS` (te
 
 **Rationale:** Key-set Jaccard + value hash is classical, deterministic, and O(K×N²) where K = output keys and N = window size (small). Detects structurally identical outputs. Per-binding scoping makes the comparison meaningful — agents working on the same capability may or may not produce similar outputs depending on the domain. `convergenceMinSamples` prevents false positives when only 1-2 agents have run. The informational framing (OUTPUT_CONVERGENCE_DETECTED, not DIVERSITY_VIOLATION) correctly reflects what the engine can determine: structural similarity exists. Whether that similarity indicates consensus, collusion, or groupthink is a semantic judgment that belongs in blocks.
 
-**Trade-offs:** Structural similarity only — semantically equivalent but structurally different outputs are not detected. Acceptable for v1 — LLM-backed semantic analysis is a natural blocks extension. Value hash comparison is exact-match — near-duplicates with minor field variations pass. Mitigated by the Jaccard threshold on key sets catching most near-duplicates.
+**Trade-offs:** Structural similarity only — semantically equivalent but structurally different outputs are not detected. Acceptable for v1 — LLM-backed semantic analysis is a natural blocks extension. Value hash comparison is exact-match — near-duplicates with minor field variations pass. Mitigated by the Jaccard threshold on key sets catching most near-duplicates. **Scope:** This monitor targets traditional worker outputs (WorkerResult key-value pairs), not stigmergy coordination artifacts (signals, interests, rules). Stigmergy agents coordinate through the coordination layer — their convergence is detected by D49 activity quiescence and D67 coordination pattern detection (signal consensus, interest convergence). For mixed cases with both traditional workers and stigmergy agents, the monitor tracks only the traditional outputs.
 
 **Sources:** `WorkflowExecutionCompletedHandler.java` (success path, output access), `ConflictResolver.java` (output key handling precedent), engine#1110 issue spec
 **Depends on:** D45 (pipeline runs after outputs are recorded), D46 (ActivityTracker pattern for per-case state)
 **Injection note:** `OutputConvergenceMonitor` is injected into `WorkflowExecutionCompletedHandler` via `Instance<OutputConvergenceMonitor>` with `isResolvable()` guard — transparent no-op when convergence module is absent. No circular dependency — both are `@ApplicationScoped` beans in `runtime-core`. The handler is large but adding an `Instance<>` injection follows the existing pattern (e.g., `Instance<StepOutcomeObserver>`, `Instance<CaseOutcomeObserver>`).
 **Exploration:** quick
-**Status:** revised — R1-06: reframed from anti-collusion/DIVERSITY_VIOLATION to informational; R2-05: clarified injection dependency and Instance<> guard pattern
+**Status:** revised — R1-06: reframed from anti-collusion/DIVERSITY_VIOLATION to informational; R2-05: clarified injection dependency and Instance<> guard pattern; R1-08: explicitly scoped to traditional worker outputs, not stigmergy coordination artifacts
 
 ## D52: ConvergenceConfig — per-case configuration
 
@@ -995,11 +995,11 @@ All three are written to EventLog immediately when detected. `CONVERGENCE_DETECT
 
 **Rationale:** This is an inherent property of event-driven perception in a time-based decay model. The asymmetry is real but bounded: case authors should configure signal halfLife proportional to the expected case activity pattern. Fast-turnaround cases use minute-scale halfLife; multi-day investigations use hour/day-scale halfLife. D29 (in-memory only) means restart during quiescence loses everything regardless — the quiescence asymmetry is a lesser concern than the restart concern.
 
-**Trade-offs:** Low-activity cases get less value from the coordination layer than high-activity cases. Acceptable for v1 — the coordination layer is most naturally useful for cases with sustained agent activity.
+**Trade-offs:** Low-activity cases get less value from the coordination layer than high-activity cases. Acceptable for v1 — the coordination layer is most naturally useful for cases with sustained agent activity. **Documentation requirement:** YAML documentation for `signalConfig.defaultHalfLife` must explicitly warn: "Signals decay continuously even during periods of no case activity. Set halfLife to exceed the longest expected idle period, or accept that coordination state will be lost during quiescence."
 
 **Sources:** D11 (exponential decay), D29 (in-memory only), `CaseContextChangedEvent` (evaluation trigger)
 **Exploration:** quick (surfaced by R1-14)
-**Status:** captured — made explicit from implicit asymmetry
+**Status:** revised — R1-12: added explicit documentation requirement for halfLife quiescence warning
 
 ## D59: Observer evaluation order — non-deterministic across agents
 
@@ -1090,12 +1090,12 @@ Resolution order: explicit per-SPI config > StigmergyConfig defaults > system de
 
 **Rationale:** The unified execution model's key principle is that strategy scopes to compound PlanItems. A compound with `planningStrategy: stigmergy` is a stigmergy compound — all its children follow stigmergy semantics. Mixed dispatch within a single compound violates the per-compound strategy model. Nesting provides the composition path: a root compound (choreography) containing a stigmergy compound (stigmergy agents) alongside normal bindings.
 
-**Trade-offs:** Triggers on stigmergy bindings are silently ignored. The strategy should log WARN if it encounters bindings with explicit triggers in a stigmergy compound. Forces the use of nested compounds for mixed-model cases — acceptable since the unified execution model already expects composition via nesting.
+**Trade-offs:** Explicit triggers (other than `ScopeActivatedTrigger`) on stigmergy bindings cause a validation failure at case definition initialization time. `IllegalStateException` with message: "Bindings in a stigmergy compound do not use triggers — the strategy manages dispatch. Remove the `on:` clause or move the binding to a non-stigmergy compound." This is a build-time error, not a runtime warning — silent behavior changes during migration from non-stigmergy to stigmergy compounds are correctness hazards. Forces the use of nested compounds for mixed-model cases — acceptable since the unified execution model already expects composition via nesting.
 
 **Sources:** Unified execution model spec §2.3 (per-compound strategy), §2.1 (compound PlanItem contains children), `PlanningStrategyLoopControl.select()`, engine#1111
 **Depends on:** D60 (three-layer architecture), D61 (planning module dependency)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — R1-10: changed from runtime WARN to validation failure at case definition initialization
 
 ## D64: Agent lifecycle — three states with voluntary departure
 
@@ -1141,7 +1141,7 @@ Resolution order: explicit per-SPI config > StigmergyConfig defaults > system de
 
 **Choice:** `StigmergyConfig` record in `engine-api` with two sub-records:
 
-`StigmergyDefaults`: `signalHalfLife` (Duration, default PT5M), `effectiveZeroThreshold` (double, 0.01), `maxSignalsPerCase` (int, 100), `maxObserversPerCase` (int, 20), `maxRulesPerCase` (int, 50), `rateWindow` (Duration, PT60S), `stabilityWindow` (Duration, PT30S), `maxDispatches` (Integer, 10000), `maxEvaluationCycles` (Integer, 50000). All nullable — null means don't override the per-SPI default.
+`StigmergyDefaults`: `signalHalfLife` (Duration, default PT5M), `effectiveZeroThreshold` (double, 0.01), `maxSignalsPerCase` (int, 100), `maxObserversPerCase` (int, 20), `maxRulesPerCase` (int, 50), `rateWindow` (Duration, PT60S), `stabilityWindow` (Duration, PT30S), `maxDispatches` (Integer, 10000), `maxEvaluationCycles` (Integer, 10000). All nullable — null means don't override the per-SPI default.
 
 `CoordinationConfig`: `consensusThreshold` (int, default 2 — min reinforcement count for SIGNAL_CONSENSUS_DETECTED), `stormRateMultiplier` (double, default 10.0 — rates above convergenceThreshold × multiplier = storm), `interestHotspotThreshold` (double, default 0.6 — hotspot score for INTEREST_CONVERGENCE_DETECTED). All have sensible defaults — case author can use `stigmergyConfig: {}` with zero configuration to get working stigmergy.
 
@@ -1536,4 +1536,21 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 **Sources:** D23 (per-domain package pattern), D70 (stigmergy package structure)
 **Depends on:** D73 (swarm extends stigmergy)
 **Exploration:** quick
+**Status:** captured
+
+## D83: Pipeline decomposition — CaseEvaluationPipeline with phase handlers
+
+**Choice:** Extract the five evaluation phases from `CaseContextChangedEventHandler` into a `CaseEvaluationPipeline` composed of phase handlers. Each phase implements a common interface receiving a `CaseEvaluationContext(CaseInstance, CaseContext, CaseDefinition)` and returning phase-specific results. Phase handlers: `BindingDispatchPhase` (existing `rules()` method), `GoalEvaluationPhase` (existing `goals()` method), `ObservationPhase` (existing `observations()` method), `LocalRulePhase` (existing `localRules()` method), `ConvergenceDetectionPhase` (existing `convergenceDetection()` method). The handler delegates to the pipeline. Each phase class owns only the dependencies it needs — BindingDispatchPhase takes the dispatch-related dependencies, ObservationPhase takes the observation registries, etc. The handler's constructor shrinks from 34 parameters to the pipeline + a few handler-level concerns (eventDispatcher, evaluationSerializer, quiescenceTracker).
+
+**Alternatives:**
+- Keep monolithic handler — current state with 34+ constructor parameters, all 5 phases in one class. Difficult to test individual phases in isolation, hard to reason about which dependencies serve which concern.
+- Partial extraction (only new phases) — extract ObservationPhase, LocalRulePhase, ConvergenceDetectionPhase from hive-mind; keep existing rules() and goals() in the handler. Inconsistent — two phases in the handler, three extracted. No clear boundary.
+
+**Rationale:** The handler has 34 constructor parameters and 5 sequential phases with distinct dependency sets. The `evaluateAndDispatch()` method already calls five named methods sequentially — these ARE the phases. Extracting them reduces per-class complexity and improves testability. Each phase is testable in isolation with only its relevant dependencies. The pipeline structure makes the evaluation order explicit in the type system rather than implicit in method call order.
+
+**Trade-offs:** Additional indirection — `evaluateAndDispatch()` delegates to a pipeline instead of calling methods directly. Acceptable — the abstraction boundary is already implicit in the five named methods. One shared CaseEvaluationContext object instead of repeating parameters across method signatures.
+
+**Sources:** `CaseContextChangedEventHandler.java:97-260` (constructor with 34 parameters), `CaseContextChangedEventHandler.java:260-285` (evaluateAndDispatch calling 5 phases)
+**Depends on:** D5 (observation phase), D42 (local rule phase), D45 (convergence detection phase)
+**Exploration:** quick (surfaced by R1-03)
 **Status:** captured
