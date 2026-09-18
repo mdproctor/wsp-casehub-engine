@@ -166,7 +166,7 @@ record DetectedRole(
 )
 ```
 
-`roleId` is generated on first detection and reused across cycles via cluster matching. Two clusters match if they share > 50% of their members (majority overlap).
+`roleId` is generated on first detection as `"role-" + incrementingCounter` (per case, reset on eviction) and reused across cycles via cluster matching. Two clusters match if they share > 50% of their members (majority overlap).
 
 ### Role Evolution Detection
 
@@ -281,7 +281,7 @@ record SwarmProgress(
 
 **Exploration breadth:**
 - Numerator: count of unique signal names deposited + unique context keys written by all agents in the current sliding window
-- Denominator: sliding maximum of this count over the last N detection cycles (avoids division by a static constant that doesn't adapt to case complexity)
+- Denominator: sliding maximum of this count over the last `roleDetectionWindow` detection cycles (default 20) — avoids division by a static constant that doesn't adapt to case complexity
 - At detection cycle 1: score = 1.0 (numerator = denominator). Score decreases if agents stop exploring new features.
 
 **Consensus formation:**
