@@ -1096,3 +1096,164 @@ Resolution order: explicit per-SPI config > StigmergyConfig defaults > system de
 **Depends on:** D60 (three-layer architecture), D61 (planning module dependency)
 **Exploration:** quick
 **Status:** captured
+
+## D64: Agent lifecycle — three states with voluntary departure
+
+**Choice:** `StigmergyCoordinator` tracks three lifecycle states per agent per case:
+
+- `JOINING` — agent dispatched, worker execution in progress (setup: registering interests, rules, initial signals). Transition → ACTIVE when worker completes successfully.
+- `ACTIVE` — agent participating in coordination. Its observers evaluate, rules fire, signals are deposited. Transition → DEPARTED on voluntary `leave()` or case termination.
+- `DEPARTED` — agent has deregistered all state (observers, rules, signals) and is no longer participating. Terminal state.
+
+`WorkerRuntime` gains a `leave()` method for voluntary departure. On `leave()`: deregisters all observers (via `ObservationRegistry.unregisterByAgent()`), deregisters all rules (via `RuleRegistry.unregisterByAgent()`), transitions agent to DEPARTED in coordinator, publishes `STIGMERGY_AGENT_DEPARTED` event. Signals deposited by the agent are NOT removed — they decay naturally (consistent with biological stigmergy: an ant that leaves doesn't erase its pheromone trail).
+
+**Alternatives:**
+- Two states (ACTIVE/DEPARTED) — can't distinguish setup-in-progress from fully active, loses diagnostic value
+- Four states (adding QUIESCENT) — per-agent quiescence adds complexity. System-level convergence detection (D49) already tracks aggregate activity rates. Per-agent quiescence is a natural extension for #1112 (swarm) but premature for #1111.
+
+**Rationale:** Three states capture the essential lifecycle without over-engineering. JOINING is diagnostic — if an agent stays JOINING for too long, the setup failed. ACTIVE is the steady state. DEPARTED enables voluntary exit, which reduces agent count and can accelerate convergence.
+
+**Trade-offs:** `leave()` on `WorkerRuntime` is available to ALL workers, not just stigmergy agents. Calling `leave()` outside stigmergy mode is a no-op (coordinator is not tracking the agent). Alternatively, `leave()` could throw `IllegalStateException` — but no-op is safer and follows the `default` method pattern on WorkerRuntime.
+
+**Sources:** `ObservationRegistry.unregisterByAgent()` (existing), `RuleRegistry` (needs `unregisterByAgent()`), D2 (registration mechanism), D18 (signal lifecycle — case-scoped eviction), D19 (faceted architecture)
+**Depends on:** D60 (StigmergyCoordinator is Layer 3), D63 (all bindings are agents)
+**Exploration:** quick
+**Status:** captured
+
+## D65: Strategy dispatch — first-cycle dispatch with health monitoring
+
+**Choice:** `StigmergyStrategy.select()` tracks whether initial dispatch has happened (per case, via `StigmergyCoordinator`). On first `select()` call: returns all bindings for dispatch with `COMPOUND` lifecycle scope. On subsequent calls: returns empty list (no new dispatches). The strategy monitors agent health via coordinator queries each cycle — if an agent fails (worker execution error), it can re-dispatch that binding. No condition-gated or population-managed dispatch in v1.
+
+**Alternatives:**
+- Condition-gated dispatch — agents have activation conditions evaluated each cycle. Enables delayed joining. Blurs the line with choreography and adds complexity. Natural extension for v2 or #1112.
+- Population-managed dispatch — strategy actively manages agent count. Foundation for #1113 (self-provisioning). Premature for v1.
+
+**Rationale:** First-cycle dispatch is the simplest model that delivers working stigmergy. All agents join at case start, observe, decide, act. The pipeline drives the cycle. Health monitoring provides resilience (failed agents are re-dispatched) without adding complexity. Condition-gated and population-managed dispatch are natural extensions that can be added to `StigmergyStrategy.select()` without changing the architecture.
+
+**Trade-offs:** All agents start simultaneously — no staggered or conditional joining. Acceptable for rule-based stigmergy where the agent population is known at case definition time. Dynamic joining is a #1112/#1113 concern.
+
+**Sources:** `PlanningStrategy.select()` (existing SPI), `PlanningStrategyLoopControl.java` (evaluation cycle dispatch), D60 (strategy is Layer 2)
+**Depends on:** D60 (StigmergyStrategy), D63 (all bindings are agents), D64 (lifecycle tracking)
+**Exploration:** quick
+**Status:** captured
+
+## D66: StigmergyConfig structure — defaults + coordination thresholds
+
+**Choice:** `StigmergyConfig` record in `engine-api` with two sub-records:
+
+`StigmergyDefaults`: `signalHalfLife` (Duration, default PT5M), `effectiveZeroThreshold` (double, 0.01), `maxSignalsPerCase` (int, 100), `maxObserversPerCase` (int, 20), `maxRulesPerCase` (int, 50), `rateWindow` (Duration, PT60S), `stabilityWindow` (Duration, PT30S), `maxDispatches` (Integer, 10000), `maxEvaluationCycles` (Integer, 50000). All nullable — null means don't override the per-SPI default.
+
+`CoordinationConfig`: `consensusThreshold` (int, default 2 — min reinforcement count for SIGNAL_CONSENSUS_DETECTED), `stormRateMultiplier` (double, default 10.0 — rates above convergenceThreshold × multiplier = storm), `interestHotspotThreshold` (double, default 0.6 — hotspot score for INTEREST_CONVERGENCE_DETECTED). All have sensible defaults — case author can use `stigmergyConfig: {}` with zero configuration to get working stigmergy.
+
+YAML: `stigmergyConfig:` block with optional `defaults:` and `coordination:` sub-blocks. Empty `stigmergyConfig:` activates stigmergy mode with all defaults.
+
+**Alternatives:**
+- Flat record (all fields at top level) — loses semantic grouping between SPI defaults and coordination intelligence
+- Per-detector config records — over-segmented for three threshold values
+
+**Rationale:** Two sub-records map 1:1 to two concerns: SPI defaults (what values the coordination SPIs use) and coordination intelligence (what patterns the coordinator detects). Empty config with all defaults gives a zero-configuration entry point. Power users tune specific knobs.
+
+**Trade-offs:** StigmergyDefaults overlaps with per-SPI config fields. Resolution is explicit: per-SPI config > StigmergyDefaults > system defaults. This is documented in the CaseDefinition initialization logic.
+
+**Sources:** `SignalConfig`, `RuleConfig`, `ConvergenceThresholdConfig`, `BudgetConfig`, `OutputConvergenceConfig`, `ObservationConfig` (existing per-SPI configs), D62 (coordinated defaults)
+**Depends on:** D60 (StigmergyConfig is Layer 1), D62 (defaults preset model)
+**Exploration:** quick
+**Status:** captured
+
+## D67: Coordination pattern detection — three detectors in convergenceDetection phase
+
+**Choice:** Three coordination pattern detectors run during the `convergenceDetection()` pipeline phase for stigmergy cases. Each is a method on `StigmergyCoordinator`, examining existing registry state with no new storage — pure computation over existing data.
+
+1. **Signal consensus detection**: When a signal's `sources.size()` crosses `consensusThreshold`, emit `SIGNAL_CONSENSUS_DETECTED`. Tracks which signals have already fired consensus events (per-case `Set<String>`) to avoid repeated firing. Resets when signal decays below effective-zero. Computation: O(S) where S ≤ `maxSignalsPerCase`. Reads `SignalRegistry.perceiveAll(caseId)`.
+
+2. **Coordination storm detection**: When any ActivityTracker rate exceeds `convergenceThreshold × stormRateMultiplier`, emit `COORDINATION_STORM_DETECTED`. Fires once when storm begins. Resets (can fire again) after all rates drop below storm threshold (hysteresis). Computation: O(1) — reads four rate values from ActivityTracker.
+
+3. **Interest convergence detection**: When the interest landscape shows a hotspot score above `interestHotspotThreshold`, emit `INTEREST_CONVERGENCE_DETECTED`. Fires once per hotspot key. Resets when hotspot dissolves (agents deregister interests). Computation: O(N) where N ≤ `maxObserversPerCase`.
+
+`convergenceDetection()` in `CaseContextChangedEventHandler` gains: `if coordinator.isStigmergyCase(caseId): coordinator.detectPatterns(...)` after existing ConvergenceDetector and BudgetEnforcer.
+
+**Alternatives:**
+- Lifecycle events only (no pattern detection) — misses the core value of stigmergy audit. Individual SPI events exist but don't tell the coordination story.
+- Separate pipeline phase for coordination intelligence — adds a 6th phase. Over-engineered; convergenceDetection is the natural home since it already examines aggregate behavior.
+- Pattern detection in a separate bean — unnecessary separation when patterns are simple threshold checks on existing data.
+
+**Rationale:** The three patterns cover the essential stigmergy dynamics: consensus (the mechanism working), storms (the mechanism pathological), and attention convergence (the mechanism focusing). All are mechanically detectable — no LLM needed. They run alongside existing convergence checks with negligible overhead.
+
+**Trade-offs:** Per-case tracking state for "already fired" (Set<String> for consensus signals, boolean for storm, Set<String> for hotspot keys) adds memory proportional to signals/keys. Bounded by `maxSignalsPerCase` and `maxObserversPerCase`. Evicted on case termination alongside all other coordinator state.
+
+**Sources:** `SignalRegistry.perceiveAll()`, `ActivityTracker` (rate queries), `ObservationRegistry` (interest landscape), D35 (Signal.sources tracking), D46 (ActivityTracker rates), D49 (ConvergenceDetector — existing pattern), D54 (existing convergence events)
+**Depends on:** D60 (StigmergyCoordinator is Layer 3), D66 (CoordinationConfig provides thresholds)
+**Exploration:** quick
+**Status:** captured
+
+## D68: Seven new CaseHubEventTypes for stigmergy
+
+**Choice:** Seven new `CaseHubEventType` values in two groups:
+
+**Lifecycle events:**
+- `STIGMERGY_CASE_INITIALIZED` — case starts with stigmergy mode. Metadata: `agentCount`, config summary.
+- `STIGMERGY_AGENT_JOINED` — agent dispatched (JOINING state). Metadata: `agentId`, `bindingName`.
+- `STIGMERGY_AGENT_ACTIVATED` — agent completed setup (ACTIVE state). Metadata: `agentId`, `interestCount`, `ruleCount`.
+- `STIGMERGY_AGENT_DEPARTED` — agent voluntarily left. Metadata: `agentId`, `reason`, `activeTimeMs`.
+
+**Coordination intelligence events:**
+- `SIGNAL_CONSENSUS_DETECTED` — signal reinforced by N agents. Metadata: `signalName`, `reinforcementCount`, `sources` (agent IDs), `effectiveStrength`.
+- `COORDINATION_STORM_DETECTED` — activity rates exceed storm thresholds. Metadata: `stormingMetrics` (which rates), `currentRates`, `stormThreshold`.
+- `INTEREST_CONVERGENCE_DETECTED` — collective attention focusing. Metadata: `hotspotKeys`, `watchingAgentCount`, `hotspotScore`.
+
+**Alternatives:** None significant — follows established CaseHubEventType patterns from D16 (pheromone), D27 (interest), D44 (rules), D54 (convergence).
+
+**Rationale:** Two groups tell different parts of the coordination story. Lifecycle events track WHO is participating and WHEN. Coordination events track WHAT patterns are emerging. Together they give a complete audit trail of stigmergic coordination — readable from EventLog without manual correlation of hundreds of individual SPI events.
+
+**Trade-offs:** Seven new event types is a significant addition to the enum. Justified: each captures a distinct, non-overlapping concern. All are conditional (only published for stigmergy cases or when thresholds are crossed).
+
+**Sources:** `CaseHubEventType.java` (existing enum), D16 (pheromone events), D27 (interest events), D44 (rule events), D54 (convergence events)
+**Depends on:** D64 (lifecycle states define when lifecycle events fire), D67 (detectors define when coordination events fire)
+**Exploration:** quick
+**Status:** captured
+
+## D69: Trigger-less bindings in stigmergy compounds
+
+**Choice:** Bindings within a stigmergy compound do not require trigger conditions (`on:`, `when:`). The `StigmergyStrategy` handles all dispatch decisions — triggers are the strategy's concern, not the binding's. If a binding in a stigmergy compound has a trigger, the strategy ignores it (logs WARN on first encounter).
+
+For YAML: `on:` is optional when `planningStrategy: stigmergy`. For Java: Binding.builder() allows `build()` without `on()` when the binding will be added to a stigmergy compound.
+
+Implementation: the binding builder can accept `Trigger.STRATEGY_MANAGED` as a sentinel value, or the strategy can wrap trigger-less bindings internally. Implementation detail — the design decision is that triggers are optional.
+
+**Alternatives:**
+- Require always-true triggers — forces case authors to write `on: { contextChange: { filter: 'true' } }` on every binding. Boilerplate that contradicts the "strategy manages dispatch" principle.
+- Remove triggers entirely for stigmergy — too aggressive, since future extensions (condition-gated dispatch per D65 alternatives) would want optional triggers back.
+
+**Rationale:** The unified execution model's §2.2 establishes that ORCHESTRATED dispatch mode means "parent's strategy selects this item." The strategy IS the trigger. Requiring an explicit trigger alongside strategy-managed dispatch is redundant. Making triggers optional gives the cleanest YAML surface.
+
+**Trade-offs:** Binding validation must be context-aware (needs to know parent compound's strategy to validate trigger requirement). Mitigated: validation happens at CaseDefinition initialization time when compound context is available, not at individual Binding construction time.
+
+**Sources:** `Binding.Builder.build()`, unified execution model spec §2.2 (dispatch modes), D63 (all bindings are agents)
+**Depends on:** D63 (all bindings are agents), D65 (strategy handles dispatch)
+**Exploration:** quick
+**Status:** captured
+
+## D70: Module placement — package structure
+
+**Choice:** Detailed package placement:
+
+| Component | Module | Package |
+|-----------|--------|---------|
+| `StigmergyConfig`, `StigmergyDefaults`, `CoordinationConfig` | engine-api | `io.casehub.api.model.stigmergy` |
+| `AgentLifecycleState` (enum), `AgentState` (record) | engine-api | `io.casehub.api.model.stigmergy` |
+| New `CaseHubEventType` values | engine-api | `io.casehub.api.event` (existing enum) |
+| `StigmergyCoordinator` | runtime-core | `io.casehub.engine.internal.stigmergy` |
+| `StigmergyStrategy` | planning-core | `io.casehub.engine.plan.strategy` (existing strategy package) |
+
+`StigmergyCoordinator` is injected into `CaseContextChangedEventHandler` via `Instance<StigmergyCoordinator>` with `isResolvable()` guard — transparent no-op when runtime-core is present but no stigmergy case is active. No circular dependency — both are `@ApplicationScoped` beans in runtime-core. Follows the `Instance<OutputConvergenceMonitor>` pattern from D51.
+
+`StigmergyStrategy` follows the `DefaultPlanningStrategy` pattern in planning-core — registered as a `NamedStrategy` with `id() = "stigmergy"`.
+
+**Alternatives:** None significant — follows established patterns from D4, D17, D36, D44, D53.
+
+**Rationale:** API types in `api/model/stigmergy` (new domain package matching signals, convergence). Infrastructure in `runtime-core/internal/stigmergy`. Strategy in `planning-core/strategy` alongside other strategies. Each follows the established tier: api → common-core → runtime-core → planning-core.
+
+**Sources:** D4 (observation placement), D17 (signal placement), D53 (convergence placement), D61 (planning module dependency)
+**Depends on:** D60 (three-layer architecture defines what exists), D61 (planning module houses the strategy)
+**Exploration:** quick
+**Status:** captured
