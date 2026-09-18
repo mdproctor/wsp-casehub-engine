@@ -44,7 +44,7 @@ The swarm model extends stigmergy (D73) — same `planningStrategy: stigmergy`, 
 │  │                    MetricsSpace                           │   │
 │  │   5th WorkerRuntime facet — read-only agent self-awareness│   │
 │  │   activityRates · budgetUsage · myFingerprint             │   │
-│  │   swarmProgress · detectedRoles                           │   │
+│  │   swarmProgress · detectedRoles · detectedTeams           │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                              │                                   │
 │                              ▼                                   │
@@ -149,6 +149,8 @@ Per-agent, per-domain: a circular buffer of per-cycle feature maps over the last
 - Rule firings: recorded by `RuleRegistry.storeFirings()` per cycle — `RoleTracker` reads `RuleRegistry.getFirings(caseId, agentId)` each cycle and counts rule IDs for the decision domain
 - Context writes: derived from the same `RuleRegistry.getFirings()` data — `RoleTracker` filters `RuleFiring.executedActions()` for `WriteContext` instances and extracts written keys for the effect domain. No separate notification mechanism needed; both decision and effect domains come from `RuleRegistry`
 
+**Query API for TeamDetector:** `RoleTracker.effectKeys(UUID caseId, String agentId)` returns `Set<String>` — the set of context keys written by an agent across the current sliding window. This is a projection of data already accumulated for the effect domain fingerprint (the fingerprint stores normalized counts; `effectKeys()` returns the raw key set). TeamDetector uses this for the COMPLEMENTARY affinity computation (cross-referencing one agent's output keys against another's interest keys).
+
 ### Role Cluster Detection
 
 Algorithm (runs on periodic + event triggers per D80):
@@ -215,7 +217,7 @@ Team affinity between two agents is computed from three of the four `NeighborRel
 |----------|-----------------|--------|
 | `SHARED_INTEREST` | Attention alignment — watching the same context keys | `ObservationRegistry` — compare `watchedKeys()` per observer |
 | `SHARED_SIGNAL` | Communication alignment — depositing the same signals | `SignalRegistry` — compare `sources` sets across signals |
-| `COMPLEMENTARY` | Workflow alignment — one agent's outputs feed another's observations | Cross-reference output keys (from `WriteContext` actions) against interest keys |
+| `COMPLEMENTARY` | Workflow alignment — one agent's outputs feed another's observations | Cross-reference output keys from `RoleTracker.effectKeys(caseId, agentId)` against interest keys from `ObservationRegistry` |
 
 Affinity score: for each relation type, compute a Jaccard-like ratio (`shared features / union features`). Overall affinity is the average of the three scores.
 
@@ -262,7 +264,7 @@ Runs alongside `RoleTracker` on the same trigger schedule (periodic + event-trig
 
 ### Trade-offs
 
-No explicit team identity — agents can't say "I'm in team X." Agents detect team membership indirectly via `NeighborSpace` queries. Acceptable for v1 — explicit team identity is a natural extension if needed.
+No explicit team identity — agents can't say "I'm in team X." Agents observe team topology via `MetricsSpace.detectedTeams()` (system-level cluster view) and their own position via `NeighborSpace` queries (per-agent relational view). Explicit team identity (agent knows its own teamId) is a natural extension if needed.
 
 ## 3. SwarmProgressTracker
 
@@ -339,6 +341,8 @@ interface MetricsSpace {
 
     List<DetectedRole> detectedRoles();
 
+    List<DetectedTeam> detectedTeams();
+
     MetricsSpace NOOP = new MetricsSpace() { /* all methods return empty/default */ };
 }
 ```
@@ -350,6 +354,7 @@ interface MetricsSpace {
 | `myFingerprint()` | This agent's current behavioral fingerprint | `RoleTracker` |
 | `swarmProgress()` | Swarm-level progress scores | `SwarmProgressTracker` |
 | `detectedRoles()` | All currently detected role clusters | `RoleTracker` |
+| `detectedTeams()` | All currently detected team clusters | `TeamDetector` |
 
 All methods return immutable snapshots. No mutations.
 
@@ -362,7 +367,7 @@ default MetricsSpace metrics() {
 }
 ```
 
-`DefaultMetricsSpace` (`runtime-core`, `io.casehub.engine.internal.stigmergy`) delegates to `ActivityTracker`, `RoleTracker`, `SwarmProgressTracker`. Constructor takes `(UUID caseId, String agentId, ActivityTracker, RoleTracker, SwarmProgressTracker, StigmergyConfig)`. The `agentId` identifies "me" for `myFingerprint()`. Wired via `WorkerRuntimeFactory` — the factory passes the trackers plus the agent's ID and caseId; the runtime creates the facet.
+`DefaultMetricsSpace` (`runtime-core`, `io.casehub.engine.internal.stigmergy`) delegates to `ActivityTracker`, `RoleTracker`, `TeamDetector`, `SwarmProgressTracker`. Constructor takes `(UUID caseId, String agentId, ActivityTracker, RoleTracker, TeamDetector, SwarmProgressTracker, StigmergyConfig)`. The `agentId` identifies "me" for `myFingerprint()`. Wired via `WorkerRuntimeFactory` — the factory passes the trackers plus the agent's ID and caseId; the runtime creates the facet.
 
 `activityRates()` uses `StigmergyDefaults.stabilityWindow()` (defaulting to `Duration.ofSeconds(30)`) as the window duration for `CaseActivityState` rate methods. Returns rates for dispatch, signal deposit, context mutation, and evaluation cycles over that window.
 
@@ -400,6 +405,11 @@ record SwarmConfig(
 ```
 
 All fields nullable — null means use default. Empty `swarm: {}` activates swarm with all defaults.
+
+**`maxSwarmSize` enforcement:** This spec provides the declarative cap and the observation infrastructure; dynamic enforcement is #1113's responsibility. Within this spec's scope:
+- **Validation at initialization:** `StigmergyCoordinator.initializeCase()` logs a warning if the declared worker count exceeds `maxSwarmSize` (informational, not a hard error — the cap is primarily for dynamic provisioning).
+- **Observation:** Agents can query `StigmergyCoordinator.activeCount(caseId)` against `SwarmConfig.maxSwarmSize()` via MetricsSpace to see proximity to the cap.
+- **#1113 contract:** Self-provisioning (engine#1113) checks `activeCount(caseId) >= maxSwarmSize` before adding agents. The guard is in #1113's provisioning logic, not in swarm detection.
 
 ### StigmergyConfig Integration
 
@@ -505,9 +515,9 @@ t=30:  SWARM_ROLE_EMERGED               (role-2: [cooling-controller, vent-contr
                                           dominant: effect:coolingAction, signal:cooldown)
 t=30:  SWARM_TEAM_FORMED                (team-1: [temp-monitor, cooling-controller],
                                           dominant: COMPLEMENTARY)
-t=50:  SWARM_PROGRESS                   (exploration=0.8, consensus=0.4, stability=0.6)
+t=50:  SWARM_PROGRESS                   (explorationPace=0.8, consensus=0.4, stability=0.6)
 t=70:  SWARM_ROLE_SHIFT                 (stability-assessor: ungrouped → role-1)
-t=80:  SWARM_PROGRESS                   (exploration=0.9, consensus=0.7, stability=0.9)
+t=80:  SWARM_PROGRESS                   (explorationPace=0.9, consensus=0.7, stability=0.9)
 t=100: CONVERGENCE_DETECTED             (all rates below threshold for 30s)
 ```
 
@@ -528,6 +538,7 @@ Extend existing stigmergy packages — no new packages (D82):
 | `TeamDetector` | runtime-core | `io.casehub.engine.internal.stigmergy` |
 | `SwarmProgressTracker` | runtime-core | `io.casehub.engine.internal.stigmergy` |
 | `DefaultMetricsSpace` | runtime-core | `io.casehub.engine.internal.stigmergy` |
+| `SwarmEvent` | runtime-core | `io.casehub.engine.internal.stigmergy` |
 
 Follows the established tier model: API types in Tier 1, infrastructure in Tier 2/3. `MetricsSpace` follows the facet pattern in `api/engine` alongside `SignalSpace`, `InterestSpace`, `NeighborSpace`, `RuleSpace`.
 
@@ -587,8 +598,16 @@ All three trackers are `@ApplicationScoped` beans in `runtime-core`. Constructor
 - `TeamDetector`: `ObservationRegistry`, `SignalRegistry`, `RoleTracker`, `StigmergyCoordinator`
 - `SwarmProgressTracker`: `SignalRegistry`, `RoleTracker`, `StigmergyCoordinator`
 
-Trackers do NOT inject `EventDispatcher`. Following the `StigmergyCoordinator.detectPatterns()` pattern, each tracker's `detect()` / `evaluate()` method returns structured detection results. The handler (or future `ConvergenceDetectionPhase`) owns all `EventDispatcher` calls. This keeps trackers as pure functions from registries to detection results — simpler testing, handler retains control over event timing and error handling.
-- `DefaultMetricsSpace`: `ActivityTracker`, `RoleTracker`, `SwarmProgressTracker`
+Trackers do NOT inject `EventDispatcher`. Following the `StigmergyCoordinator.detectPatterns()` pattern, each tracker's `detect()` / `evaluate()` method returns `List<SwarmEvent>`. The handler (or future `ConvergenceDetectionPhase`) owns all `EventDispatcher` calls. This keeps trackers as pure functions from registries to detection results — simpler testing, handler retains control over event timing and error handling.
+
+### SwarmEvent
+
+```java
+record SwarmEvent(CaseHubEventType type, Map<String, Object> metadata)
+```
+
+`SwarmEvent` (`runtime-core`, `io.casehub.engine.internal.stigmergy`) — the return type for all three trackers' detection methods. Parallels `StigmergyCoordinator.CoordinationEvent` but uses `CaseHubEventType` directly since swarm events are first-class event types (SWARM_ROLE_EMERGED, etc.), not coordinator-internal classifications. The handler's `dispatchSwarmEvents()` iterates the list and dispatches each as a `CaseHubEvent` with the given type and metadata.
+- `DefaultMetricsSpace`: `ActivityTracker`, `RoleTracker`, `TeamDetector`, `SwarmProgressTracker`
 
 `DefaultMetricsSpace` is wired via `WorkerRuntimeFactory` — the factory passes the trackers to each `DefaultWorkerRuntime` instance.
 
