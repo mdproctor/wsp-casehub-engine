@@ -31,7 +31,7 @@ The swarm model extends stigmergy (D73) — same `planningStrategy: stigmergy`, 
 │  ┌──────────────┐ ┌──────────────┐ ┌─────────────────────────┐  │
 │  │ RoleTracker  │ │ TeamDetector │ │ SwarmProgressTracker    │  │
 │  │              │ │              │ │                         │  │
-│  │ • behavioral │ │ • signal-    │ │ • exploration breadth   │  │
+│  │ • behavioral │ │ • signal-    │ │ • exploration pace      │  │
 │  │   fingerprint│ │   based      │ │ • consensus formation   │  │
 │  │ • cosine     │ │   affinity   │ │ • stability score       │  │
 │  │   similarity │ │ • emergent   │ │                         │  │
@@ -91,10 +91,19 @@ Each sub-vector is a sparse `Map<String, Double>`. Feature names are plain strin
 
 | Domain | Features | Source | Type |
 |--------|----------|--------|------|
-| Perception | interest keys registered | `ObservationRegistry` — extract `watchedKeys()` per observer for this agent | Binary (1.0) |
-| Communication | signal names deposited | `SignalRegistry` — signals where `sources` contains this agent | Normalized counts |
-| Decision | rule IDs that fired | `RoleTracker` accumulator — sliding window of `RuleFiring` records | Normalized counts |
-| Effect | context keys written | `RoleTracker` accumulator — sliding window of `WriteContext` actions | Normalized counts |
+| Perception | interest keys registered | `ObservationRegistry.getRegistrationsForAgent()` — extract keys from `EnvironmentObserver.watchedKeys()` plus pattern-match on `InterestDeclaration` variants (see below) | Binary (1.0) |
+| Communication | signal names deposited + signal interests | `SignalRegistry` — signals where `sources` contains this agent; plus `SignalThreshold` declarations from `ObservationRegistry` | Normalized counts / Binary |
+| Decision | rule IDs that fired | `RoleTracker` accumulator — sliding window of `RuleFiring` records from `RuleRegistry.getFirings()` | Normalized counts |
+| Effect | context keys written | `RoleTracker` accumulator — sliding window of `WriteContext` actions from `RuleFiring.executedActions()` via `RuleRegistry.getFirings()` | Normalized counts |
+
+**Perception key extraction:** `InterestDeclaration` is a sealed interface with five variants, each exposing keys differently. `RoleTracker` pattern-matches to extract context keys:
+- `KeyThreshold` → `key()` (single String)
+- `KeyCorrelation` → `keys()` (Set\<String>)
+- `TemporalSequence` → each `step.key()` from `steps()`
+- `JqInterest` → `watchedKeys()` (Set\<String>)
+- `SignalThreshold` → classified under the **communication** domain (signal interest, not context key), added as `"signal-interest:" + signalName()` feature
+
+For registrations with a null `declaration` (raw API observers), `EnvironmentObserver.watchedKeys()` provides the context keys. Registrations contributing no extractable keys are valid — they simply add nothing to the perception fingerprint.
 
 **Static features** (perception) change infrequently — agents register interests during `execute()` and rarely modify them. **Dynamic features** (communication, decision, effect) evolve continuously as agents adapt their behavior.
 
@@ -137,8 +146,8 @@ Per-agent, per-domain: a circular buffer of per-cycle feature maps over the last
 **Storage:** Per-agent circular buffer of per-cycle feature maps. Bounded by `agents × windowSize × featuresPerCycle`. With 20 agents × 20 cycles × 50 features = 20,000 entries. Negligible.
 
 **Accumulation points:**
-- Rule firings: recorded by `RuleRegistry` per cycle — `RoleTracker` reads `RuleRegistry.getFirings(caseId, agentId)` each cycle
-- Context writes: recorded by `LocalRuleEvaluator` — `RoleTracker` is notified of `WriteContext` actions per agent each cycle
+- Rule firings: recorded by `RuleRegistry.storeFirings()` per cycle — `RoleTracker` reads `RuleRegistry.getFirings(caseId, agentId)` each cycle and counts rule IDs for the decision domain
+- Context writes: derived from the same `RuleRegistry.getFirings()` data — `RoleTracker` filters `RuleFiring.executedActions()` for `WriteContext` instances and extracts written keys for the effect domain. No separate notification mechanism needed; both decision and effect domains come from `RuleRegistry`
 
 ### Role Cluster Detection
 
@@ -149,8 +158,7 @@ Algorithm (runs on periodic + event triggers per D80):
 3. Build adjacency graph: edge between agents i, j if `similarity(i,j) > roleSimilarityThreshold` (default 0.7)
 4. Find connected components via BFS
 5. For each component, compute average internal pairwise similarity
-6. If average < `roleSimilarityThreshold`, split by removing weakest edge and recurse
-7. Components with size ≥ `roleMinClusterSize` (default 2) and avg similarity ≥ threshold are role clusters
+6. Components with size ≥ `roleMinClusterSize` (default 2) and avg similarity ≥ threshold are role clusters. Components failing the average check are discarded — those agents have no detected role, which is a valid state observable via `MetricsSpace`
 
 With N ≤ 20 agents, total cost is O(400 × K) per detection — negligible.
 
@@ -162,9 +170,12 @@ record DetectedRole(
     Set<String> memberAgents,               // agent IDs in this cluster
     BehavioralFingerprint centroid,         // average fingerprint of cluster members
     List<String> dominantFeatures,          // top-3 features from centroid (for naming)
-    int stabilityCount                      // consecutive detection cycles this cluster persisted
+    int stabilityCount,                     // consecutive detection cycles this cluster persisted
+    double centroidDrift                    // cosine distance between current centroid and centroid at roleId creation
 )
 ```
+
+`centroidDrift` measures how far the role's behavioral meaning has shifted since creation, addressing the Ship of Theseus problem with majority-overlap matching. An agent seeing `stabilityCount = 20, centroidDrift = 0.8` knows the roleId has been stable but the role's meaning has fundamentally changed. `centroidDrift` of 0.0 = identical to original; 1.0 = completely different behavior. RoleTracker stores the original centroid per roleId for comparison.
 
 `roleId` is generated on first detection as `"role-" + incrementingCounter` (per case, reset on eviction) and reused across cycles via cluster matching. Two clusters match if they share > 50% of their members (majority overlap).
 
@@ -198,7 +209,7 @@ Two agents with the same role might not be teaming (parallel independent work). 
 
 ### Affinity Computation
 
-Team affinity between two agents is computed from three NeighborSpace relation types:
+Team affinity between two agents is computed from three of the four `NeighborRelation` types. `COACTIVE` is excluded — it indicates temporal co-activity (agents active simultaneously) which is a baseline condition for all stigmergy agents, not evidence of coordination. The three interaction-based relations:
 
 | Relation | What it measures | Source |
 |----------|-----------------|--------|
@@ -229,7 +240,7 @@ Same algorithm as role clustering (connected components + internal average check
 record DetectedTeam(
     String teamId,                          // engine-generated, stable across cycles
     Set<String> memberAgents,               // agent IDs in this cluster
-    Set<String> dominantRelations,          // which relation types dominate the affinity
+    Set<NeighborRelation> dominantRelations, // which relation types dominate the affinity
     double avgAffinity,                     // average internal affinity score
     int stabilityCount                      // consecutive detection cycles
 )
@@ -243,6 +254,7 @@ Team matching across cycles uses the same majority-overlap rule as roles.
 |-------|-----------|
 | `SWARM_TEAM_FORMED` | New team cluster detected |
 | `SWARM_TEAM_DISSOLVED` | Previous team cluster no longer exists |
+| `SWARM_TEAM_SHIFT` | Agent moved from one team cluster to another between detection cycles |
 
 ### Pipeline Integration
 
@@ -262,7 +274,7 @@ Three generic progress metrics, each [0.0, 1.0]:
 
 | Dimension | What it measures | Computation |
 |-----------|-----------------|-------------|
-| Exploration breadth | How much of the problem space agents have covered | Ratio of unique features explored (unique signal names + unique context keys written) vs. a sliding maximum. Higher = more exploration. |
+| Exploration pace | Whether agents are still discovering at their peak rate | Ratio of unique features explored (unique signal names + unique context keys written) vs. sliding maximum over the detection window. Higher = agents are still actively exploring. A declining score means exploration is slowing — agents should look at absolute feature counts via `MetricsSpace` for coverage assessment. |
 | Consensus formation | How much agreement has formed among agents | Ratio of signals with consensus (`sources.size() ≥ consensusThreshold`) vs. total active signals. Higher = more agreement. |
 | Stability score | How settled the swarm's role structure is | Percentage of agents that stayed in the same role cluster across the last N detection cycles. Higher = roles have stabilized. |
 
@@ -270,7 +282,7 @@ Three generic progress metrics, each [0.0, 1.0]:
 
 ```java
 record SwarmProgress(
-    double explorationScore,        // [0.0, 1.0]
+    double explorationPace,        // [0.0, 1.0]
     double consensusScore,          // [0.0, 1.0]
     double stabilityScore,          // [0.0, 1.0]
     Instant computedAt
@@ -279,14 +291,15 @@ record SwarmProgress(
 
 ### Computation
 
-**Exploration breadth:**
+**Exploration pace:**
 - Numerator: count of unique signal names deposited + unique context keys written by all agents in the current sliding window
 - Denominator: sliding maximum of this count over the last `roleDetectionWindow` detection cycles (default 20) — avoids division by a static constant that doesn't adapt to case complexity
-- At detection cycle 1: score = 1.0 (numerator = denominator). Score decreases if agents stop exploring new features.
+- At detection cycle 1: score = 1.0 (numerator = denominator). Score decreases when the rate of new feature discovery drops relative to the peak. This measures exploration **velocity**, not coverage — a score of 0.4 means "exploring at 40% of peak rate," not "40% of the space covered." Agents making explore/exploit decisions should use a declining pace as a trigger to broaden their interests.
 
 **Consensus formation:**
-- Numerator: count of signals in `SignalRegistry.perceiveAll(caseId)` where `sources.size() ≥ consensusThreshold`
-- Denominator: total count of signals above effective-zero threshold
+- Numerator: `SignalRegistry.consensusSignals(caseId, consensusThreshold, effectiveZeroThreshold).size()` — signals meeting the consensus criteria
+- Denominator: `SignalRegistry.perceive(caseId, effectiveZeroThreshold).size()` — all active signals above effective-zero
+- `consensusThreshold` read from `StigmergyConfig.coordination().consensusThreshold()` (defaulting to 2); `effectiveZeroThreshold` from `StigmergyConfig.defaults().effectiveZeroThreshold()` (defaulting to 0.01)
 - Empty registry: score = 0.0
 
 **Stability score:**
@@ -297,7 +310,9 @@ record SwarmProgress(
 
 ### Event
 
-`SWARM_PROGRESS` event fired when any score changes by more than `progressChangeThreshold` (default 0.1) since the last event. Metadata: `explorationScore`, `consensusScore`, `stabilityScore`, `cycle`.
+`SWARM_PROGRESS` event fired when any score changes by more than `progressChangeThreshold` (default 0.1) since the last event. Metadata: `explorationPace`, `consensusScore`, `stabilityScore`, `cycle`.
+
+`SwarmProgressTracker.evaluate()` accepts the full `StigmergyConfig` (not just `SwarmConfig`) because it needs `CoordinationConfig.consensusThreshold()` for the consensus formation metric and `StigmergyDefaults.effectiveZeroThreshold()` for signal filtering.
 
 Runs on periodic interval only — progress is a slow-moving metric, not sensitive to structural changes.
 
@@ -347,7 +362,9 @@ default MetricsSpace metrics() {
 }
 ```
 
-`DefaultMetricsSpace` (`runtime-core`, `io.casehub.engine.internal.stigmergy`) delegates to `ActivityTracker`, `RoleTracker`, `SwarmProgressTracker`. Wired via `WorkerRuntimeFactory` — the factory passes the trackers; the runtime creates the facet.
+`DefaultMetricsSpace` (`runtime-core`, `io.casehub.engine.internal.stigmergy`) delegates to `ActivityTracker`, `RoleTracker`, `SwarmProgressTracker`. Constructor takes `(UUID caseId, String agentId, ActivityTracker, RoleTracker, SwarmProgressTracker, StigmergyConfig)`. The `agentId` identifies "me" for `myFingerprint()`. Wired via `WorkerRuntimeFactory` — the factory passes the trackers plus the agent's ID and caseId; the runtime creates the facet.
+
+`activityRates()` uses `StigmergyDefaults.stabilityWindow()` (defaulting to `Duration.ofSeconds(30)`) as the window duration for `CaseActivityState` rate methods. Returns rates for dispatch, signal deposit, context mutation, and evaluation cycles over that window.
 
 ### D56 Fulfillment
 
@@ -370,6 +387,7 @@ Agents can game metrics (e.g., artificially inflate exploration by depositing di
 
 ```java
 record SwarmConfig(
+    Integer maxSwarmSize,               // default null (no cap) — maximum active agents
     Double roleSimilarityThreshold,     // default 0.7
     Integer roleMinClusterSize,         // default 2
     Integer roleDetectionWindow,        // default 20 (sliding window cycles)
@@ -447,7 +465,7 @@ Fingerprint data accumulates every cycle (cheap counter increments in the slidin
 
 ## 7. Audit Events
 
-Six new `CaseHubEventType` values in three groups:
+Seven new `CaseHubEventType` values in three groups:
 
 ### Role Events
 
@@ -463,12 +481,13 @@ Six new `CaseHubEventType` values in three groups:
 |-------|------|-------------|
 | `SWARM_TEAM_FORMED` | Team affinity cluster detected | `teamId`, `memberAgents`, `dominantRelations`, `avgAffinity` |
 | `SWARM_TEAM_DISSOLVED` | Team cluster no longer exists | `teamId`, `previousMembers`, `lifetimeCycles` |
+| `SWARM_TEAM_SHIFT` | Agent moved from one team to another | `agentId`, `fromTeamId`, `toTeamId`, `affinityToNewTeam` |
 
 ### Progress Events
 
 | Event | When | Key Metadata |
 |-------|------|-------------|
-| `SWARM_PROGRESS` | Score delta exceeds threshold or periodic report | `explorationScore`, `consensusScore`, `stabilityScore`, `cycle` |
+| `SWARM_PROGRESS` | Score delta exceeds threshold or periodic report | `explorationPace`, `consensusScore`, `stabilityScore`, `cycle` |
 
 ### The Swarm Intelligence Story
 
@@ -539,14 +558,17 @@ convergenceDetection(caseInstance, caseDefinition):
             caseDefinition.stigmergyConfig())
 
     // Swarm detection — guarded by swarmConfig presence
-    swarmConfig = caseDefinition.stigmergyConfig()?.swarm()
+    stigmergyConfig = caseDefinition.stigmergyConfig()
+    swarmConfig = stigmergyConfig?.swarm()
     if swarmConfig != null:
         roleTracker.accumulate(caseId)           // always — cheap per-cycle accumulation
         if roleTracker.shouldDetect(caseId):      // periodic or dirty flag
-            roleTracker.detect(caseId, swarmConfig)
-            teamDetector.detect(caseId, swarmConfig)
+            roleEvents = roleTracker.detect(caseId, swarmConfig)   // returns List<SwarmEvent>
+            teamEvents = teamDetector.detect(caseId, swarmConfig)  // returns List<SwarmEvent>
+            dispatchSwarmEvents(roleEvents + teamEvents)           // handler dispatches
         if roleTracker.shouldTrackProgress(caseId):  // periodic only
-            progressTracker.evaluate(caseId, swarmConfig)
+            progressEvents = progressTracker.evaluate(caseId, stigmergyConfig)  // returns List<SwarmEvent>
+            dispatchSwarmEvents(progressEvents)
 
     // Existing budget/convergence detection
     if budgetConfig == null && convergenceConfig == null:
@@ -561,9 +583,11 @@ convergenceDetection(caseInstance, caseDefinition):
 
 All three trackers are `@ApplicationScoped` beans in `runtime-core`. Constructor-injected dependencies:
 
-- `RoleTracker`: `ObservationRegistry`, `SignalRegistry`, `RuleRegistry`, `StigmergyCoordinator`, `EventDispatcher`
-- `TeamDetector`: `ObservationRegistry`, `SignalRegistry`, `RoleTracker` (for `WriteContext` action tracking), `StigmergyCoordinator`, `EventDispatcher`
-- `SwarmProgressTracker`: `SignalRegistry`, `RoleTracker`, `StigmergyCoordinator`, `EventDispatcher`
+- `RoleTracker`: `ObservationRegistry`, `SignalRegistry`, `RuleRegistry`, `StigmergyCoordinator`
+- `TeamDetector`: `ObservationRegistry`, `SignalRegistry`, `RoleTracker`, `StigmergyCoordinator`
+- `SwarmProgressTracker`: `SignalRegistry`, `RoleTracker`, `StigmergyCoordinator`
+
+Trackers do NOT inject `EventDispatcher`. Following the `StigmergyCoordinator.detectPatterns()` pattern, each tracker's `detect()` / `evaluate()` method returns structured detection results. The handler (or future `ConvergenceDetectionPhase`) owns all `EventDispatcher` calls. This keeps trackers as pure functions from registries to detection results — simpler testing, handler retains control over event timing and error handling.
 - `DefaultMetricsSpace`: `ActivityTracker`, `RoleTracker`, `SwarmProgressTracker`
 
 `DefaultMetricsSpace` is wired via `WorkerRuntimeFactory` — the factory passes the trackers to each `DefaultWorkerRuntime` instance.
@@ -574,9 +598,9 @@ All three trackers are `@ApplicationScoped` beans in `runtime-core`. Constructor
 
 ## 11. Cross-Cutting Concerns
 
-### 11a. Pipeline Decomposition (D83)
+### 11a. Pipeline Decomposition (separate issue)
 
-The decision review identified that `CaseContextChangedEventHandler` has grown to 34+ constructor parameters with 5 sequential phases. D83 proposes extracting each phase into a dedicated handler class composed into a `CaseEvaluationPipeline`. This is a related architectural improvement that benefits all pipeline phases, not just swarm — it reduces per-class complexity and improves phase testability. Swarm detection adds 3 more `Instance<>` injections to the handler, making the decomposition more pressing.
+`CaseContextChangedEventHandler` has grown to 34+ constructor parameters with 5 sequential phases. D83 (captured in decisions.md) proposes extracting each phase into a dedicated handler class composed into a `CaseEvaluationPipeline`. This is a separate architectural improvement that benefits all pipeline phases, not just swarm. Swarm detection adds 3 more `Instance<>` injections to the handler, making the decomposition more pressing. D83 is scoped out of this spec — it will be filed as a separate issue since it is a cross-cutting refactoring not specific to swarm.
 
 ### 11b. Crash Recovery (D29)
 
@@ -695,7 +719,7 @@ public class AdaptiveTemperatureMonitor implements WorkerFunction {
                 var metrics = runtime.metrics();
                 var progress = metrics.swarmProgress();
                 // If exploration is low, broaden observation
-                return progress.explorationScore() < 0.3;
+                return progress.explorationPace() < 0.3;
             }),
             List.of(
                 new RegisterInterest(
@@ -720,6 +744,8 @@ public class AdaptiveTemperatureMonitor implements WorkerFunction {
 
 After `execute()` returns, the agent's rules run each evaluation cycle. The "adapt-to-swarm" rule checks `MetricsSpace.swarmProgress()` — if exploration is low, it broadens the agent's observation interests. The "budget-awareness" rule checks budget usage and signals for throttling when approaching the cap.
 
+**Note:** `RegisterInterest` is declared as a `RuleAction` variant but its execution is currently a no-op in `LocalRuleEvaluator` — wiring interest registration from rule actions back through the handler is a known gap from the local rule evaluation spec (#1110). The example above demonstrates the intended design; the wiring must be completed before this adaptive pattern functions at runtime.
+
 ## 13. Relationship to Existing Infrastructure
 
 | Existing | Relationship |
@@ -735,6 +761,21 @@ After `execute()` returns, the agent's rules run each evaluation cycle. The "ada
 | **engine#1113** (self-provisioning) | Future extension. RoleTracker provides the behavioral intelligence that #1113's provisioning decisions need — which roles are under-represented, which are over-staffed. |
 | **blocks#10** (LLM-enhanced swarm) | Future extension. MetricsSpace provides the observation data that LLM agents use for sophisticated role adaptation and team coordination. |
 
+## 14. Deferred Requirements
+
+Issue #1112 specifies requirements that are out of scope for this spec (tracking and detection only). Each is listed with rationale and future issue:
+
+| Requirement | Deferred to | Rationale |
+|---|---|---|
+| "role diversity requirements" — minimum role diversity constraints | blocks#10 (LLM-enhanced swarm) | Role diversity is a behavioral goal, not a static config field. LLM agents make diversity decisions using `MetricsSpace.detectedRoles()` — enforcing minimum diversity requires intelligence that belongs in blocks, not the engine. |
+| "team formation rules" — explicit team formation logic | blocks#10 (LLM-enhanced swarm) | Teams emerge from interaction patterns; explicit formation rules require agent intelligence. The engine observes and reports; blocks provides the steering. |
+| "Swarm-level goal — mission-level objective" | blocks#10 (LLM-enhanced swarm) | A collective mission requires goal negotiation and shared planning — LLM-level capabilities. The engine provides `SwarmProgress` metrics as proxy; explicit mission management is blocks territory. |
+| Dynamic agent scaling | engine#1113 (self-provisioning) | `RoleTracker` provides the behavioral intelligence (under/over-represented roles) that #1113's provisioning decisions consume. `maxSwarmSize` in `SwarmConfig` provides the cap; scaling logic is #1113. |
+
+### Prerequisites
+
+ASSUMPTION: The stigmergy execution model (#1111) is implemented as specified before #1112 implementation begins. Specifically, stigmergy event dispatch (`STIGMERGY_CASE_INITIALIZED`, `STIGMERGY_AGENT_JOINED`, etc.) must be wired — these `CaseHubEventType` values are currently declared but not dispatched by any code. The swarm audit narrative (§7) depends on these events forming a working event trail.
+
 ## Decisions
 
 This spec implements the following design decisions:
@@ -749,9 +790,9 @@ This spec implements the following design decisions:
 | D78 | MetricsSpace — 5th WorkerRuntime facet |
 | D79 | SwarmConfig — inside StigmergyConfig, presence-activated |
 | D80 | Detection frequency — periodic + event-triggered hybrid |
-| D81 | Swarm event types — 6 new CaseHubEventType values |
+| D81 | Swarm event types — 7 new CaseHubEventType values |
 | D82 | Module placement — extend existing stigmergy packages |
-| D83 | Pipeline decomposition — CaseEvaluationPipeline with phase handlers |
+| ~~D83~~ | ~~Pipeline decomposition~~ — scoped out to separate issue (see §11a) |
 
 Cross-references to foundation SPI decisions: D1-D9 (observation), D10-D18 (signals), D19-D28 (interests/facets), D29-D31 (coordination state), D32-D36 (neighbors), D37-D44 (local rules), D45-D59 (convergence), D60-D72 (stigmergy execution model).
 
@@ -767,7 +808,7 @@ Cross-references to foundation SPI decisions: D1-D9 (observation), D10-D18 (sign
 - `WorkerRuntime.java` — api coordination surface (facets: signals, interests, neighbors, rules)
 - `DefaultWorkerRuntime.java` — runtime-core WorkerRuntime implementation
 - `WorkerRuntimeFactory.java` — factory wiring registries into runtime
-- `CaseContextChangedEventHandler.java:1384-1425` — convergenceDetection phase
+- `CaseContextChangedEventHandler.java:1390-1444` — convergenceDetection phase
 - `CaseStatusChangedHandler.java` — terminal state cleanup
 - `CaseHubEventType.java` — existing event type enum
 - `NeighborSpace.java` — neighbor queries (shared interests, shared signals, complementary)
