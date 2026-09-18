@@ -18,9 +18,9 @@ date: 2026-09-15
 - [ ] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment ← active
   - [x] Batch 1: API-Types
     - [x] Task 1: Foundation-types
-  - [ ] Batch 2: Coordinator
-    - [ ] Task 2: StigmergyCoordinator
-    - [ ] Task 3: Runtime-wiring
+  - [x] Batch 2: Coordinator
+    - [x] Task 2: StigmergyCoordinator
+    - [x] Task 3: Runtime-wiring
   - [ ] Batch 3: Strategy
     - [ ] Task 4: StigmergyStrategy
     - [ ] Task 5: Integration-test
