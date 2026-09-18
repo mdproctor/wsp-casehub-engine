@@ -1293,3 +1293,247 @@ Implementation path: the case initializer automatically adds `ScopeActivatedTrig
 **Depends on:** D6 (thread model guidance)
 **Exploration:** quick (surfaced by ADR R1-15)
 **Status:** captured — made explicit from implicit inconsistency
+
+## D73: Swarm architecture — extend stigmergy, not separate strategy
+
+**Choice:** The swarm execution model extends `StigmergyStrategy` and `StigmergyCoordinator` with new tracking/detection registries. Same `planningStrategy: stigmergy`, no new strategy type. `StigmergyConfig` gains an optional `swarm` sub-record. Swarm behaviors (role tracking, team detection, progress monitoring, agent-visible metrics) layer onto the existing stigmergy infrastructure. Scope is tracking + detection only — no dynamic agent scaling (that's #1113), no LLM-driven role assignment (that's blocks).
+
+**Alternatives:**
+- Separate `planningStrategy: swarm` with `SwarmStrategy` — cleaner separation but more types, another strategy to resolve, and duplicates stigmergy dispatch logic
+- Layered composition (SwarmExecutionModel wraps stigmergy) — most modular but most indirection, and D60 already anticipated swarm as a stigmergy extension
+
+**Rationale:** D65 explicitly notes that `StigmergyStrategy.select()` gains additional logic for #1112 without architectural change. Swarm IS stigmergy plus role awareness and collective intelligence. Keeping it as one strategy avoids the composition overhead and aligns with the "coordination as fourth axis" framing from D60.
+
+**Trade-offs:** StigmergyConfig grows wider. Mitigated: SwarmConfig is a nullable sub-record — pure stigmergy cases don't see swarm fields.
+
+**Sources:** D60 (three-layer architecture), D65 (strategy extension note), engine#1112
+**Exploration:** quick
+**Status:** captured
+
+## D74: Role emergence — multi-dimensional behavioral fingerprinting
+
+**Choice:** A role is the emergent behavioral pattern of an agent, computed from four domain-specific sub-vectors:
+
+| Domain | Features | Source | Type |
+|--------|----------|--------|------|
+| Perception | interest keys | ObservationRegistry | binary (1.0) |
+| Communication | signal names deposited | SignalRegistry (sources tracking) | normalized counts |
+| Decision | rule IDs that fired | RoleTracker accumulator | normalized counts |
+| Effect | context keys written | RoleTracker accumulator | normalized counts |
+
+`BehavioralFingerprint` record: four `Map<String, Double>` sub-vectors. Similarity = weighted average of per-domain cosine similarities. Default weights: equal (0.25 each), configurable via `SwarmConfig.domainWeights`. Case authors can emphasize specific domains (e.g., "roles are defined by what agents communicate").
+
+Role clusters detected via pairwise similarity + connected components with internal average similarity check. Cluster matching across cycles via majority member overlap (>50%). RoleTracker maintains per-agent sliding window of dynamic feature counts (configurable window size, default 20 cycles).
+
+**Alternatives:**
+- Set intersection (Jaccard) — simplest but loses all intensity information. Can't distinguish specialists from generalists.
+- Flat feature vector + single cosine — captures intensity but mixes domains with different semantics. Domains with more features dominate similarity.
+
+**Rationale:** Multi-dimensional fingerprint captures all four behavioral dimensions of perceive→decide→act independently. Domain weights give case authors control over what "role" means. Per-domain analysis gives richer audit data ("identical perception, divergent effects"). Built entirely from existing registry queries — no new data collection.
+
+**Trade-offs:** More complex than Jaccard or flat vector. Four cosine computations per pair instead of one. Mitigated: N ≤ 20 agents, each domain vector is very sparse (≤20-100 features), total cost is negligible.
+
+**Sources:** arXiv:2603.28990 ("Drop the Hierarchy and Roles" — 5,006 emergent roles), SwarmSys (arXiv:2510.10047 — Explorer/Worker/Validator cycle), D73 deep exploration analysis
+**Depends on:** D73 (swarm extends stigmergy)
+**Exploration:** deep-analysis (first-principles derivation of four behavioral domains)
+**Status:** captured
+
+## D75: Team model — signal-based affinity clusters
+
+**Choice:** Teams are emergent coordination clusters, not declared structures. Team affinity between two agents is a weighted function of three NeighborSpace relations: `SHARED_INTEREST` (attention alignment), `SHARED_SIGNAL` (communication alignment), `COMPLEMENTARY` (workflow alignment — one agent's outputs feed another's observations). Affinity = weighted Jaccard-like score across these three dimensions. Teams detected using same clustering algorithm as roles (connected components + internal average check) but on affinity matrix instead of behavioral similarity. Events: `SWARM_TEAM_FORMED`, `SWARM_TEAM_DISSOLVED`.
+
+**Alternatives:**
+- Explicit TeamRegistry with JoinTeam/LeaveTeam rule actions — more structured but adds a new coordination primitive, defeats emergence
+- Compound-based teams (dynamic sub-compounds) — leverages existing compound lifecycle but requires dynamic PlanItem creation, a significant engine extension
+
+**Rationale:** Teams are defined by WHO coordinates together, not WHAT they do (that's roles). The engine already tracks all inter-agent relations via NeighborSpace (D32-D34). Team detection is a clustering query over existing relation data. Ephemeral teams that form and dissolve naturally match biological swarm behavior — ant foraging parties form and dissolve without explicit group management.
+
+**Trade-offs:** No explicit team identity — agents can't say "I'm in team X." Agents detect team membership indirectly via NeighborSpace queries. Acceptable for v1 — explicit team identity is a natural extension if needed.
+
+**Sources:** D32-D34 (NeighborSpace architecture and relations), D35 (Signal.sources tracking), engine#1108, engine#1112
+**Depends on:** D73 (swarm extends stigmergy), D74 (role clusters use same algorithm)
+**Exploration:** quick
+**Status:** captured
+
+## D76: Work redistribution — departure event + rule reaction
+
+**Choice:** No engine-orchestrated redistribution. When an agent fails or departs, the existing `STIGMERGY_AGENT_DEPARTED` event (D68) is published. Neighboring agents detect this via their local rules (rule condition checks neighbor state via NeighborSpace queries in lambda predicates) and adapt — register additional interests, deposit compensating signals, pick up the departed agent's work. Self-healing through the existing perceive→decide→act cycle. MetricsSpace (D78) enables agents to see the departure and adjust.
+
+**Alternatives:**
+- Coordinator-managed redistribution — StigmergyCoordinator actively deposits "help-needed" signals or modifies remaining agents' rules. More reliable but makes the coordinator an orchestrator, fighting the self-organization principle.
+- Capability handoff protocol — failed agent's capabilities published as available, others claim. More structured but requires a new claiming mechanism.
+
+**Rationale:** The entire point of self-organization is that the system adapts without central control. The engine provides the observation and notification infrastructure; agents provide the adaptive logic. This is exactly how biological swarms handle worker loss — neighboring ants detect the gap in pheromone refreshment and compensate by adjusting their response thresholds.
+
+**Trade-offs:** Self-healing quality depends entirely on agent rule quality. Poorly-written rules won't compensate for departed agents. Acceptable — the engine provides the infrastructure, blocks (#1112 blocks issue #10) provides the LLM intelligence for sophisticated adaptation.
+
+**Sources:** D64 (agent lifecycle — DEPARTED state), D68 (STIGMERGY_AGENT_DEPARTED event), D37 (rule action scope), engine#1112
+**Depends on:** D73 (swarm extends stigmergy), D64 (departure lifecycle)
+**Exploration:** quick
+**Status:** captured
+
+## D77: Swarm progress tracking — exploration, consensus, stability metrics
+
+**Choice:** `SwarmProgressTracker` (`runtime-core/internal/stigmergy/`, `@ApplicationScoped`, `Resettable`) tracks three generic progress dimensions:
+
+1. **Exploration breadth** — ratio of unique features explored (unique signal names deposited + unique context keys written) vs. a sliding maximum. Higher = more exploration.
+2. **Consensus formation** — ratio of signals with consensus (sources.size() ≥ threshold) vs. total active signals. Higher = more agreement.
+3. **Stability score** — role cluster stability over last N detection cycles (% of agents that stayed in the same cluster). Higher = swarm has settled.
+
+`SwarmProgress` record: `(double explorationScore, double consensusScore, double stabilityScore, Instant computedAt)`. Each score is [0.0, 1.0]. Progress is computed during `convergenceDetection()` phase. `SWARM_PROGRESS` event fired when any score changes significantly (delta > 0.1) or at configurable intervals.
+
+Mission completion: standard goal in completion block. Progress scores are proxies — the engine can't measure domain-specific progress. Agents use progress scores via MetricsSpace to adapt strategy (e.g., shift from exploration to exploitation when exploration score is high).
+
+**Alternatives:**
+- Mission as configuration string only — no runtime tracking, progress inferred from convergence detection. Simpler but agents can't self-regulate.
+- Mission decomposition into sub-goals — most ambitious but requires goal generation logic (LLM concern, blocks scope).
+
+**Rationale:** Three dimensions capture the generic dynamics of any swarm: explore (have we covered the space?), agree (do agents see the same things?), settle (have roles stabilized?). Domain-specific progress belongs in goal conditions, not the generic tracker. The tracker gives agents enough information to adapt their exploration/exploitation balance.
+
+**Trade-offs:** Generic metrics are proxies, not direct progress measures. A high exploration score doesn't mean the right things were explored. Acceptable — domain-specific intelligence is blocks' concern.
+
+**Sources:** D46 (ActivityTracker pattern), D67 (coordination pattern detection), D74 (role clusters for stability), engine#1112
+**Depends on:** D73 (swarm extends stigmergy), D74 (role clusters for stability score)
+**Exploration:** quick
+**Status:** captured
+
+## D78: MetricsSpace — 5th WorkerRuntime facet
+
+**Choice:** `MetricsSpace` is a read-only WorkerRuntime facet (the 5th, alongside signals, interests, neighbors, rules):
+
+```java
+interface MetricsSpace {
+    Map<String, Double> activityRates();
+    Map<String, Long> budgetUsage();
+    BehavioralFingerprint myFingerprint();
+    SwarmProgress swarmProgress();
+    List<DetectedRole> detectedRoles();
+}
+```
+
+`DefaultMetricsSpace` (`runtime-core/internal/stigmergy/`) delegates to `ActivityTracker`, `RoleTracker`, `SwarmProgressTracker`. All methods return immutable snapshots. No mutations. `default MetricsSpace metrics() { return MetricsSpace.NOOP; }` on `WorkerRuntime`.
+
+D56 planned this extension path — swarm is the concrete use case. Agents use metrics to adapt: see their own fingerprint and compare with role clusters, see swarm progress to decide explore vs. exploit, see budget usage to voluntarily throttle.
+
+**Alternatives:**
+- No MetricsSpace (keep deferred) — agents coordinate only through signals/interests/rules. Limits self-regulation.
+- Partial (progress only) — less useful without activity rates and fingerprint.
+
+**Rationale:** D56 explicitly deferred MetricsSpace for #1112. Swarm agents that can see system-level state make better adaptation decisions. Read-only ensures agents observe but don't manipulate system metrics. The facet pattern (D19) makes this a clean extension.
+
+**Trade-offs:** Agents can game metrics (e.g., artificially inflate exploration by depositing diverse signals). Mitigated: budget enforcement caps total activity regardless of diversity.
+
+**Sources:** D19 (faceted architecture), D56 (MetricsSpace deferral), D46 (ActivityTracker), engine#1112
+**Depends on:** D73 (swarm extends stigmergy), D74 (fingerprints), D77 (progress tracker)
+**Exploration:** quick
+**Status:** captured
+
+## D79: SwarmConfig — inside StigmergyConfig, presence-activated
+
+**Choice:** `StigmergyConfig` gains an optional `SwarmConfig swarm` field. Presence activates swarm features (role tracking, team detection, progress monitoring, MetricsSpace). Absence means pure stigmergy without swarm tracking.
+
+`SwarmConfig` record:
+```java
+SwarmConfig(
+    Double roleSimilarityThreshold,     // default 0.7
+    Integer roleMinClusterSize,         // default 2
+    Integer roleDetectionWindow,        // default 20 (cycles for sliding window)
+    Integer detectionInterval,          // default 10 (periodic re-cluster every N cycles)
+    RoleDomainWeights domainWeights,    // default equal (0.25 each)
+    Double teamAffinityThreshold,       // default 0.5
+    Integer teamMinSize,                // default 2
+    Double progressChangeThreshold      // default 0.1 (fire event when score delta > this)
+)
+```
+
+All fields nullable — null means use default. YAML: `stigmergyConfig: { swarm: { ... } }`. Empty `swarm: {}` activates swarm with all defaults.
+
+**Alternatives:**
+- Separate top-level `swarmConfig` on CaseDefinition — more independent but two coordination configs to manage, and swarm without stigmergy is architecturally impossible.
+
+**Rationale:** Swarm is an extension of stigmergy, not an independent concern. Nesting SwarmConfig inside StigmergyConfig makes the dependency explicit. Presence-as-activation follows the established pattern (StigmergyConfig itself, ObservationConfig, SignalConfig, etc.).
+
+**Trade-offs:** StigmergyConfig grows wider. Mitigated: SwarmConfig is a nullable sub-record — pure stigmergy cases don't see it.
+
+**Sources:** D62 (StigmergyConfig as preset), D66 (StigmergyConfig structure), engine#1112
+**Depends on:** D73 (swarm extends stigmergy)
+**Exploration:** quick
+**Status:** captured
+
+## D80: Detection frequency — periodic + event-triggered hybrid
+
+**Choice:** Role and team detection use dual triggers:
+
+1. **Periodic** — re-cluster every `detectionInterval` evaluation cycles (default 10). Catches gradual behavioral drift in dynamic features (rule firing patterns, signal deposit frequency). Fingerprint data accumulates every cycle (cheap counter increments); clustering runs only at periodic intervals.
+
+2. **Event-triggered** — immediate re-cluster on structural changes: agent departure (`STIGMERGY_AGENT_DEPARTED`), new interest/rule registration, interest/rule deregistration. These are significant topology changes that can invalidate current clusters immediately.
+
+Both triggers feed the same clustering pipeline. Periodic detection uses a cycle counter in RoleTracker. Event-triggered detection sets a "dirty" flag checked at the next `convergenceDetection()` phase — detection still runs within the pipeline, not inline with the registration event.
+
+SwarmProgressTracker always runs on the periodic interval (progress is a slow metric).
+
+**Alternatives:**
+- Periodic only — misses immediate structural changes (agent departure leaves stale cluster data until next periodic tick)
+- Event-triggered only — misses gradual behavioral drift in dynamic features
+- Every cycle — wasteful; O(N²) clustering on every cycle when patterns change slowly
+
+**Rationale:** Periodic and event-triggered are complementary, not alternatives. Periodic catches slow drift. Event-triggered catches sharp topology changes. The dirty-flag approach avoids running clustering inline with registration events (which happen inside the serializer gate) while ensuring the next evaluation cycle picks up the change.
+
+**Trade-offs:** Slightly more complex trigger logic. Mitigated: dirty flag is a single boolean per case.
+
+**Sources:** D67 (coordination pattern detection runs in convergenceDetection phase), D46 (ActivityTracker periodic pattern)
+**Depends on:** D74 (role detection), D75 (team detection), D79 (detectionInterval config)
+**Exploration:** quick
+**Status:** captured
+
+## D81: Swarm event types — 6 new CaseHubEventType values
+
+**Choice:** Six new `CaseHubEventType` values in three groups:
+
+**Role events:**
+- `SWARM_ROLE_EMERGED` — a new role cluster detected. Metadata: `roleId` (generated), `memberAgents`, `dominantFeatures` (top-3 features from centroid), `clusterSize`, `avgSimilarity`.
+- `SWARM_ROLE_DISSOLVED` — a role cluster no longer meets minimum membership. Metadata: `roleId`, `previousMembers`, `lifetimeCycles`.
+- `SWARM_ROLE_SHIFT` — an agent moved from one role cluster to another. Metadata: `agentId`, `fromRoleId`, `toRoleId`, `similarityToNewRole`.
+
+**Team events:**
+- `SWARM_TEAM_FORMED` — a team affinity cluster detected. Metadata: `teamId` (generated), `memberAgents`, `dominantRelations` (which relation types dominate), `avgAffinity`.
+- `SWARM_TEAM_DISSOLVED` — a team cluster no longer exists. Metadata: `teamId`, `previousMembers`, `lifetimeCycles`.
+
+**Progress events:**
+- `SWARM_PROGRESS` — progress scores changed significantly or periodic report. Metadata: `explorationScore`, `consensusScore`, `stabilityScore`, `cycle`.
+
+Convergence/specialization (two clusters merging/splitting) are derivable from EMERGED/DISSOLVED pairs in the event stream — no dedicated event types.
+
+**Alternatives:**
+- 8 events (add ROLE_CONVERGED, ROLE_SPECIALIZED) — derivable from the 6-event set
+- 4 events (drop ROLE_SHIFT, TEAM_DISSOLVED) — loses per-agent tracking and team lifecycle
+
+**Sources:** D68 (stigmergy event patterns), D54 (convergence events), engine#1112
+**Depends on:** D74 (role detection), D75 (team detection), D77 (progress tracking)
+**Exploration:** quick
+**Status:** captured
+
+## D82: Module placement — extend existing stigmergy packages
+
+**Choice:** Swarm types extend the existing stigmergy packages, not new packages:
+
+| Component | Module | Package |
+|-----------|--------|---------|
+| `SwarmConfig`, `RoleDomainWeights` | api | `io.casehub.api.model.stigmergy` |
+| `BehavioralFingerprint`, `DetectedRole`, `SwarmProgress` | api | `io.casehub.api.model.stigmergy` |
+| `MetricsSpace` | api | `io.casehub.api.engine` |
+| `RoleTracker` | runtime-core | `io.casehub.engine.internal.stigmergy` |
+| `TeamDetector` | runtime-core | `io.casehub.engine.internal.stigmergy` |
+| `SwarmProgressTracker` | runtime-core | `io.casehub.engine.internal.stigmergy` |
+| `DefaultMetricsSpace` | runtime-core | `io.casehub.engine.internal.stigmergy` |
+| New `CaseHubEventType` values | api | `io.casehub.api.event` (existing enum) |
+
+No new packages. Swarm is an extension of stigmergy — the package structure reflects this. MetricsSpace follows the facet pattern in `api/engine` alongside SignalSpace, InterestSpace, NeighborSpace, RuleSpace.
+
+**Alternatives:**
+- New `api/model/swarm` + `runtime-core/internal/swarm` packages — clearer separation but swarm IS stigmergy, creating new packages implies a distinction that doesn't exist architecturally.
+
+**Sources:** D23 (per-domain package pattern), D70 (stigmergy package structure)
+**Depends on:** D73 (swarm extends stigmergy)
+**Exploration:** quick
+**Status:** captured
