@@ -225,7 +225,18 @@ Affinity score: for each relation type, compute a Jaccard-like ratio (`shared fe
 affinity(A, B) = (sharedInterestScore + sharedSignalScore + complementaryScore) / 3.0
 ```
 
-Each component score is [0.0, 1.0]. `sharedInterestScore = |A.interestKeys ∩ B.interestKeys| / |A.interestKeys ∪ B.interestKeys|`. Signal and complementary scores follow the same pattern.
+Each component score is [0.0, 1.0]. `sharedInterestScore = |A.interestKeys ∩ B.interestKeys| / |A.interestKeys ∪ B.interestKeys|`. `sharedSignalScore` follows the same intra-domain Jaccard pattern.
+
+**COMPLEMENTARY is cross-domain and inherently asymmetric** (one agent's outputs vs. another's observations), so it requires explicit symmetrization:
+
+```
+complementaryScore(A, B) = max(
+    jaccard(A.effectKeys, B.interestKeys),   // what A writes that B watches
+    jaccard(B.effectKeys, A.interestKeys)    // what B writes that A watches
+)
+```
+
+`max()` is the continuous analog of `DefaultNeighborSpace.complementary()` which uses `iProduceTheyWatch || theyProduceIWatch` (OR of both directions). A monitor that feeds data to a controller has high A→B complementarity; the reverse may be near zero. `max()` correctly identifies this as a strong team signal. `average()` would halve the score for one-directional producer→consumer workflows, which are common and legitimate team patterns.
 
 ### Team Cluster Detection
 
