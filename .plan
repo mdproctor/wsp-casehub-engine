@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1126-trust-cdi-fix
-state: closing:review
+state: closing:promoted
 project-sha: 71e44717abaefb25bbbbd1eba00fcf041ddee9a7
 date: 2026-09-19
 issue-repo: casehubio/engine
