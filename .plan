@@ -17,10 +17,10 @@ date: 2026-09-15
 - [x] casehubio/engine#1110 — feat: Convergence detection & termination — emergent completion, runaway & collusion prevention
 - [x] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment
 - [ ] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence ← active
-  - [ ] Batch 1: API-Types
-    - [ ] Task 1: API-types
-  - [ ] Batch 2: RoleTracker
-    - [ ] Task 2: RoleTracker
+  - [x] Batch 1: API-Types
+    - [x] Task 1: API-types
+  - [x] Batch 2: RoleTracker
+    - [x] Task 2: RoleTracker
   - [ ] Batch 3: TeamDetector-Progress
     - [ ] Task 3: TeamDetector
     - [ ] Task 4: SwarmProgressTracker
