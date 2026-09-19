@@ -1895,3 +1895,30 @@ This creates an architectural requirement: signals are the inter-agent communica
 **Depends on:** D1, D7, D10, D14, D31
 **Exploration:** quick (surfaced by ADR-R1-17 — made explicit from implicit per-agent isolation)
 **Status:** captured
+
+## D103: Improvement priority hierarchy — pyramid of needs
+
+**Choice:** Three-tier priority hierarchy for self-improvement, modelled as `ImprovementTier` enum: `STABILITY`, `QUALITY`, `CAPABILITY`. Resources flow to the lowest unmet need — the swarm doesn't research coordination algorithms while its tests are failing.
+
+**Tier 1 — Stability & reliability:** CI green, tests passing, no regressions, no runtime failures. Improvement signals: `improvement:stability:*` (ci-failure, test-regression, runtime-error). These always take priority. When stability signals are active, capability improvement goals are paused (not abandoned — paused via GoalRevisionEvaluator priority adjustment).
+
+**Tier 2 — Quality & hygiene:** Dependencies current, lint/checkstyle clean, test coverage adequate, technical debt managed. Improvement signals: `improvement:quality:*` (dependency-stale, lint-violations, coverage-gap, tech-debt). Processed when tier 1 is healthy.
+
+**Tier 3 — Capability growth:** Better reasoning, new techniques, broader problem-solving, research-driven improvements. Improvement signals: `improvement:capability:*` (success-rate-drop, reasoning-gap, strategy-underperforming, research-opportunity). Processed when tiers 1 and 2 are healthy.
+
+The tier is a field on `ImprovementGoal` (extends the SELF_IMPROVEMENT GoalKind context). `ImprovementBudgetEnforcer` checks tier health before approving goal formation: if tier N has active unresolved signals, tier N+1 goals are deprioritised (budget allocation shifts downward). This is not a hard block — the budget enforcer reduces the concurrent allocation for higher tiers, not forbids them entirely. A swarm can run one capability research while fixing three stability issues.
+
+The hierarchy also informs #1115's continuous loop: the swarm's standing directive "decide how you'd like to grow" is constrained by "but keep the foundation solid first." Growth direction is only meaningful when the base is healthy.
+
+**Alternatives:**
+- Flat priority — all improvements compete equally; stability fixes compete with capability research for budget slots. This leads to the swarm researching new techniques while its CI is red.
+- Hard blocking — tier N must be fully resolved before any tier N+1 work starts. Too rigid — a single flaky test shouldn't block all capability improvement.
+
+**Rationale:** This is Maslow's hierarchy applied to self-improvement. The ordering is not arbitrary — stability is prerequisite for quality (can't improve coverage if tests don't run), quality is prerequisite for capability growth (can't safely adopt new techniques if the codebase is brittle). The budget-based soft prioritisation (shift allocation, don't block) keeps the swarm responsive without being rigid.
+
+**Trade-offs:** Tier assessment requires health metrics for each level. Engine provides this: CI status → stability health, lint/coverage reports → quality health, success rate metrics → capability health. The assessment is rule-based and deterministic. Blocks can enhance the assessment (e.g., "is this CI failure actually blocking capability work, or is it unrelated?") but the engine provides a working default.
+
+**Sources:** Issue #1114, issue #1115, D97 (ImprovementBudget), D99 (GoalKind.SELF_IMPROVEMENT), D95 (improvement taxonomy)
+**Depends on:** D92 (signals carry tier information), D97 (budget enforcer respects tier priority), D99 (GoalRevisionEvaluator adjusts priorities by tier health)
+**Exploration:** deep-analysis
+**Status:** captured
