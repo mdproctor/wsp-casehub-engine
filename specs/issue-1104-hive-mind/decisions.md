@@ -1690,3 +1690,167 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 **Depends on:** D86 (CBR learns tuning axes), D89 (SwarmProvisioner orchestrates CBR queries)
 **Exploration:** quick
 **Status:** captured
+
+## D92: Improvement identification model — signals trigger goals
+
+**Choice:** Two-layer architecture. Signals are sensors (collective consensus), goals are actuators (execution lifecycle). Agents deposit `improvement:*` signals when they observe issues. Signal consensus validates the observation (same pattern as `swarm:need-capacity` in #1113). Once consensus is reached, GoalFormationService.propose() creates a SELF_IMPROVEMENT goal with the improvement context. The goal is dispatched through the normal goal lifecycle.
+
+**Alternatives:**
+- Signals alone — no prioritisation, tracking, lifecycle, or learning mechanism; would reinvent half the goal system
+- Goals alone — no consensus mechanism; single agent's opinion drives improvement instead of collective intelligence
+
+**Rationale:** Sensing and acting are fundamentally different capabilities. An agent good at noticing code smells might not be good at fixing them. Signals let any agent contribute observations; goals let the best-suited agent execute. Each layer evolves independently — blocks can enhance sensing (LLM-powered observation, blocks#284) or execution (LLM-powered implementation, blocks#285) separately. Neocortex makes both layers smarter: sensing remembers "we tried X before, it was rejected," execution remembers "this approach worked for module Y." Directly feeds into goal creation/management epic (#800) — improvement goals ARE goals, so all of Sub-epic C (formation, revision, abandonment, priority evolution) applies.
+
+**Trade-offs:** More complex than either layer alone. Signal→goal bridge is new infrastructure. Acceptable — the alternative is building parallel systems or leaving gaps that #1115 and #800 would need to fill.
+
+**Sources:** SwarmProvisioner.java:71 (signal consensus pattern), GoalFormationService.java:18, GoalFormationStrategy.java:20, issue #1114, issue #800 (goal lifecycle epic), arXiv:2603.28990 (role emergence), SwarmWorld cognition/consequence split
+**Exploration:** deep-analysis
+**Status:** captured
+
+## D93: Execution model — case-as-improvement
+
+**Choice:** Each improvement spawns a child case via SubCaseBinding. The improvement IS a case — bindings for introspect, implement, submit-pr, review, integrate. Each step is a worker with its own capability. Full audit trail via EventLog. Workers are independently replaceable — blocks can substitute any step with an LLM-powered agent.
+
+**Alternatives:**
+- Direct worker dispatch — single monolithic 'self-improver' worker handles entire lifecycle; can't evolve steps independently, no per-step audit trail, can't parallelise
+- Workflow orchestration via WorkOrchestrator.submitAndWait() — explicit orchestration rather than choreography; doesn't use case model strengths, less extensible via bindings
+
+**Rationale:** The case model already provides everything needed: bindings with triggers, per-step worker dispatch, EventLog audit, SubCaseBinding for spawning child cases, lifecycle management (RUNNING/WAITING/COMPLETED). Each step is a capability — the routing strategy selects the best worker. Trust model applies per step. New steps can be added as new bindings without code changes.
+
+**Trade-offs:** More complex than a single worker. Requires a case definition template. Acceptable — the complexity is managed by existing infrastructure, and independent step evolution is a hard requirement for extensibility.
+
+**Sources:** SubCaseBinding (DESIGN.md:157-177), CaseContextChangedEventHandler, WorkerScheduleEventHandler, issue #1114
+**Depends on:** D92 (goals trigger the improvement case)
+**Exploration:** quick
+**Status:** captured
+
+## D94: Engine implementation depth — full working implementations
+
+**Choice:** Engine provides working implementations of each improvement step. Rule-based workers use REST/GraphQL/MCP APIs to interact with repos and DevTown. Same pattern as every other hive mind issue: engine = working rule-based foundation, blocks = LLM enhancement. Workers handle structured, API-mediated, rule-based improvement categories.
+
+**Alternatives:**
+- SPI stubs + blocks implements — breaks the established pattern; "engine-complete" means it works, not "has interfaces"; self-improvement system does nothing without blocks
+- Thin engine + callback hooks — fewer new SPIs but callbacks are less typed than dedicated workers; same fundamental problem as stubs
+
+**Rationale:** Every issue in this epic provides working engine implementations: SignalRegistry, RoleTracker, SwarmProvisioner all work standalone. Self-improvement follows the same rule. REST/GraphQL/MCP APIs (coming to all repos) make interaction clean and proper, not shell hacking. WorkerProvisioner already calls external systems — this is the same kind of integration.
+
+**Trade-offs:** Larger implementation scope than stubs. Workers need real API integrations. Acceptable — rule-based improvements (dependency bumps, lint fixes, coverage analysis) are useful standalone and prove the architecture before blocks adds LLM intelligence.
+
+**Sources:** WorkerProvisioner.java:34 (external system integration pattern), SwarmProvisioner.java:37 (working engine implementation pattern), issue #1114
+**Depends on:** D93 (case model defines the steps workers implement)
+**Exploration:** deep-analysis
+**Status:** captured
+
+## D95: Rule-based worker categories — broad coverage
+
+**Choice:** Five rule-based worker categories for engine-only mode: (1) DependencyUpdateWorker — query versions via API, bump + test, submit PR; (2) LintFixWorker — read checkstyle/lint reports, apply auto-fixes; (3) CoverageGapWorker — read coverage reports, identify uncovered paths, generate test scaffolding; (4) CITriageWorker — read failure logs, match known failure patterns, apply known fixes; (5) RecipeWorker — OpenRewrite-style structured code transformations. All interact via REST/GraphQL/MCP APIs.
+
+**Alternatives:**
+- Narrow (deps + lint only) — safest but underdelivers on the self-improvement promise
+- Category-agnostic framework — no hardcoded types, just pluggable ImprovementRecipe implementations; more abstract but doesn't demonstrate the pattern with concrete examples
+
+**Rationale:** Broad coverage demonstrates the architecture across different improvement categories while keeping each worker focused on well-defined, structured operations. Each worker is independently testable and replaceable. Blocks enhances by providing LLM-powered versions that handle open-ended code understanding beyond what rule-based workers can detect.
+
+**Trade-offs:** Five workers is significant implementation scope. Mitigated by the fact that each is independent and can be implemented incrementally — the architecture works with any subset. Batch ordering in the implementation plan can prioritise the most impactful workers.
+
+**Sources:** Issue #1114, existing CI infrastructure, checkstyle config in engine pom.xml
+**Depends on:** D94 (workers are full implementations, not stubs)
+**Exploration:** quick
+**Status:** captured
+
+## D96: DevTown review gate — standard code-review capability
+
+**Choice:** DevTown is modelled as a standard worker with `code-review` capability. No dedicated CodeReviewGate SPI. Routing selects DevTown the same way it selects any worker. Human reviewers or alternative review systems register with the same capability. Trust model applies to the reviewer. The improvement case binding triggers on `pr-submitted` signal.
+
+**Alternatives:**
+- Dedicated CodeReviewGate SPI with sealed ReviewOutcome — more explicit safety guarantee but creates a special case outside the worker model; doesn't compose with routing or trust
+
+**Rationale:** DevTown is operational with an API. It's a worker that does code review — treating it as such reuses the entire routing, trust, and capability infrastructure. No special SPI needed. Other review mechanisms (human, alternative review systems) slot in identically by registering the same capability. The mandatory review constraint is enforced by the improvement case lifecycle — the integrate binding cannot fire without a review outcome in the case context.
+
+**Trade-offs:** The review requirement is enforced by case lifecycle rather than a dedicated hard gate. If someone bypasses the case lifecycle, the gate is bypassed. Acceptable — case lifecycle bypass is already a platform-level security concern, not specific to self-improvement.
+
+**Sources:** DevTown (operational API), AgentRoutingStrategy, TrustWeightedAgentStrategy, ComposableAgentRoutingStrategy, issue #1114
+**Depends on:** D93 (review is a step in the improvement case)
+**Exploration:** quick
+**Status:** captured
+
+## D97: Safety model — layered budget enforcement
+
+**Choice:** ImprovementBudget record with layered enforcement, following the same pattern as ProvisionBudget + DispatchBudget in SwarmProvisioner. Fields: maxConcurrent, maxPerDay, cooldownMinutes, allowedRepos, deniedPaths, requireReview (default true), requireGreenCI (default true), maxPRSize (lines changed). Enforced by ImprovementBudgetEnforcer before the improvement case is spawned.
+
+**Alternatives:**
+- Trust-gated only — existing trust maturity model restricts scope by earned trust; organic but no hard limits on volume or blast radius
+- Scope manifests — static per-worker-type scope declarations; simpler but not adaptive to runtime conditions
+
+**Rationale:** Layered budget enforcement is a proven pattern in this codebase (ProvisionBudget, DispatchBudget). Multiple independent limits prevent unbounded behaviour even when individual checks pass. Path restrictions and repo scoping provide defence-in-depth alongside DevTown review. The budget record is configurable per case via SwarmConfig, following the same structure as self-provisioning.
+
+**Trade-offs:** Configuration surface grows. Defaults must be conservative — improvements are opt-in and constrained by default. The budget can be relaxed as the system proves itself, which connects to the trust model naturally.
+
+**Sources:** ProvisionBudget (api/model/stigmergy), SwarmProvisioner.java:86-159 (budget enforcement pattern), DispatchBudget, issue #1114
+**Depends on:** D92 (budget gates goal formation), D93 (budget checked before case spawn)
+**Exploration:** quick
+**Status:** captured
+
+## D98: Outcome tracking — three-layer event-sourced model
+
+**Choice:** All three layers, composed via event sourcing. (1) Structured EventLog record is the source of truth — typed ImprovementOutcome with PR status, CI delta, coverage delta, performance delta. (2) Signals projected from the record — `improvement:outcome:positive`, `improvement:outcome:regression`, etc. — provide real-time swarm notification that decays naturally. (3) CBR trace projected from the record — stored in neocortex for historical learning, retrievable by future improvement cycles.
+
+**Alternatives:**
+- Any single layer alone — each serves a different consumer at a different timescale; omitting one leaves a gap
+
+**Rationale:** Each layer serves a different consumer at a different timescale. Structured records: case lifecycle (GoalRevisionEvaluator, GoalAbandonmentEvaluator, ImprovementBudget tracking). Signals: evaluation cycle (swarm adjusts behaviour immediately). CBR: historical (future improvements retrieve similar past outcomes). The pattern mirrors CaseLedgerEventCapture — structured event is the source, projections serve different consumers. All three layers are load-bearing for #1115 (continuous evolution loop) and #800 (goal lifecycle management).
+
+**Trade-offs:** Three projections from one event is the most complex approach. Mitigated by the fact that each projection uses existing infrastructure (EventLog, SignalRegistry, CbrRetrievalService) — no new data stores.
+
+**Sources:** CaseLedgerEventCapture (event-sourcing pattern), SignalRegistry, CbrRetrievalService, issue #1114, issue #1115, issue #800
+**Depends on:** D92 (signals are the real-time layer), D93 (case lifecycle produces the structured record)
+**Exploration:** deep-analysis
+**Status:** captured
+
+## D99: Goal integration — GoalKind.SELF_IMPROVEMENT
+
+**Choice:** New GoalKind.SELF_IMPROVEMENT value. GoalFormationEvaluator applies improvement-specific logic: improvement signals trigger proposals, scoped by ImprovementBudget. GoalRevisionEvaluator uses structured outcome records to adjust priority: repeated failures deprioritise category. GoalAbandonmentEvaluator detects futility: 3 rejected PRs → abandon direction; regression detected → abandon + rollback. Existing goal-capability mapping (#860) applies: improvement goals map to improvement capabilities.
+
+**Alternatives:**
+- Standard goals with tagged metadata — simpler but evaluators can't distinguish improvement goals from regular agent goals without inspecting metadata; loses type safety
+
+**Rationale:** GoalKind is the discriminator the existing goal evaluators use. A dedicated kind lets the evaluators apply improvement-specific logic without metadata inspection. The goal lifecycle machinery (formation, revision, abandonment, priority evolution from #800 Sub-epic C) applies directly. This is the integration point between self-improvement and the goal management epic.
+
+**Trade-offs:** Enum extension — straightforward. The improvement-specific evaluator logic is new code but follows existing patterns.
+
+**Sources:** GoalFormationEvaluator.java:47, GoalRevisionEvaluator.java:51, GoalRevisionAction.java:18, AgentGoalCompletionMarker.java:28, issue #860, issue #800
+**Depends on:** D92 (goals are the execution layer), D98 (outcome records feed goal evaluators)
+**Exploration:** quick
+**Status:** captured
+
+## D100: Scope boundary — #1114 full single-shot, #1115 continuous loop
+
+**Choice:** #1114 delivers the complete single-shot cycle: improvement signal types, signal→goal formation bridge, ImprovementBudget + enforcer, improvement case template (hybrid Java/YAML), five rule-based worker categories, DevTown as code-review capability worker, outcome tracking (all three layers), GoalKind.SELF_IMPROVEMENT. #1115 adds: standing directive / continuous trigger, outcome→detection feedback loop, prioritisation across concurrent improvements, data autophagy prevention, growth direction (swarm decides what to improve), rollback on regression.
+
+**Alternatives:**
+- #1114 mechanism only / #1115 all lifecycle — thinner #1114 but #1115 becomes very large and tightly coupled
+- #1114 everything except growth direction — #1115 becomes too thin to justify as a separate issue
+
+**Rationale:** The single-shot cycle is the natural unit of completeness — it can be tested end-to-end (signal → goal → case → workers → review → outcome). The continuous loop adds autonomous agency (the swarm decides WHEN and WHAT) which is a qualitatively different concern. Monitoring/outcome recording belongs to #1114 because it's part of verifying the single cycle worked. The feedback loop that feeds outcomes back into detection belongs to #1115 because it's the continuous aspect.
+
+**Trade-offs:** #1114 is a large issue. Mitigated by batched implementation — workers can be implemented incrementally, architecture works with any subset.
+
+**Sources:** Issue #1114, issue #1115, issue #1104 (epic structure)
+**Depends on:** D92-D99 (all prior decisions scope #1114)
+**Exploration:** quick
+**Status:** captured
+
+## D101: Case template format — hybrid Java/YAML (existing convention)
+
+**Choice:** Hybrid — core improvement case lifecycle in Java, YAML as peer representation per the DSL parity principle. Not a novel decision — this is the established CaseHub convention. Java provides the typed API surface, YAML provides the user-configurable case definition. DSL extensions where necessary.
+
+**Alternatives:** None — this is the existing convention, not a design choice.
+
+**Rationale:** CLAUDE.md: "DSL parity: YAML and Java are peer representations." Every case definition in the platform follows this pattern.
+
+**Trade-offs:** None beyond the usual hybrid approach maintenance.
+
+**Sources:** CLAUDE.md (DSL parity principle), CaseDefinition.yaml, yaml-record-mappings.yaml
+**Depends on:** D93 (case-as-improvement defines what needs Java/YAML representation)
+**Exploration:** quick (existing convention)
+**Status:** captured
