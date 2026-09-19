@@ -479,12 +479,12 @@
 
 **Rationale:** Intentional "start in-memory" design consistent with the platform's current single-instance deployment model. All per-case evaluation state (goals, plan items, bindings) is similarly in-memory during the evaluation lifecycle. Coordination state follows the same model. The `Resettable` interface on all three registries supports demo/test replay. Persistence for coordination state should be addressed holistically when the platform addresses persistence for all in-memory evaluation state — not as a per-registry concern.
 
-**Trade-offs:** Long-running cases (multi-day AML investigations, clinical trials) lose accumulated coordination intelligence on restart. Bounded by the observation that the current platform has no horizontal scaling — in-memory state is consistent because there's one instance. Multi-instance deployment would require a distributed backend for all three registries. The `CaseRecoveryStateRegistry` (which handles other recovery concerns) is also in-memory, confirming this is a platform-level constraint, not a coordination-specific one.
+**Trade-offs:** Long-running cases (multi-day AML investigations, clinical trials) lose accumulated coordination intelligence on restart. Bounded by the observation that the current platform has no horizontal scaling — in-memory state is consistent because there's one instance. Multi-instance deployment would require a distributed backend for all three registries. The `CaseRecoveryStateRegistry` (which handles other recovery concerns) is also in-memory, confirming this is a platform-level constraint, not a coordination-specific one. **Documentation requirement:** The stigmergy YAML guide must include a prominent "Deployment Considerations" section warning that all coordination state (observations, signals, interests, rules, activity metrics, convergence state, role clusters, team affinities, progress scores) is lost on restart. Multi-day cases that accumulate coordination intelligence must be designed to tolerate this loss — either through rapid signal re-establishment on case resumption, or by persisting critical coordination outcomes as CaseContext keys (which ARE persisted via EventLog).
 
 **Sources:** `ObservationRegistry.java`, `SignalRegistry.java`, `ContextHistoryBuffer.java`, `CaseRecoveryStateRegistry` (all in-memory), `Resettable` interface
 **Depends on:** D7 (materialization), D10 (signal storage)
 **Exploration:** quick (surfaced by review R1-09)
-**Status:** captured
+**Status:** revised — ADR-R1-16: added documentation requirement for deployment hazard warning in stigmergy YAML guide
 
 ## D30: Observer deduplication — registry-level replace on re-registration
 
@@ -798,7 +798,7 @@ All increments are fire-and-forget — no return values, no blocking. `ActivityT
 
 **Alternatives:**
 - Advisory monitoring + alert — doesn't prevent runaway. The whole point of budget caps is to be a fail-safe.
-- Soft cap with escalation (warn at 80%, fault at 100%) — adds configuration complexity. Warning can be implemented separately as a convergence observation without coupling to the enforcement mechanism.
+- Soft cap with escalation (warn at 80%, fault at 100%) — adds configuration complexity. Warning can be implemented separately as a convergence observation without coupling to the enforcement mechanism. **Update (ADR-R1-11):** A `BUDGET_WARNING` event is now included — fires when any metric crosses a configurable warning threshold (default 80% of budget cap). This is a simple event emission, not a dual-threshold enforcement mechanism. `BudgetConfig` gains `Double warningThreshold` (nullable, default 0.8). When non-null and a cumulative count exceeds `cap × warningThreshold`, a `BUDGET_WARNING` `CaseHubEventType` fires (once per metric per case, not repeated). Local rules can condition on this event to throttle behavior before the hard fault.
 
 **Rationale:** Hard gate prevents unbounded resource consumption, which is the #1 production failure mode for multi-agent systems (40% of pilots fail from coordination overhead). Faulting the case is the correct response — it surfaces the problem clearly and triggers the existing failure handling pipeline (CaseOutcomeObserver, EventLog audit, etc.). Null caps preserve backward compatibility — existing cases without convergence config are unaffected.
 
@@ -807,7 +807,7 @@ All increments are fire-and-forget — no return values, no blocking. `ActivityT
 **Sources:** `CaseStatusChanged` event, `CaseStatusChangedHandler.java` (terminal state handling), `maxConcurrentDispatches` (existing hard cap pattern), engine#1044 (WatchdogRecoveryBridge CANCEL_AFFECTED pattern)
 **Depends on:** D46 (ActivityTracker provides counts), D47 (instrumentation provides the counts)
 **Exploration:** quick
-**Status:** revised — acknowledged one-cycle overshoot imprecision for context mutation budget per review R2-03
+**Status:** revised — acknowledged one-cycle overshoot imprecision for context mutation budget per review R2-03; ADR-R1-11: added BUDGET_WARNING event at configurable threshold (default 80%)
 
 ## D49: ConvergenceDetector — activity quiescence with sustained stability
 
@@ -859,13 +859,13 @@ The `_converged` goal is fired by the engine with `StandardGoalKind.SUCCESS` (te
 
 **Rationale:** Key-set Jaccard + value hash is classical, deterministic, and O(K×N²) where K = output keys and N = window size (small). Detects structurally identical outputs. Per-binding scoping makes the comparison meaningful — agents working on the same capability may or may not produce similar outputs depending on the domain. `convergenceMinSamples` prevents false positives when only 1-2 agents have run. The informational framing (OUTPUT_CONVERGENCE_DETECTED, not DIVERSITY_VIOLATION) correctly reflects what the engine can determine: structural similarity exists. Whether that similarity indicates consensus, collusion, or groupthink is a semantic judgment that belongs in blocks.
 
-**Trade-offs:** Structural similarity only — semantically equivalent but structurally different outputs are not detected. Acceptable for v1 — LLM-backed semantic analysis is a natural blocks extension. Value hash comparison is exact-match — near-duplicates with minor field variations pass. Mitigated by the Jaccard threshold on key sets catching most near-duplicates. **Scope:** This monitor targets traditional worker outputs (WorkerResult key-value pairs), not stigmergy coordination artifacts (signals, interests, rules). Stigmergy agents coordinate through the coordination layer — their convergence is detected by D49 activity quiescence and D67 coordination pattern detection (signal consensus, interest convergence). For mixed cases with both traditional workers and stigmergy agents, the monitor tracks only the traditional outputs.
+**Trade-offs:** Structural similarity only — semantically equivalent but structurally different outputs are not detected. Acceptable for v1 — LLM-backed semantic analysis is a natural blocks extension. Value hash comparison uses canonical JSON serialization (sorted keys, deterministic number formatting) to avoid serialization-order sensitivity — `{"a":1,"b":2}` and `{"b":2,"a":1}` produce identical hashes. For bindings where all agents use the same output schema (schema-defined key sets), Jaccard is always 1.0 and contributes no signal — the value-hash comparison is the entire convergence measure. This is acceptable: key-set Jaccard adds value for heterogeneous outputs (e.g., agents with no fixed output schema), while value-hash provides the actual convergence signal for schema-constrained bindings. **Scope:** This monitor targets traditional worker outputs (WorkerResult key-value pairs), not stigmergy coordination artifacts (signals, interests, rules). Stigmergy agents coordinate through the coordination layer — their convergence is detected by D49 activity quiescence and D67 coordination pattern detection (signal consensus, interest convergence). For mixed cases with both traditional workers and stigmergy agents, the monitor tracks only the traditional outputs.
 
 **Sources:** `WorkflowExecutionCompletedHandler.java` (success path, output access), `ConflictResolver.java` (output key handling precedent), engine#1110 issue spec
 **Depends on:** D45 (pipeline runs after outputs are recorded), D46 (ActivityTracker pattern for per-case state)
 **Injection note:** `OutputConvergenceMonitor` is injected into `WorkflowExecutionCompletedHandler` via `Instance<OutputConvergenceMonitor>` with `isResolvable()` guard — transparent no-op when convergence module is absent. No circular dependency — both are `@ApplicationScoped` beans in `runtime-core`. The handler is large but adding an `Instance<>` injection follows the existing pattern (e.g., `Instance<StepOutcomeObserver>`, `Instance<CaseOutcomeObserver>`).
 **Exploration:** quick
-**Status:** revised — R1-06: reframed from anti-collusion/DIVERSITY_VIOLATION to informational; R2-05: clarified injection dependency and Instance<> guard pattern; R1-08: explicitly scoped to traditional worker outputs, not stigmergy coordination artifacts
+**Status:** revised — R1-06: reframed from anti-collusion/DIVERSITY_VIOLATION to informational; R2-05: clarified injection dependency and Instance<> guard pattern; R1-08: explicitly scoped to traditional worker outputs, not stigmergy coordination artifacts; ADR-R1-09: canonical JSON serialization for value hashing, acknowledged Jaccard limitation for schema-defined outputs
 
 ## D52: ConvergenceConfig — per-case configuration
 
@@ -1214,7 +1214,7 @@ YAML: `stigmergyConfig:` block with optional `defaults:` and `coordination:` sub
 
 ## D69: Trigger-less bindings in stigmergy compounds
 
-**Choice:** Bindings within a stigmergy compound do not require trigger conditions (`on:`, `when:`). The `StigmergyStrategy` handles all dispatch decisions — triggers are the strategy's concern, not the binding's. If a binding in a stigmergy compound has a trigger, the strategy ignores it (logs WARN on first encounter).
+**Choice:** Bindings within a stigmergy compound do not require trigger conditions (`on:`, `when:`). The `StigmergyStrategy` handles all dispatch decisions — triggers are the strategy's concern, not the binding's. Explicit triggers (other than `ScopeActivatedTrigger`) on stigmergy bindings cause a validation failure at case definition initialization time, consistent with D63. `IllegalStateException` with message: "Bindings in a stigmergy compound do not use triggers — the strategy manages dispatch. Remove the `on:` clause or move the binding to a non-stigmergy compound."
 
 For YAML: `on:` is optional when `planningStrategy: stigmergy`. For Java: Binding.builder() allows `build()` without `on()` when the binding will be added to a stigmergy compound.
 
@@ -1231,7 +1231,7 @@ Implementation path: the case initializer automatically adds `ScopeActivatedTrig
 **Sources:** `Binding.Builder.build()`, unified execution model spec §2.2 (dispatch modes), D63 (all bindings are agents)
 **Depends on:** D63 (all bindings are agents), D65 (strategy handles dispatch)
 **Exploration:** quick
-**Status:** revised — ADR-R1-08: specified ScopeActivatedTrigger as integration path; case initializer auto-adds trigger for trigger-less bindings in stigmergy compounds
+**Status:** revised — ADR-R1-08: specified ScopeActivatedTrigger as integration path; case initializer auto-adds trigger for trigger-less bindings in stigmergy compounds; ADR-R1-05: aligned trigger handling with D63 validation failure (was: runtime WARN + ignore)
 
 ## D70: Module placement — package structure
 
@@ -1331,7 +1331,7 @@ Role clusters detected via pairwise similarity + connected components with inter
 
 **Rationale:** Multi-dimensional fingerprint captures all four behavioral dimensions of perceive→decide→act independently. Domain weights give case authors control over what "role" means. Per-domain analysis gives richer audit data ("identical perception, divergent effects"). Built entirely from existing registry queries — no new data collection.
 
-**Trade-offs:** More complex than Jaccard or flat vector. Four cosine computations per pair instead of one. Mitigated: N ≤ 20 agents, each domain vector is very sparse (≤20-100 features), total cost is negligible.
+**Trade-offs:** More complex than Jaccard or flat vector. Four cosine computations per pair instead of one. Mitigated: N ≤ 20 agents, each domain vector is very sparse (≤20-100 features), total cost is negligible. **Scaling note:** The O(N²×K) pairwise cost (190 pairs × 4 domains × ≤100 features = ~76,000 ops for N=20) grows quadratically with agent count. If future issues (#1113 self-provisioning) raise `maxSwarmSize` above 20, the detection cost must be re-evaluated. At N=50: 1,225 pairs → ~490,000 ops. At N=100: 4,950 pairs → ~1.98M ops. The `detectionInterval` (default 10 cycles) amortizes this, but scaling `maxSwarmSize` requires explicit cost analysis.
 
 **Sources:** arXiv:2603.28990 ("Drop the Hierarchy and Roles" — 5,006 emergent roles), SwarmSys (arXiv:2510.10047 — Explorer/Worker/Validator cycle), D73 deep exploration analysis
 **Depends on:** D73 (swarm extends stigmergy)
@@ -1540,20 +1540,20 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 
 ## D83: Pipeline decomposition — CaseEvaluationPipeline with phase handlers
 
-**Choice:** Extract the five evaluation phases from `CaseContextChangedEventHandler` into a `CaseEvaluationPipeline` composed of phase handlers. Each phase implements a common interface receiving a `CaseEvaluationContext(CaseInstance, CaseContext, CaseDefinition)` and returning phase-specific results. Phase handlers: `BindingDispatchPhase` (existing `rules()` method), `GoalEvaluationPhase` (existing `goals()` method), `ObservationPhase` (existing `observations()` method), `LocalRulePhase` (existing `localRules()` method), `ConvergenceDetectionPhase` (existing `convergenceDetection()` method). The handler delegates to the pipeline. Each phase class owns only the dependencies it needs — BindingDispatchPhase takes the dispatch-related dependencies, ObservationPhase takes the observation registries, etc. The handler's constructor shrinks from 34 parameters to the pipeline + a few handler-level concerns (eventDispatcher, evaluationSerializer, quiescenceTracker).
+**Choice:** Extract the five evaluation phases from `CaseContextChangedEventHandler` into a `CaseEvaluationPipeline` composed of phase handlers. Each phase implements a common interface receiving a `CaseEvaluationContext(CaseInstance, CaseContext, CaseDefinition)` and returning phase-specific results. Phase handlers: `BindingDispatchPhase` (existing `rules()` method), `GoalEvaluationPhase` (existing `goals()` method), `ObservationPhase` (existing `observations()` method), `LocalRulePhase` (existing `localRules()` method), `ConvergenceDetectionPhase` (existing `convergenceDetection()` method). The handler delegates to the pipeline. Each phase class owns only the dependencies it needs — BindingDispatchPhase takes the dispatch-related dependencies, ObservationPhase takes the observation registries, etc. The handler's constructor shrinks from 38 parameters to the pipeline + a few handler-level concerns (eventDispatcher, evaluationSerializer, quiescenceTracker).
 
 **Alternatives:**
-- Keep monolithic handler — current state with 34+ constructor parameters, all 5 phases in one class. Difficult to test individual phases in isolation, hard to reason about which dependencies serve which concern.
+- Keep monolithic handler — current state with 38 constructor parameters, all 5 phases in one class. Difficult to test individual phases in isolation, hard to reason about which dependencies serve which concern.
 - Partial extraction (only new phases) — extract ObservationPhase, LocalRulePhase, ConvergenceDetectionPhase from hive-mind; keep existing rules() and goals() in the handler. Inconsistent — two phases in the handler, three extracted. No clear boundary.
 
-**Rationale:** The handler has 34 constructor parameters and 5 sequential phases with distinct dependency sets. The `evaluateAndDispatch()` method already calls five named methods sequentially — these ARE the phases. Extracting them reduces per-class complexity and improves testability. Each phase is testable in isolation with only its relevant dependencies. The pipeline structure makes the evaluation order explicit in the type system rather than implicit in method call order.
+**Rationale:** The handler has 38 constructor parameters and 5 sequential phases with distinct dependency sets. The `evaluateAndDispatch()` method already calls five named methods sequentially — these ARE the phases. Extracting them reduces per-class complexity and improves testability. Each phase is testable in isolation with only its relevant dependencies. The pipeline structure makes the evaluation order explicit in the type system rather than implicit in method call order.
 
 **Trade-offs:** Additional indirection — `evaluateAndDispatch()` delegates to a pipeline instead of calling methods directly. Acceptable — the abstraction boundary is already implicit in the five named methods. One shared CaseEvaluationContext object instead of repeating parameters across method signatures.
 
-**Sources:** `CaseContextChangedEventHandler.java:97-260` (constructor with 34 parameters), `CaseContextChangedEventHandler.java:260-285` (evaluateAndDispatch calling 5 phases)
+**Sources:** `CaseContextChangedEventHandler.java:97-235` (constructor with 38 parameters), `CaseContextChangedEventHandler.java:257-308` (evaluateAndDispatch calling 5 phases)
 **Depends on:** D5 (observation phase), D42 (local rule phase), D45 (convergence detection phase)
 **Exploration:** quick (surfaced by R1-03)
-**Status:** captured
+**Status:** revised — ADR-R1-08: corrected constructor parameter count from 34 to 38 (26 regular fields + 5 Instance<> fields + 7 additional)
 
 ## D84: Provisioning trigger — Signal-based consensus
 
@@ -1601,14 +1601,16 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 
 **Trade-offs:** More configuration surface than any single approach. The tuning axes add complexity to the provisioning config model. Acceptable — the alternative is a rigid system that works well in one scenario and poorly in others. The complexity is in configuration, not in runtime logic — each axis maps to a simple behavioral change.
 
+**Defaults:** Bootstrap richness: 0.7 (high — new agents get most swarm context by default, reducing cold-start latency). Integration delay: 3 cycles (brief observation period before fingerprint influences detection — enough to avoid noise without excessive delay). Self-determination: 0.5 (balanced — engine pre-configures basic interests/rules from the provisioning signal's capability metadata, agent can override). These defaults prioritize operational safety (fast integration with moderate autonomy) over emergence (high autonomy with extended observation). CBR will tune from here.
+
 **Sources:** `StigmergyCoordinator.agentJoined()` (membership lifecycle), `RoleTracker` (fingerprinting), `TeamDetector` (affinity), `SwarmProgressTracker` (stability impact), `CbrRetrievalService` (outcome learning), issue #1113
 **Depends on:** D84 (signal triggers provisioning), D85 (capability resolution determines what agent), D73 (swarm extends stigmergy)
 **Exploration:** deep-analysis (first-principles exploration of three approaches and hybrid)
-**Status:** captured
+**Status:** revised — ADR-R1-14: specified explicit defaults for three axes (bootstrap=0.7, delay=3 cycles, self-determination=0.5)
 
 ## D87: Budget enforcement — Layered caps
 
-**Choice:** Three enforcement layers, all must agree before provisioning proceeds: (1) `SwarmConfig.maxSwarmSize` — per-case hard cap on total active agents, (2) `ProvisionBudget` nested in SwarmConfig with `maxProvisions` (total lifetime), `maxConcurrent` (simultaneous active), `cooldownCycles` (minimum cycles between provisions), (3) external `DispatchBudget` SPI for cross-case capacity coordination (e.g., claudony session pool limits).
+**Choice:** Three enforcement layers, all must agree before provisioning proceeds: (1) `SwarmConfig.maxSwarmSize` — per-case hard cap on total active agents (declared + provisioned combined), (2) `ProvisionBudget` nested in SwarmConfig with `maxProvisions` (total lifetime provisions), `maxConcurrent` (simultaneous active provisioned agents — distinct from `maxSwarmSize` which caps the total including declared agents), `cooldownCycles` (minimum cycles between provisions), (3) external `DispatchBudget` SPI for cross-case capacity coordination (e.g., claudony session pool limits). Clarification: `maxSwarmSize` on SwarmConfig is the overall population cap (all agents, whether declared in YAML or dynamically provisioned). `ProvisionBudget.maxConcurrent` is a sub-cap on dynamically provisioned agents specifically. Both are enforced — a provisioning request must satisfy `activeAgents < maxSwarmSize` AND `activeProvisionedAgents < maxConcurrent`.
 
 **Alternatives:**
 - Single cap (just maxSwarmSize) — simple but no rate limiting or cross-case coordination; aggressive swarm exhausts all capacity in one burst
@@ -1621,7 +1623,7 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 **Sources:** `SwarmConfig.maxSwarmSize` (existing field), `BudgetConfig` (existing pattern), `DispatchBudget` (existing SPI), `BudgetEnforcer` (existing enforcement), issue #1113
 **Depends on:** D84 (budget checked after signal consensus triggers provisioning)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — ADR-R1-14: clarified maxSwarmSize vs ProvisionBudget.maxConcurrent relationship
 
 ## D88: De-provisioning — Idle detection + signal decay
 
@@ -1650,7 +1652,7 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 
 **Rationale:** Provisioning is a distinct responsibility with its own dependencies (WorkerProvisioner, CapabilityHealth, CbrRetrievalService, budget enforcement). Inlining it into the handler violates single responsibility and increases constructor size. The SwarmProvisioner bean is injected via `Instance<>` (same pattern as StigmergyCoordinator) — available when stigmergy is active, absent otherwise.
 
-**Trade-offs:** New bean adds to the CDI graph. Acceptable — the alternative is a 37+ parameter handler constructor. SwarmProvisioner has clear boundaries: it's called from the convergence detection phase and delegates to existing SPIs.
+**Trade-offs:** New bean adds to the CDI graph. Acceptable — the alternative is a 38+ parameter handler constructor. SwarmProvisioner has clear boundaries: it's called from the convergence detection phase and delegates to existing SPIs.
 
 **Sources:** `StigmergyCoordinator` (pattern for `Instance<>` injection), `WorkerProvisioner` (existing provisioning SPI), `CbrRetrievalService` (outcome learning), `RuntimeBeans.java` (CDI wiring pattern), issue #1113
 **Depends on:** D84 (signal consensus triggers SwarmProvisioner), D85 (capability resolution), D86 (integration model), D87 (budget enforcement), D88 (de-provisioning), D83 (handler extraction — SwarmProvisioner avoids further handler bloat)
@@ -1767,16 +1769,16 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 
 **Rationale:** DevTown is operational with an API. It's a worker that does code review — treating it as such reuses the entire routing, trust, and capability infrastructure. No special SPI needed. Other review mechanisms (human, alternative review systems) slot in identically by registering the same capability. The mandatory review constraint is enforced by the improvement case lifecycle — the integrate binding cannot fire without a review outcome in the case context.
 
-**Trade-offs:** The review requirement is enforced by case lifecycle rather than a dedicated hard gate. If someone bypasses the case lifecycle, the gate is bypassed. Acceptable — case lifecycle bypass is already a platform-level security concern, not specific to self-improvement.
+**Trade-offs:** The review requirement is enforced at two levels: (1) case lifecycle — the integrate binding's `when` condition requires a review outcome in the case context, and (2) defensive hard gate — the integration worker itself performs a pre-flight check against the case's EventLog, confirming a `REVIEW_COMPLETED` event exists with a passing verdict before proceeding. The hard gate is belt-and-suspenders: even if a lifecycle bug allows the integrate binding to fire without a review, the worker refuses to execute. `IllegalStateException` with message: "Integration blocked: no passing review record found for improvement case <caseId>." This is not an SPI — it's an internal check in the integration worker.
 
 **Sources:** DevTown (operational API), AgentRoutingStrategy, TrustWeightedAgentStrategy, ComposableAgentRoutingStrategy, issue #1114
 **Depends on:** D93 (review is a step in the improvement case)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — ADR-R1-15: added defensive hard gate at integration step (EventLog pre-flight check) alongside lifecycle enforcement
 
 ## D97: Safety model — layered budget enforcement
 
-**Choice:** ImprovementBudget record with layered enforcement, following the same pattern as ProvisionBudget + DispatchBudget in SwarmProvisioner. Fields: maxConcurrent, maxPerDay, cooldownMinutes, allowedRepos, deniedPaths, requireReview (default true), requireGreenCI (default true), maxPRSize (lines changed). Enforced by ImprovementBudgetEnforcer before the improvement case is spawned.
+**Choice:** ImprovementBudget record with layered enforcement, following the same pattern as ProvisionBudget + DispatchBudget in SwarmProvisioner. Fields: maxConcurrent, maxPerDay, cooldownMinutes, allowedRepos, deniedPaths, requireReview (default true), requireGreenCI (default true), maxPRSize (lines changed). Enforced by ImprovementBudgetEnforcer before the improvement case is spawned. **Structural self-modification denial:** `deniedPaths` includes by default (not just as configuration): any path matching `**/ImprovementBudget*`, `**/ImprovementBudgetEnforcer*`, `**/SafetyConfig*`, and the improvement case template definition. These defaults are hardcoded in `ImprovementBudgetEnforcer` and cannot be overridden by configuration — they are structural constraints, not policy choices. User-configured `deniedPaths` are additive to these structural denials. This ensures the self-improvement system cannot modify its own safety constraints regardless of configuration.
 
 **Alternatives:**
 - Trust-gated only — existing trust maturity model restricts scope by earned trust; organic but no hard limits on volume or blast radius
@@ -1789,7 +1791,7 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 **Sources:** ProvisionBudget (api/model/stigmergy), SwarmProvisioner.java:86-159 (budget enforcement pattern), DispatchBudget, issue #1114
 **Depends on:** D92 (budget gates goal formation), D93 (budget checked before case spawn)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised — ADR-R1-15: added structural self-modification denial (hardcoded deniedPaths for safety infrastructure, non-overridable)
 
 ## D98: Outcome tracking — three-layer event-sourced model
 
@@ -1853,4 +1855,24 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 **Sources:** CLAUDE.md (DSL parity principle), CaseDefinition.yaml, yaml-record-mappings.yaml
 **Depends on:** D93 (case-as-improvement defines what needs Java/YAML representation)
 **Exploration:** quick (existing convention)
+**Status:** captured
+
+## D102: Cross-agent observation isolation — per-agent observations, shared signals
+
+**Choice:** Observations are per-agent: `observationRegistry.getObservations(caseId, agentId)` returns only the calling agent's observations. Signals are shared: all agents perceive the same signal set. InterestLandscape is shared: all agents see the collective interest aggregate. Neighbors are per-agent queries: each agent sees its own proximity context.
+
+This creates an architectural requirement: signals are the inter-agent communication channel for observation-derived findings. If Agent A detects "suspicious pattern" via an observer, Agent B can only learn about it if Agent A deposits a signal. Observations are local perception (what I detected); signals are shared announcement (what I want others to know).
+
+**Alternatives:**
+- Shared observations (all agents see all observations) — breaks per-agent specialization. Agents with different interests would be overwhelmed by observations from domains they don't care about. The observation registry would need cross-agent filtering, which is what the signal layer already provides.
+- Observation forwarding (agent A can explicitly share specific observations with agent B) — useful but adds a targeted communication primitive outside the stigmergy model. Stigmergy is indirect coordination through environment modification, not direct agent-to-agent messaging.
+- Per-agent with opt-in visibility (agents can mark observations as "public") — hybrid, but collapses the observation/signal distinction. A "public observation" IS a signal.
+
+**Rationale:** The asymmetry is intentional and architecturally correct. Observations are the output of the perceive step — they represent what an individual agent's observers detected. Rules are the decide step — they process the agent's own observations alongside shared coordination state (signals, landscape). Signals are the act step — they announce findings to the environment. The perceive→decide→act cycle requires this asymmetry: if observations were shared, there would be no need for signals as a communication mechanism, and the stigmergy model collapses into a shared-memory model.
+
+**Trade-offs:** Inter-agent communication requires an explicit signal deposit. An observation that should influence other agents must be "promoted" to a signal by the detecting agent's rules. This is additional rule complexity but matches the biological model — an ant that finds food must lay a pheromone trail (signal) to share the finding; other ants don't telepathically see the finding.
+
+**Sources:** `ObservationRegistry.getObservations(caseId, agentId)` (per-agent), `SignalRegistry.perceive(caseId)` (shared), `ObservationContext.interestLandscape()` (shared), `NeighborSpace` queries (per-agent), D1 (observer SPI), D7 (observation materialization), D10 (signal storage), D14 (observation integration)
+**Depends on:** D1, D7, D10, D14, D31
+**Exploration:** quick (surfaced by ADR-R1-17 — made explicit from implicit per-agent isolation)
 **Status:** captured
