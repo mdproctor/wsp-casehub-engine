@@ -1933,4 +1933,45 @@ The key insight: the Drive system found that "one doesn't take priority over the
 **Sources:** DriveAxis.java, DriveComposer.java, DriveOrchestrator.java, DriveConfig.java, DriveProfile.java, DriveGoalFormationStrategy.java, DriveGoalFormationContext.java, DriveGoalProposal.java (all in blocks-core `io.casehub.blocks.agentic.social.drive`/`.goal`), neocortex#345 (goal cognition epic), issue #1114, issue #1115
 **Depends on:** D92 (improvement signals feed drive sources), D97 (budget enforcer respects drive profile), D99 (GoalKind.SELF_IMPROVEMENT goals proposed by DriveGoalFormationStrategy)
 **Exploration:** deep-analysis
-**Status:** revised — replaced rigid tier hierarchy with Drive system integration; balanced competing needs instead of strict priority ordering
+**Status:** revised — replaced rigid tier hierarchy with Drive system integration; balanced competing needs instead of strict priority ordering. Further revised to include centralised cognitive agent model (D104).
+
+## D104: Self-improvement as a cognitive agent — full CognitionCore stack
+
+**Choice:** The self-improvement system is a cognitive agent running the full blocks `CognitionCore` stack. It is not a mechanical budgeting system — it is an entity with personality, drives, emotions, inner narrative, memory, strategy learning, and goals. Both centralised AND distributed:
+
+**Centralised:** A dedicated self-improvement agent with an `AgentDescriptor` configured for improvement-oriented cognition. Its `CognitionCore` orchestrates:
+- **MoodOrchestrator** (PAD) — it feels. Pleasure rises when improvements land, drops when PRs get rejected. Arousal rises when it discovers promising research or faces a crisis. Dominance rises when it expands capabilities, drops when it hits walls.
+- **DriveOrchestrator** — its needs. COMPETENCE for stability/quality, CURIOSITY for research/growth, AUTONOMY for capability expansion, AFFILIATION for coordination quality. Needs balance dynamically — no rigid hierarchy.
+- **NarrativeOrchestrator** — its inner monologue. "I noticed test coverage dropped in the planning module. That makes me uneasy. I should look into it."
+- **StrategyLearningOrchestrator** — it learns what improvement approaches work. "Dependency bumps in module X always go smoothly. Code refactors in module Y often get rejected."
+- **MentalModelOrchestrator** — it models the platform it's improving. Tracks what's stable, what's fragile, what's well-tested.
+- **GoalProposalOrchestrator** — it proposes improvement goals from its cognitive state (via `DriveGoalFormationStrategy`).
+- **MemoryHygieneOrchestrator** — it manages its own knowledge freshness.
+
+**Distributed:** Every swarm agent's drive profile includes improvement-relevant signals. When any agent encounters a failure pattern, test regression, or capability gap, it deposits improvement signals that feed the centralised agent's drive sources. The swarm collectively senses; the cognitive agent decides and acts.
+
+**Personality configuration** for the self-improvement agent (via `AgentDescriptor.disposition()`):
+- High curiosity / risk appetite — explores new techniques
+- High competence focus — sensitive to quality degradation
+- Moderate autonomy — expands capabilities within safety bounds
+- Moderate social orientation — coordinates with other agents when improvements affect them
+
+The mood-drive feedback loop: PAD emotional state modulates drives (already implemented in `DriveComposer.applyMoodModulation()`). A frustrated agent (low pleasure from rejected PRs) naturally shifts toward safer stability work. A satisfied agent (high pleasure from recent successes) gets bolder and invests more in research. An excited agent (high arousal from discovering a paper) prioritises capability growth. This is not hardcoded logic — it emerges from the cognitive architecture.
+
+The engine provides the case lifecycle, signal infrastructure, budget enforcement, and rule-based drive sources. Blocks provides the cognitive stack (`CognitionCore`) and LLM-powered workers. As neocortex goal cognition (#345) lands — goal dependency graphs, affective valuation, multi-signal priority, opportunity cost awareness, goal-conditioned retrieval — the self-improvement agent automatically benefits.
+
+**Alternatives:**
+- Mechanical budgeting system — no personality, no emotion, no narrative. Works but misses the cognitive dimension. Doesn't leverage the existing avatar infrastructure.
+- Distributed only — no centralised agent; improvement emerges purely from swarm consensus. Clean but no focused execution capability; improvements would compete with regular case work for agent attention.
+- Centralised only — dedicated agent, no distributed sensing. Misses the swarm's collective observation capability; the centralised agent can't see what it hasn't observed itself.
+
+**Rationale:** The platform already has a complete cognitive agent architecture — CognitionCore with mood, drives, narrative, strategy, mental model, goals. Using it for self-improvement means the agent that improves the platform is a first-class cognitive entity, not a mechanical process. Its improvement decisions are influenced by how it feels (PAD), what it needs (drives), what it's learned (strategy), and what it's thinking about (narrative). This makes the self-improvement system a demonstration of the platform's own capabilities — it eats its own cooking.
+
+The centralised+distributed model follows the same pattern as biological self-regulation: every cell monitors its own health (distributed sensing), while the brain coordinates systemic response (centralised decision-making). Neither works alone; together they create adaptive self-regulation.
+
+**Trade-offs:** Full CognitionCore integration is a blocks-level capability. In engine-only mode, the self-improvement system operates with rule-based drive sources and budget allocation — functional but without the cognitive depth (no mood modulation, no narrative, no strategy learning). This is the same graceful degradation as the rest of the hive mind: engine works, blocks enhances.
+
+**Sources:** CognitionCore.java, CognitionSnapshot.java, MoodOrchestrator (PAD), DriveOrchestrator, NarrativeOrchestrator, StrategyLearningOrchestrator, MentalModelOrchestrator, GoalProposalOrchestrator, DriveGoalFormationStrategy.java, neocortex#345 (goal cognition epic), issue #1114
+**Depends on:** D103 (Drive system integration), D92 (improvement signals), D93 (improvement case), D95 (improvement taxonomy), D99 (GoalKind.SELF_IMPROVEMENT)
+**Exploration:** deep-analysis
+**Status:** captured
