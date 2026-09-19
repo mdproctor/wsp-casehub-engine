@@ -1743,22 +1743,31 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 **Exploration:** deep-analysis
 **Status:** captured
 
-## D95: Rule-based worker categories — broad coverage
+## D95: Improvement taxonomy — operational AND capability improvements
 
-**Choice:** Five rule-based worker categories for engine-only mode: (1) DependencyUpdateWorker — query versions via API, bump + test, submit PR; (2) LintFixWorker — read checkstyle/lint reports, apply auto-fixes; (3) CoverageGapWorker — read coverage reports, identify uncovered paths, generate test scaffolding; (4) CITriageWorker — read failure logs, match known failure patterns, apply known fixes; (5) RecipeWorker — OpenRewrite-style structured code transformations. All interact via REST/GraphQL/MCP APIs.
+**Choice:** Two-dimensional improvement taxonomy. **Operational improvements** target code hygiene and infrastructure: dependency updates, lint/checkstyle fixes, test coverage gaps, CI failure triage, OpenRewrite-style code recipes. **Capability improvements** target the swarm's cognitive abilities: better agent definitions/prompts, better routing/planning strategies, better observation patterns, new tool definitions, broader problem-solving scope, enriched knowledge bases.
+
+The engine detects improvement opportunities in both dimensions via rule-based metrics: operational — coverage reports, lint reports, dependency staleness, CI logs; capability — success rate declining on task types, trust scores plateauing, CBR traces showing repeated failures on a problem class, performance metrics degrading, strategy effectiveness metrics.
+
+The case template is category-agnostic — the same improvement case lifecycle (introspect → implement → submit-pr → review → integrate → monitor) handles both operational and capability improvements. What differs is the worker implementation: engine rule-based workers handle structured operational improvements (D94); blocks-enhanced workers handle capability improvements and open-ended code understanding. The architecture scales with what's plugged in.
+
+Five initial engine rule-based worker categories for operational improvements: (1) DependencyUpdateWorker, (2) LintFixWorker, (3) CoverageGapWorker, (4) CITriageWorker, (5) RecipeWorker. All via REST/GraphQL/MCP APIs. Capability improvement workers are blocks-provided — the engine provides the detection signals and the case lifecycle, blocks provides the implementation intelligence.
 
 **Alternatives:**
-- Narrow (deps + lint only) — safest but underdelivers on the self-improvement promise
-- Category-agnostic framework — no hardcoded types, just pluggable ImprovementRecipe implementations; more abstract but doesn't demonstrate the pattern with concrete examples
+- Operational only — misses the core promise of self-improvement; the swarm fixes lint but never gets smarter
+- Capability only — requires LLM for everything; no engine-complete story
+- Narrow (deps + lint only) — underdelivers and doesn't demonstrate the architecture breadth
 
-**Rationale:** Broad coverage demonstrates the architecture across different improvement categories while keeping each worker focused on well-defined, structured operations. Each worker is independently testable and replaceable. Blocks enhances by providing LLM-powered versions that handle open-ended code understanding beyond what rule-based workers can detect.
+**Rationale:** Self-improvement is not just janitorial. The swarm should improve its own cognitive capabilities — better reasoning, broader problem-solving, more powerful tools. Operational improvements are the floor (rule-based, engine-complete). Capability improvements are the ceiling (LLM-enhanced, blocks-powered). Both use the same case lifecycle and safety infrastructure. The three-axis integration model (D86) — specifically the self-determination axis — is precisely about growing the swarm's autonomy. Capability improvement is growing along that axis.
 
-**Trade-offs:** Five workers is significant implementation scope. Mitigated by the fact that each is independent and can be implemented incrementally — the architecture works with any subset. Batch ordering in the implementation plan can prioritise the most impactful workers.
+Connection to goal epic (#800): goal formation discovers capability gaps ("we fail at X class of problems"), goal revision adjusts improvement strategies based on outcomes, goal abandonment drops ineffective capability improvements. The goal lifecycle IS the capability growth lifecycle.
 
-**Sources:** Issue #1114, existing CI infrastructure, checkstyle config in engine pom.xml
-**Depends on:** D94 (workers are full implementations, not stubs)
-**Exploration:** quick
-**Status:** captured
+**Trade-offs:** Capability improvement detection is less precise than operational detection — success rate metrics and failure pattern analysis are noisier than lint reports. Acceptable — false positives are caught by the review gate, and signal consensus filters out noise. The architecture supports both dimensions even when capability workers are absent (engine-only mode runs operational improvements; capability improvements wait for blocks).
+
+**Sources:** Issue #1114, issue #800 (goal lifecycle), D86 (three-axis integration model), Darwin Gödel Machine (SWE-bench 20%→50%), SICA (17%→53%), existing CI infrastructure
+**Depends on:** D94 (workers are full implementations), D92 (signals detect both operational and capability gaps)
+**Exploration:** deep-analysis
+**Status:** revised — expanded from operational-only to full taxonomy including capability improvements
 
 ## D96: DevTown review gate — standard code-review capability
 
