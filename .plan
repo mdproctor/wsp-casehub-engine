@@ -1,0 +1,15 @@
+# Work Plan — issue-1084-inbound-bridge-update
+
+## State
+branch: issue-1084-inbound-bridge-update
+state: scaffolded
+project-sha: f874edb3c0047929317f357d4aa33bffa0e90220
+date: 2026-09-20
+issue-repo: casehubio/engine
+covers: 1084,1128
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1084 — Issue #1084 ← active
