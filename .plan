@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1127-reprioritize-goal-action
-state: scaffolded
+state: active
 project-sha: 6c06d1682d8c413ac6fa768764d64a14abc5e502
 date: 2026-09-19
 issue-repo: casehubio/engine
