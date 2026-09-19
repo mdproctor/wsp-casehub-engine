@@ -1975,3 +1975,43 @@ The centralised+distributed model follows the same pattern as biological self-re
 **Depends on:** D103 (Drive system integration), D92 (improvement signals), D93 (improvement case), D95 (improvement taxonomy), D99 (GoalKind.SELF_IMPROVEMENT)
 **Exploration:** deep-analysis
 **Status:** captured
+
+## D105: Research memory — MindMap as the improvement knowledge graph
+
+**Choice:** The self-improvement agent uses neocortex MindMap as its semantic memory for research, techniques, findings, and improvement history. Research findings are not flat CBR traces — they are nodes in a semantic knowledge graph with typed edges, emotional associations, and consolidation lifecycle.
+
+**MindMap as improvement knowledge:**
+- **Research findings** as nodes — papers, techniques, approaches, algorithms discovered during the research phase. Each node has emotional valence: a promising paper triggers excitement (high arousal, positive pleasure). A paper whose approach failed carries disappointment.
+- **Typed edges** link research to platform concepts — "this coordination technique (research node) APPLIES_TO SignalRegistry (platform concept node)", "this paper REFERENCES this other paper", "this technique ENABLES this capability goal"
+- **Cognitive node types** — beliefs ("this technique would improve our convergence detection"), intentions ("I want to try adaptive signal decay"), predictions ("this should reduce CI failures by 30%"), fears ("this refactor could break the SubCase lifecycle")
+- **Emotional associations** on nodes — a technique that worked carries positive valence. A research direction that led nowhere carries negative. The emotional landscape guides what the agent finds worth pursuing. Mood (PAD) updates when the agent engages with these nodes — reading an exciting paper genuinely shifts its emotional state.
+
+**Consolidation lifecycle for research:**
+- **Ephemeral:** Raw search results, paper summaries, initial analysis (experience buffer)
+- **Episodic:** Specific research sessions, what was found, what was tried (experience events)
+- **Semantic:** Durable knowledge — proven techniques, validated approaches, established patterns (MindMap nodes promoted via consolidation)
+- Ephemeral research that never gets reinforced decays. Findings that lead to successful improvements consolidate into durable platform knowledge.
+
+**Curiosity-driven exploration:**
+- `CuriositySignalGenerator` (existing neocortex pattern) identifies knowledge gaps — "I found a reference to technique X but haven't explored it yet." These gaps become CURIOSITY drive intensity signals, naturally directing the research phase.
+- Goal-conditioned retrieval — "what research findings are relevant to THIS improvement goal?" uses the existing `ModulationFactor` framework to bias retrieval toward actionable research.
+
+**CBR traces complement, not replace, MindMap:**
+- D98's CBR traces capture improvement outcomes (structured: what was tried, what happened, metrics)
+- MindMap captures the semantic landscape (relational: how findings connect, what they mean, how the agent feels about them)
+- Both are projections of the same experience — CBR for structured retrieval ("find similar past improvements"), MindMap for semantic navigation ("what do we know about coordination techniques and how do they relate?")
+
+**Alternatives:**
+- CBR-only memory — flat case traces without semantic relationships or emotional associations. Functional for "find similar" retrieval but can't navigate "what connects to what" or guide exploration via curiosity/emotion.
+- External knowledge base — separate from the agent's cognitive state. The research becomes data, not experience. No emotional engagement, no drive modulation from findings.
+
+**Rationale:** The MindMap is the agent's mind — its understanding of the world, structured as concepts with relationships and emotional weight. For a self-improving agent, the "world" it understands includes the platform's own architecture, the research landscape, and the history of improvement attempts. Using MindMap for research memory means the agent's understanding of "how to improve" is first-class cognitive content, not a lookup table. Its curiosity about unexplored research gaps, its excitement about promising techniques, and its caution about approaches that failed before are genuine cognitive states that influence its behaviour through the drive and mood systems.
+
+This is the deepest integration: the agent's memory of improvement attempts IS part of its cognitive state, modulating its personality, its emotional responses, and its goals. A research paper doesn't just go into a database — it becomes part of how the agent thinks about itself.
+
+**Trade-offs:** MindMap integration requires neocortex. In engine-only mode, improvement memory falls back to EventLog records and CBR traces — functional but without semantic navigation, emotional associations, or curiosity-driven exploration. The full cognitive research loop requires blocks + neocortex.
+
+**Sources:** MindMap (neocortex cognitive-index), CognitiveProfile, CognitiveDerivationEngine, CuriositySignalGenerator (existing pattern), ModulationFactor, ExperienceConsolidationPhase (#336), cognitive node type classification (#322), neocortex#345 (goal cognition — goal-conditioned retrieval), D98 (CBR outcome traces), D104 (cognitive agent model)
+**Depends on:** D104 (cognitive agent uses CognitionCore), D98 (CBR traces complement MindMap), D95 (research-driven capability improvements)
+**Exploration:** deep-analysis
+**Status:** captured
