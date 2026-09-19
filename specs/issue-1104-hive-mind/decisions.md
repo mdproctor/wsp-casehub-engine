@@ -1896,29 +1896,41 @@ This creates an architectural requirement: signals are the inter-agent communica
 **Exploration:** quick (surfaced by ADR-R1-17 — made explicit from implicit per-agent isolation)
 **Status:** captured
 
-## D103: Improvement priority hierarchy — pyramid of needs
+## D103: Improvement prioritisation — Drive system integration, not rigid hierarchy
 
-**Choice:** Three-tier priority hierarchy for self-improvement, modelled as `ImprovementTier` enum: `STABILITY`, `QUALITY`, `CAPABILITY`. Resources flow to the lowest unmet need — the swarm doesn't research coordination algorithms while its tests are failing.
+**Choice:** Self-improvement prioritisation uses the existing Drive system (`blocks-core`, `io.casehub.blocks.agentic.social.drive`) rather than a rigid tier hierarchy. The Drive system models four competing axes (CURIOSITY, COMPETENCE, AFFILIATION, AUTONOMY) as balanced needs that compete dynamically, modulated by mood and personality. The **dominant drive** emerges from context — no axis has hardcoded priority over another.
 
-**Tier 1 — Stability & reliability:** CI green, tests passing, no regressions, no runtime failures. Improvement signals: `improvement:stability:*` (ci-failure, test-regression, runtime-error). These always take priority. When stability signals are active, capability improvement goals are paused (not abandoned — paused via GoalRevisionEvaluator priority adjustment).
+Self-improvement maps onto the Drive axes:
+- **COMPETENCE drive** — rises when quality/stability metrics degrade (CI failures, test regressions, coverage gaps, lint violations). The swarm feels "I need to get my house in order."
+- **CURIOSITY drive** — rises when research opportunities appear, when success rates plateau, when new techniques are discovered. The swarm feels "I want to learn and grow."
+- **AUTONOMY drive** — rises when the swarm's self-determination is constrained, when it encounters problems it can't handle. The swarm feels "I need to expand my capabilities."
+- **AFFILIATION drive** — rises when coordination quality drops, when team coherence degrades. The swarm feels "I need to work better together."
 
-**Tier 2 — Quality & hygiene:** Dependencies current, lint/checkstyle clean, test coverage adequate, technical debt managed. Improvement signals: `improvement:quality:*` (dependency-stale, lint-violations, coverage-gap, tech-debt). Processed when tier 1 is healthy.
+`DriveOrchestrator.tick()` evaluates all four axes each cycle, `DriveComposer` modulates by mood and personality, and the `DriveProfile.dominantDrive()` determines what the swarm focuses on. Budget allocation is proportional to drive intensity — a high-intensity COMPETENCE drive (stability is failing) naturally draws more budget than a low-intensity CURIOSITY drive (everything's fine, let's explore). But neither is suppressed — the swarm can research while fixing stability, just with proportionally less allocation.
 
-**Tier 3 — Capability growth:** Better reasoning, new techniques, broader problem-solving, research-driven improvements. Improvement signals: `improvement:capability:*` (success-rate-drop, reasoning-gap, strategy-underperforming, research-opportunity). Processed when tiers 1 and 2 are healthy.
+The engine provides `ImprovementDriveSource` implementations for each axis — rule-based evaluators that feed drive intensity from metrics:
+- COMPETENCE source: CI status, test pass rate, lint violation count, coverage percentage → drive intensity
+- CURIOSITY source: time since last research cycle, number of unexamined external signals, success rate trajectory → drive intensity
+- AUTONOMY source: count of problem classes with repeated failures, trust score plateaus, capability gaps → drive intensity
+- AFFILIATION source: team coherence score (from TeamDetector), coordination failure rate → drive intensity
 
-The tier is a field on `ImprovementGoal` (extends the SELF_IMPROVEMENT GoalKind context). `ImprovementBudgetEnforcer` checks tier health before approving goal formation: if tier N has active unresolved signals, tier N+1 goals are deprioritised (budget allocation shifts downward). This is not a hard block — the budget enforcer reduces the concurrent allocation for higher tiers, not forbids them entirely. A swarm can run one capability research while fixing three stability issues.
+These sources implement `DriveSource` (existing blocks SPI). The engine provides rule-based defaults; blocks can enhance with LLM-powered assessment.
 
-The hierarchy also informs #1115's continuous loop: the swarm's standing directive "decide how you'd like to grow" is constrained by "but keep the foundation solid first." Growth direction is only meaningful when the base is healthy.
+`DriveGoalFormationStrategy` already exists and proposes goals from drive context. Self-improvement goals flow through this existing machinery: when a drive intensity exceeds `DriveConfig.changeThreshold()`, `DriveGoalFormationStrategy.propose()` is called with the drive context, and it proposes a SELF_IMPROVEMENT goal scoped to the drive axis. The budget enforcer (D97) checks `ImprovementBudget` limits before approving.
+
+The neocortex goal cognition epic (#345) adds further sophistication: goal dependency graphs, affective valuation, multi-signal priority (urgency × importance × feasibility × affective valence), opportunity cost awareness, and goal-conditioned retrieval. As these capabilities land, self-improvement goals automatically benefit from them.
 
 **Alternatives:**
-- Flat priority — all improvements compete equally; stability fixes compete with capability research for budget slots. This leads to the swarm researching new techniques while its CI is red.
-- Hard blocking — tier N must be fully resolved before any tier N+1 work starts. Too rigid — a single flaky test shouldn't block all capability improvement.
+- Rigid tier hierarchy (Maslow model) — stability always wins; capability growth only when base is healthy. Too rigid — a single flaky test shouldn't suppress all research. Doesn't match how the Drive system works.
+- Flat priority — all improvements compete without any weighting. Misses the real signal that stability degradation should increase urgency.
 
-**Rationale:** This is Maslow's hierarchy applied to self-improvement. The ordering is not arbitrary — stability is prerequisite for quality (can't improve coverage if tests don't run), quality is prerequisite for capability growth (can't safely adopt new techniques if the codebase is brittle). The budget-based soft prioritisation (shift allocation, don't block) keeps the swarm responsive without being rigid.
+**Rationale:** The Drive system already solves this problem. It models balanced competing needs where the dominant one emerges from context rather than being prescribed. Using it for self-improvement means: (1) no new prioritisation infrastructure, (2) improvement priorities respond to mood and personality (a cautious agent naturally prioritises stability; an exploratory agent naturally prioritises research), (3) as neocortex goal cognition (#345) lands, self-improvement goals get affective valuation, dependency tracking, and sophisticated prioritisation for free.
 
-**Trade-offs:** Tier assessment requires health metrics for each level. Engine provides this: CI status → stability health, lint/coverage reports → quality health, success rate metrics → capability health. The assessment is rule-based and deterministic. Blocks can enhance the assessment (e.g., "is this CI failure actually blocking capability work, or is it unrelated?") but the engine provides a working default.
+The key insight: the Drive system found that "one doesn't take priority over the other" — needs balance dynamically based on intensity, modulation, and context. A swarm with failing CI has high COMPETENCE drive intensity, which naturally dominates budget allocation. But if stability is fine, CURIOSITY and AUTONOMY drives compete for what the swarm works on next. This is more realistic and more extensible than rigid tiers.
 
-**Sources:** Issue #1114, issue #1115, D97 (ImprovementBudget), D99 (GoalKind.SELF_IMPROVEMENT), D95 (improvement taxonomy)
-**Depends on:** D92 (signals carry tier information), D97 (budget enforcer respects tier priority), D99 (GoalRevisionEvaluator adjusts priorities by tier health)
+**Trade-offs:** Depends on blocks-core for the Drive system. In engine-only mode (no blocks), `ImprovementBudgetEnforcer` falls back to proportional allocation based on raw signal counts — simpler but still responsive. The Drive system adds personality, mood, and narrative modulation that pure signal counting cannot provide.
+
+**Sources:** DriveAxis.java, DriveComposer.java, DriveOrchestrator.java, DriveConfig.java, DriveProfile.java, DriveGoalFormationStrategy.java, DriveGoalFormationContext.java, DriveGoalProposal.java (all in blocks-core `io.casehub.blocks.agentic.social.drive`/`.goal`), neocortex#345 (goal cognition epic), issue #1114, issue #1115
+**Depends on:** D92 (improvement signals feed drive sources), D97 (budget enforcer respects drive profile), D99 (GoalKind.SELF_IMPROVEMENT goals proposed by DriveGoalFormationStrategy)
 **Exploration:** deep-analysis
-**Status:** captured
+**Status:** revised — replaced rigid tier hierarchy with Drive system integration; balanced competing needs instead of strict priority ordering
