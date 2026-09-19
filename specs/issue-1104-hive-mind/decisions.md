@@ -1554,3 +1554,139 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 **Depends on:** D5 (observation phase), D42 (local rule phase), D45 (convergence detection phase)
 **Exploration:** quick (surfaced by R1-03)
 **Status:** captured
+
+## D84: Provisioning trigger — Signal-based consensus
+
+**Choice:** Agents deposit provisioning signals (e.g., `swarm:need-capacity`) through the existing pheromone model when they detect workload pressure. When the signal reaches consensus (multiple agents reinforcing the same signal), the engine triggers provisioning. Signal metadata carries capability tags and preferred model.
+
+**Alternatives:**
+- Rule-based (explicit `RuleAction.Provision`) — more explicit control but couples provisioning logic into per-agent rule definitions, less emergent
+- Metric-threshold (SwarmProgressTracker auto-triggers on exploration pace drop) — fully automated but less agent-driven; the swarm doesn't "decide", the engine infers
+
+**Rationale:** Uses the existing signal/pheromone infrastructure — decay prevents stale requests, reinforcement confirms real need, consensus prevents single-agent noise from triggering expensive operations. No new trigger mechanism needed, just a semantic convention on signal names and metadata.
+
+**Trade-offs:** Consensus-based triggering is slower than direct rule actions — there's inherent latency between "agent detects pressure" and "enough agents agree." Acceptable for provisioning which is a heavyweight operation that shouldn't fire on transient spikes.
+
+**Sources:** `SignalRegistry.java:37` (deposit/reinforce/decay), `SignalRegistry.consensusSignals()` (multi-source detection), `SwarmConfig.java` (configuration), issue #1113
+**Exploration:** quick
+**Status:** captured
+
+## D85: Capability resolution — Capability-tagged signals via eidos
+
+**Choice:** The provisioning signal carries metadata (capability tags, preferred model query). The engine resolves these against eidos `AgentDescriptor` registry to find or compose a matching agent. The swarm says "I need an analyst" not "provision agent-config-xyz."
+
+**Alternatives:**
+- Explicit agent type (signal metadata names a specific AgentDescriptor ID) — tighter coupling but guarantees exact agent configuration
+- Engine-inferred (engine analyzes role/team gaps and decides) — maximum engine autonomy but least agent control
+
+**Rationale:** Capability-tagged signals let the swarm express intent without coupling to specific agent configurations. Eidos already has the registry and matching infrastructure (`AgentCapability`, `CapabilityHealth`, `ModelQuery`). The platform resolves the "what kind of agent" question — the swarm only needs to express "what capabilities are needed."
+
+**Trade-offs:** Indirect resolution means the provisioned agent might not exactly match what the swarm expected. The eidos registry might not have a matching descriptor. Both are acceptable — the tunable integration model (D86) handles mismatches gracefully.
+
+**Sources:** `AgentCapability` (eidos-api), `CapabilityHealth` (eidos-api), `ModelQuery` (platform-api), `AgentDescriptor` (eidos-api), issue #1113
+**Depends on:** D84 (signal carries metadata for resolution)
+**Exploration:** quick
+**Status:** captured
+
+## D86: Agent membership — Three-axis tunable integration model with CBR learning
+
+**Choice:** Newly provisioned agents integrate through a tunable model with three independently configurable axes: (1) **Bootstrap richness** — how much swarm state context the engine provides (0.0=none → 1.0=full state transfer), (2) **Integration delay** — how many cycles before the agent's fingerprint influences role/team detection (0=immediate → N=extended observation), (3) **Self-determination** — how much the agent decides its own interests/signals/rules vs. having them pre-configured (0.0=engine-assigned → 1.0=fully autonomous discovery). Optional guardrails on each axis. CBR records provisioning outcomes and adjusts tuning over time. Agents can also propose tuning adjustments based on their own experience (feed-forward for #1114).
+
+**Alternatives:**
+- Coordinator-managed join only — engine slots agent in, treats it as interchangeable capacity; kills emergence
+- Staged onboarding only — engine-imposed PROBATIONARY state; readiness is about understanding, not time
+- Self-registration only — purest autonomy but cold-start is fatal in fast-moving swarms
+
+**Rationale:** No single approach is correct for all situations. Emergency swarms need high bootstrap + zero delay. Research swarms need high autonomy + some delay. The right settings are contextual and situational — something we won't get right on day one. Building tunable infrastructure with CBR learning lets the system evolve toward optimal settings for each context. Agent self-tuning enables #1114 self-improvement.
+
+**Trade-offs:** More configuration surface than any single approach. The tuning axes add complexity to the provisioning config model. Acceptable — the alternative is a rigid system that works well in one scenario and poorly in others. The complexity is in configuration, not in runtime logic — each axis maps to a simple behavioral change.
+
+**Sources:** `StigmergyCoordinator.agentJoined()` (membership lifecycle), `RoleTracker` (fingerprinting), `TeamDetector` (affinity), `SwarmProgressTracker` (stability impact), `CbrRetrievalService` (outcome learning), issue #1113
+**Depends on:** D84 (signal triggers provisioning), D85 (capability resolution determines what agent), D73 (swarm extends stigmergy)
+**Exploration:** deep-analysis (first-principles exploration of three approaches and hybrid)
+**Status:** captured
+
+## D87: Budget enforcement — Layered caps
+
+**Choice:** Three enforcement layers, all must agree before provisioning proceeds: (1) `SwarmConfig.maxSwarmSize` — per-case hard cap on total active agents, (2) `ProvisionBudget` nested in SwarmConfig with `maxProvisions` (total lifetime), `maxConcurrent` (simultaneous active), `cooldownCycles` (minimum cycles between provisions), (3) external `DispatchBudget` SPI for cross-case capacity coordination (e.g., claudony session pool limits).
+
+**Alternatives:**
+- Single cap (just maxSwarmSize) — simple but no rate limiting or cross-case coordination; aggressive swarm exhausts all capacity in one burst
+- Token-based (regenerating provisioning tokens) — elegant but adds a new resource tracking concept
+
+**Rationale:** Provisioning is expensive (real compute, real cost). Single cap doesn't prevent burst provisioning. Token-based is novel complexity. Layered caps use existing patterns: maxSwarmSize is already in SwarmConfig, DispatchBudget SPI already exists for external capacity. ProvisionBudget adds rate limiting (cooldown) and lifetime caps without new concepts.
+
+**Trade-offs:** Three-layer check on every provisioning decision adds latency. Negligible — provisioning itself is orders of magnitude slower than the budget check.
+
+**Sources:** `SwarmConfig.maxSwarmSize` (existing field), `BudgetConfig` (existing pattern), `DispatchBudget` (existing SPI), `BudgetEnforcer` (existing enforcement), issue #1113
+**Depends on:** D84 (budget checked after signal consensus triggers provisioning)
+**Exploration:** quick
+**Status:** captured
+
+## D88: De-provisioning — Idle detection + signal decay
+
+**Choice:** Track agent activity via ActivityTracker. When an agent's activity rate drops below a configurable threshold AND no provisioning signals reinforce its role, the engine terminates it via `WorkerProvisioner.terminate()`. Pheromone decay naturally clears stale capacity requests — if no one reinforces the signal that provisioned this agent, the justification decays away. De-provisioning events emitted for audit and CBR.
+
+**Alternatives:**
+- Departure rules (agents fire RuleAction.Leave when they detect they're no longer needed) — requires agents to have good self-awareness; unreliable for rule-based agents
+- Swarm vote (agents deposit 'reduce-capacity' signals targeting idle agents) — democratic but slower; adds delay to scale-down
+
+**Rationale:** Idle detection is observable and objective — activity rates are already tracked. Signal decay handles the "why was this agent provisioned" question naturally — if the original need has decayed, the agent's justification has too. Combining both prevents premature termination (agent is idle but still needed) and delayed termination (agent is active but original need is gone).
+
+**Trade-offs:** Idle threshold is a tuning parameter that varies by workload type. An agent processing rare high-value events might appear idle most of the time. Mitigated by making the threshold configurable per SwarmConfig and learnable via CBR.
+
+**Sources:** `ActivityTracker` (rate computation), `SignalRegistry` (decay mechanics), `WorkerProvisioner.terminate()` (existing termination SPI), issue #1113
+**Depends on:** D84 (provisioning signals whose decay informs de-provisioning), D87 (de-provisioning frees budget capacity)
+**Exploration:** quick
+**Status:** captured
+
+## D89: Provisioning orchestration — SwarmProvisioner bean
+
+**Choice:** New `@ApplicationScoped` bean `SwarmProvisioner` in `runtime-core/stigmergy` that coordinates the full provisioning flow: validate budget → resolve capabilities via eidos → build bootstrap context (per D86 tuning) → call `WorkerProvisioner.provision()` → `StigmergyCoordinator.agentJoined()` → emit ledger-integrated audit events. Clean extension points for blocks-side LLM reasoning (SPI hook where blocks can inject reasoning into provisioning decisions). Full CBR loop: query past outcomes for similar swarm states, record current outcome.
+
+**Alternatives:**
+- CaseContextChangedEventHandler inline — keeps everything in one place but makes the already-large handler even larger (34+ constructor params, per D83)
+- RuleAction extension (RuleAction.Provision) — reuses rule infrastructure but means provisioning is always rule-triggered, limiting signal-based approaches
+
+**Rationale:** Provisioning is a distinct responsibility with its own dependencies (WorkerProvisioner, CapabilityHealth, CbrRetrievalService, budget enforcement). Inlining it into the handler violates single responsibility and increases constructor size. The SwarmProvisioner bean is injected via `Instance<>` (same pattern as StigmergyCoordinator) — available when stigmergy is active, absent otherwise.
+
+**Trade-offs:** New bean adds to the CDI graph. Acceptable — the alternative is a 37+ parameter handler constructor. SwarmProvisioner has clear boundaries: it's called from the convergence detection phase and delegates to existing SPIs.
+
+**Sources:** `StigmergyCoordinator` (pattern for `Instance<>` injection), `WorkerProvisioner` (existing provisioning SPI), `CbrRetrievalService` (outcome learning), `RuntimeBeans.java` (CDI wiring pattern), issue #1113
+**Depends on:** D84 (signal consensus triggers SwarmProvisioner), D85 (capability resolution), D86 (integration model), D87 (budget enforcement), D88 (de-provisioning), D83 (handler extraction — SwarmProvisioner avoids further handler bloat)
+**Exploration:** quick
+**Status:** captured
+
+## D90: Audit trail — Ledger-integrated provisioning events
+
+**Choice:** Provisioning events flow through the existing `LedgerTraceIdProvider` / `causedByEntryId` chain. Each provision/terminate gets a ledger entry with causal linkage back to the signal consensus that triggered it. Engine-internal `CaseHubEventType` events also emitted for real-time swarm awareness (SWARM_PROVISION_REQUESTED, SWARM_PROVISION_COMPLETED, SWARM_AGENT_TERMINATED). CBR records include the full provisioning context (tuning axes, swarm state at time of decision, outcome).
+
+**Alternatives:**
+- Engine-internal events only — cheaper, no ledger dependency, sufficient for CBR but no compliance/audit trail
+- Both (ledger + events) — redundant channels for the same information
+
+**Rationale:** Provisioning creates real compute resources with real cost. Audit trail is non-negotiable for compliance and cost attribution. The existing ledger infrastructure already handles causal linkage via `ProvisionResult.causedByEntryId()`. Engine events provide the real-time swarm awareness needed for detection algorithms. Both channels serve different consumers.
+
+**Trade-offs:** Ledger writes add latency to the provisioning flow. Acceptable — provisioning is already a heavyweight operation (spinning up compute). The ledger write is negligible relative to the actual provisioning time.
+
+**Sources:** `LedgerTraceIdProvider` (existing trace infrastructure), `ProvisionResult.causedByEntryId()` (existing causal linkage), `CaseHubEventType` (existing event enum), issue #1113
+**Depends on:** D89 (SwarmProvisioner emits the events)
+**Exploration:** quick
+**Status:** captured
+
+## D91: Scope — Engine-complete with blocks hooks and full CBR loop
+
+**Choice:** Full provisioning mechanism works in-engine with rule-based agents. Clean SPI extension points where blocks can later inject LLM reasoning into provisioning decisions (e.g., LLM evaluates bootstrap context, LLM reasons about capability gaps). Full CBR loop included: query past provisioning outcomes for similar swarm states during provisioning decisions, record current provisioning context + outcome for future retrieval. No blocks repo dependency in this issue.
+
+**Alternatives:**
+- Engine-only (no blocks hooks, no CBR) — simplest scope but requires retrofit
+- Include blocks integration — builds blocks-side LLM reasoning; significantly larger scope, cross-repo
+
+**Rationale:** The CBR loop is essential because provisioning tuning (D86) is explicitly designed to be learned, not hardcoded. Without CBR from day one, the tuning axes have no feedback mechanism. Blocks hooks are low-cost extension points (SPI interfaces) that prevent API-breaking changes when blocks integration arrives.
+
+**Trade-offs:** Larger scope than mechanism-only. CBR integration requires understanding CbrRetrievalService's query model and adapting it for provisioning scenarios. Acceptable — the alternative is building a tunable system with no way to learn.
+
+**Sources:** `CbrRetrievalService` (existing CBR infrastructure), `blocks#285` (future LLM coordination), issue #1113
+**Depends on:** D86 (CBR learns tuning axes), D89 (SwarmProvisioner orchestrates CBR queries)
+**Exploration:** quick
+**Status:** captured
