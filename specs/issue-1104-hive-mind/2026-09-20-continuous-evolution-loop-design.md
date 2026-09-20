@@ -115,9 +115,11 @@ The continuous evolution loop uses two complementary trigger mechanisms that tog
 
 ### Event-driven re-entry (primary)
 
-Outcome signals projected by `ImprovementOutcomeEventCapture` (existing, D98) feed back into the signal registry. These signals — `improvement:outcome:positive:*`, `improvement:outcome:regression:*`, `improvement:outcome:rejected:*` — are visible to `ImprovementGoalFormationStrategy` during the next evaluation cycle. When outcome signals reinforce existing improvement signals (e.g., a positive outcome in dependency updates reinforces `improvement:dependency:staleness:*` signals for similar dependencies), the consensus threshold is reached and new goals are proposed.
+The existing `CaseContextChangedEventHandler` already calls `ImprovementGoalFormationStrategy.proposeImprovements()` during the convergence detection phase (after swarm activity, signal deposits, and context mutations). This means improvement proposals are evaluated on every case evaluation cycle — the event-driven path already exists.
 
-This path requires no new infrastructure — the signal projection and goal formation strategy already exist. The loop closes by wiring outcome signals into the same consensus model that triggers new improvements.
+Outcome signals projected by `ImprovementOutcomeEventCapture` (existing, D98) feed back into the signal registry. These signals — `improvement:outcome:positive:*`, `improvement:outcome:regression:*`, `improvement:outcome:rejected:*` — modulate the priority of detection signals in the same category. However, outcome signals are **not** improvement requests — they don't carry `ImprovementRequest` context in `ImprovementSignalContext` and are not consumed by the `proposeImprovements()` consensus scan. Instead, outcome signals influence the feedback loop through category priority modulation (§2).
+
+The primary re-entry path is: outcome recorded → `ImprovementOutcomeEventCapture` fires → signal projected + category priority updated → next evaluation cycle picks up detection signals with adjusted priority → new improvements proposed if consensus conditions met.
 
 ### Timer backstop (secondary)
 
@@ -129,20 +131,61 @@ public class EvolutionTicker implements Resettable {
   private final ImprovementGoalFormationStrategy goalFormation;
   private final ImprovementCircuitBreaker circuitBreaker;
   private final HealthScoreTracker healthTracker;
+  private final ConflictDetector conflictDetector;
 
   public void tick(UUID caseId, ImprovementConfig config) {
-    healthTracker.refresh(caseId);
+    // Gate 1: opt-in check
+    if (!config.effectiveEvolutionEnabled()) {
+      return;
+    }
 
+    // Gate 2: refresh health score
+    healthTracker.refresh(caseId, config.effectiveHealthPolicy());
+
+    // Gate 3: evaluate circuit breaker (may trip OPEN based on health)
+    circuitBreaker.evaluate(caseId, healthTracker, config.effectiveHealthPolicy());
+
+    // Gate 4: block if circuit breaker is OPEN
     if (circuitBreaker.state(caseId) == CircuitBreakerState.OPEN) {
       return;
     }
 
-    goalFormation.proposeImprovements(caseId, config);
+    // Gate 5: propose improvements (internally: consensus scan → category check → budget check)
+    var proposal = goalFormation.proposeImprovements(caseId, config);
+    if (proposal == null || proposal.goals().isEmpty()) {
+      return;
+    }
+
+    // Gate 6: conflict detection per proposal (path overlap with active improvements)
+    // Conflicting proposals are queued, not rejected
+    for (var goal : proposal.goals()) {
+      var request = goalFormation.extractRequest(caseId, goal);
+      if (request != null) {
+        var check = conflictDetector.check(
+            request, budgetEnforcer.activeRequests(caseId),
+            config.effectiveConflictTrivialThreshold());
+        if (check instanceof ConflictCheck.Conflicting) {
+          goalFormation.queueForLater(caseId, goal, request);
+          continue;
+        }
+      }
+      // Gate 7: spawn improvement case
+      spawnImprovementCase(caseId, config, goal);
+    }
   }
 }
 ```
 
-The ticker is invoked periodically by the case evaluation pipeline. The interval is configurable via `ImprovementConfig.evolutionTickIntervalMinutes()` (default: 60). The tick is lightweight — it refreshes the health score and invokes the existing goal formation strategy, which already handles consensus detection and budget checking.
+**Gate pipeline (complete and canonical):**
+
+```
+evolutionEnabled → health refresh → circuit breaker evaluate → circuit breaker check
+  → consensus scan → category check → budget check → conflict check → spawn case
+```
+
+The first four gates live in `EvolutionTicker`. The consensus/category/budget gates are internal to `proposeImprovements()`. The conflict check is applied per-proposal after formation.
+
+The ticker is invoked periodically by the case evaluation pipeline. The interval is configurable via `ImprovementConfig.evolutionTickIntervalMinutes()` (default: 60). The tick is lightweight — it refreshes the health score, evaluates the circuit breaker, and invokes the existing goal formation strategy.
 
 ### Idempotency
 
@@ -162,23 +205,70 @@ The loop is **opt-in**. `evolutionEnabled` must be explicitly set to `true`. Thi
 
 The feedback loop connects improvement outcomes back to the sensing layer, creating a closed cycle where results influence future detection.
 
+### Two signal types — detection vs outcome
+
+**Detection signals** (e.g., `improvement:dependency:staleness:*`) are deposited by agents that observe quality issues. They carry `ImprovementRequest` context via `ImprovementSignalContext` and are consumed by `proposeImprovements()` through the consensus scan → `signalContext.get()` lookup path.
+
+**Outcome signals** (e.g., `improvement:outcome:positive:pr-merged`) are deposited by `ImprovementSignalProjector` after an improvement completes. They do NOT carry `ImprovementRequest` context and are NOT consumed by the consensus scan. They serve a different purpose: modulating the priority of future detection signals in the same category.
+
+The existing `proposeImprovements()` code correctly skips outcome signals — `signalContext.get()` returns empty for them. This is by design, not a gap. Outcome signals close the loop through category priority modulation, not through direct re-proposal.
+
 ### Feedback paths
 
 | Outcome status | Signal projected | Effect on next cycle |
 |---------------|-----------------|---------------------|
-| MERGED | `improvement:outcome:positive:pr-merged` | Reinforces similar improvement signals — "this category works, keep going" |
-| REJECTED | `improvement:outcome:rejected` | Weakens signals in this category — goal formation reduces priority |
+| MERGED | `improvement:outcome:positive:pr-merged` | Category priority boost — `ImprovementCategoryTracker` raises category weight |
+| REJECTED | `improvement:outcome:rejected` | Category priority reduction — repeated rejections suppress the category |
 | REGRESSION | `improvement:outcome:regression:*` | Triggers `RegressionDetector` (§3) — may pause category |
 | FAILED | `improvement:outcome:failed` | Enriches CBR trace — "what went wrong?" informs future attempts |
-| ABANDONED | `improvement:outcome:abandoned` | Clears related signals — direction was abandoned |
+| ABANDONED | `improvement:outcome:abandoned` | Clears related detection signals — direction was abandoned |
 
-### Goal revision from outcomes
+### ImprovementCategoryTracker
 
-`GoalRevisionEvaluator` applies improvement-specific logic when `goal.kind() == StandardGoalKind.SELF_IMPROVEMENT`:
+Tracks per-category outcome history and computes priority modulation:
 
-- **Repeated failures:** 3+ FAILED outcomes in the same category within the health window → deprioritise. The drive source for COMPETENCE lowers intensity for that category.
-- **Repeated rejections:** 3 REJECTED PRs in the same improvement direction → abandon the goal and emit `improvement:outcome:abandoned`.
-- **Regression:** Any REGRESSION outcome → trigger `RegressionDetector` (§3) for confidence-tiered response.
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@ApplicationScoped
+public class ImprovementCategoryTracker implements Resettable {
+
+  public record CategoryState(
+      int successCount, int failureCount, int rejectionCount,
+      Instant lastOutcome, boolean paused, @Nullable Instant pausedUntil) {}
+
+  private final ConcurrentHashMap<String, ConcurrentHashMap<String, CategoryState>> states =
+      new ConcurrentHashMap<>();  // caseId → category → state
+
+  public void recordOutcome(UUID caseId, String category, ImprovementOutcome.OutcomeStatus status) {
+    // Update counts based on outcome status
+  }
+
+  public boolean isSuppressed(UUID caseId, String category) {
+    // 3+ consecutive failures → suppress
+    // 3 rejections in window → suppress
+    // Category paused by RegressionDetector → suppress
+  }
+
+  public void pauseCategory(UUID caseId, String category, Duration duration) {
+    // Pauses new improvements in this category for the specified duration
+    // Safety-critical: used by RegressionDetector on medium/high confidence regression
+  }
+
+  public void unpauseCategory(UUID caseId, String category) {
+    // Manual unpause — also called when pause duration expires
+  }
+}
+```
+
+### Outcome processing in ImprovementGoalFormationStrategy
+
+`proposeImprovements()` consults `ImprovementCategoryTracker.isSuppressed()` as a gate before proposing improvements in each category. This replaces the previously incorrect reference to `GoalRevisionEvaluator`:
+
+- **Repeated failures:** 3+ FAILED outcomes in the same category within the health window → category suppressed until manual reset or health window expires.
+- **Repeated rejections:** 3 REJECTED PRs in the same improvement direction → category suppressed and emit `improvement:outcome:abandoned`.
+- **Regression:** Any REGRESSION outcome → `RegressionDetector` (§3) handles via `ImprovementCategoryTracker.pauseCategory()`.
+
+**Note:** `GoalRevisionEvaluator` operates within the eidos agent goal system (`AgentDescriptor`, `AgentGoal`, `GoalEvolution`) and has no concept of `GoalKind` or improvement-specific logic. Improvement outcome processing lives entirely in `ImprovementCategoryTracker` and `ImprovementGoalFormationStrategy`.
 
 ### CBR-informed goal formation
 
@@ -207,7 +297,8 @@ When an improvement lands and makes things worse, the system detects and respond
 public class RegressionDetector {
 
   private final ConfidenceScorer scorer;
-  private final ImprovementBudgetEnforcer budgetEnforcer;
+  private final ImprovementCategoryTracker categoryTracker;
+  private final RollbackHistory rollbackHistory;
   private final SignalRegistry signalRegistry;
 
   public void evaluate(UUID caseId, ImprovementOutcome outcome) {
@@ -221,34 +312,23 @@ public class RegressionDetector {
 
   public void onMetricsDegraded(
       UUID caseId, UUID improvementCaseId, String category,
-      RollbackPolicy policy, MetricsSnapshot before, MetricsSnapshot after) {
+      RollbackPolicy policy, HealthSnapshot before, HealthSnapshot after) {
     double confidence = scorer.score(caseId, improvementCaseId, before, after);
 
     if (confidence >= policy.effectiveAutoRevertThreshold()) {
       spawnRollbackCase(caseId, improvementCaseId, confidence);
-      budgetEnforcer.pauseCategory(caseId, category);
+      categoryTracker.pauseCategory(caseId, category,
+          Duration.ofMinutes(policy.effectiveRegressionWindowMinutes()));
+      rollbackHistory.record(caseId, improvementCaseId, category);
     } else if (confidence >= policy.effectivePauseThreshold()) {
       emitRegressionSignal(caseId, improvementCaseId, confidence);
-      budgetEnforcer.pauseCategory(caseId, category);
+      categoryTracker.pauseCategory(caseId, category,
+          Duration.ofMinutes(policy.effectiveRegressionWindowMinutes()));
     } else {
       emitRegressionSignal(caseId, improvementCaseId, confidence);
     }
   }
 }
-```
-
-### MetricsSnapshot
-
-```java
-// api/model/stigmergy
-public record MetricsSnapshot(
-    double ciPassRate,
-    double testCoverage,
-    int lintViolations,
-    double dependencyFreshness,
-    long buildTimeMs,
-    double flakyTestRate,
-    Instant capturedAt) {}
 ```
 
 ### ConfidenceScorer
@@ -262,7 +342,7 @@ public class ConfidenceScorer {
 
   public double score(
       UUID caseId, UUID improvementCaseId,
-      MetricsSnapshot before, MetricsSnapshot after) {
+      HealthSnapshot before, HealthSnapshot after) {
     double confidence = 0.0;
 
     if (improvementCiBuildFailed(improvementCaseId)) {
@@ -378,13 +458,94 @@ bindings:
     capability: improvement-outcome
 ```
 
+### Revert worker
+
+The `improvement-revert` capability is provided by `ImprovementRevertWorker`:
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement.worker
+@ApplicationScoped
+public class ImprovementRevertWorker {
+  // Creates a git revert commit of the improvement's merge commit
+  // via the same REST/GraphQL API surface used by ImprovementIntegrateWorker.
+  //
+  // If the revert has merge conflicts (target code changed since the
+  // improvement landed), the worker returns WorkerOutcome.Failed with
+  // reason "revert-conflict" and emits a signal for human review.
+  // It does NOT attempt automatic conflict resolution.
+}
+```
+
+| Aspect | Detail |
+|--------|--------|
+| Module | `runtime-core` |
+| Package | `io.casehub.engine.internal.improvement.worker` |
+| Capability | `improvement-revert` |
+| Conflict handling | Fails with `revert-conflict` — escalates to human review |
+
+### RollbackHistory (engine-only anti-oscillation fallback)
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@ApplicationScoped
+public class RollbackHistory implements Resettable {
+
+  public record RollbackRecord(UUID improvementCaseId, String category,
+      String target, Instant rolledBackAt) {}
+
+  private final ConcurrentHashMap<UUID, List<RollbackRecord>> history =
+      new ConcurrentHashMap<>();
+
+  public void record(UUID caseId, UUID improvementCaseId, String category) { ... }
+
+  public boolean wasRecentlyRolledBack(UUID caseId, String category,
+      String target, Duration window) {
+    // Returns true if the same category+target was rolled back within the window
+  }
+}
+```
+
+This provides the fail-closed anti-oscillation guard when CBR (neocortex) is unavailable. `ImprovementGoalFormationStrategy` checks `RollbackHistory` first (always available), then CBR (when available, provides richer context matching). If either indicates a recent rollback of the same target and context hasn't materially changed, the proposal is suppressed.
+
 ### Safety guards
 
-**Anti-oscillation:** Before proposing an improvement, `ImprovementGoalFormationStrategy` queries CBR for past rollbacks of the same target. If found and context hasn't materially changed, the proposal is suppressed.
+**Anti-oscillation:** Before proposing an improvement, `ImprovementGoalFormationStrategy` checks:
+1. `RollbackHistory.wasRecentlyRolledBack()` (always available — engine-only fallback)
+2. CBR retrieval for similar past rollbacks (when neocortex is available — richer matching)
+If either returns a match and context hasn't materially changed, the proposal is suppressed. The engine-only fallback is fail-closed — without rollback history, the system defaults to allowing (history starts empty, fills on first rollback). With rollback history present, proposals for recently-rolled-back targets are blocked.
 
 **Anti-cascade:** Before spawning a rollback case, `RegressionDetector` checks `ConflictDetector` (§5) for later improvements that depend on the regressed change. If dependencies exist, downgrade to signal + pause — don't auto-revert.
 
 **Anti-flaky:** `RegressionDetector` requires `sustainedFailureCount` (default 2) consecutive failures before acting. A single flaky test run does not trigger rollback.
+
+### Structural deny list update
+
+The following new safety-critical components must be added to `ImprovementBudgetEnforcer.STRUCTURAL_DENIED_PATTERNS`:
+
+```java
+private static final Set<String> STRUCTURAL_DENIED_PATTERNS =
+    Set.of(
+        // Existing (#1114)
+        "ImprovementBudget",
+        "ImprovementBudgetEnforcer",
+        "ImprovementConfig",
+        "SafetyConfig",
+        "improvement-case-template",
+        // New (#1115) — safety-critical components
+        "ImprovementCircuitBreaker",
+        "RegressionDetector",
+        "ConfidenceScorer",
+        "HealthScoreTracker",
+        "HealthPolicy",
+        "RollbackPolicy",
+        "ConflictDetector",
+        "ImprovementCategoryTracker",
+        "RollbackHistory",
+        "self-improvement-rollback"
+    );
+```
+
+The improvement system must not be able to modify its own safety constraints — this is the foundational safety invariant. Any component involved in gating, detecting, or responding to improvement failures is structurally denied.
 
 ## 4. Health Score and Circuit Breaker
 
@@ -404,30 +565,42 @@ public class HealthScoreTracker implements Resettable {
 
   private final ConcurrentHashMap<UUID, Deque<HealthSnapshot>> history =
       new ConcurrentHashMap<>();
+  private final CapabilityAreaRegistry areaRegistry;
 
   public double computeScore(UUID caseId, HealthPolicy policy) {
-    // Aggregate normalised metrics weighted by policy
-    // Each metric normalised to [0, 1]
-    double score = 0.0;
+    // Aggregate health from capability area assessments
+    // Each CapabilityArea.assess() returns healthScore in [0, 1]
     var weights = policy.effectiveWeights();
-    score += weights.getOrDefault("ciPassRate", 0.2) * normaliseCiPassRate(caseId);
-    score += weights.getOrDefault("testCoverage", 0.15) * normaliseTestCoverage(caseId);
-    score += weights.getOrDefault("lintViolations", 0.15) * normaliseLintViolations(caseId);
-    score += weights.getOrDefault("dependencyFreshness", 0.15) * normaliseDependencyFreshness(caseId);
-    score += weights.getOrDefault("buildTime", 0.1) * normaliseBuildTime(caseId);
-    score += weights.getOrDefault("flakyTestRate", 0.15) * normaliseFlakyTestRate(caseId);
-    score += weights.getOrDefault("improvementSuccessRate", 0.1) * normaliseImprovementSuccessRate(caseId);
-    return score;
+    double weightedSum = 0.0;
+    double totalWeight = 0.0;
+    for (CapabilityArea area : areaRegistry.active()) {
+      var assessment = area.assess(caseId);
+      double weight = weights.getOrDefault(area.id(), 0.1);
+      weightedSum += weight * assessment.healthScore();
+      totalWeight += weight;
+    }
+    // Normalise by total weight to guarantee [0, 1] regardless of custom weights
+    return totalWeight > 0 ? weightedSum / totalWeight : 0.0;
   }
 
-  public void refresh(UUID caseId) {
-    // Compute and store in history ring buffer
+  public void refresh(UUID caseId, HealthPolicy policy) {
+    double score = computeScore(caseId, policy);
+    Map<String, Double> components = new LinkedHashMap<>();
+    for (CapabilityArea area : areaRegistry.active()) {
+      components.put(area.id(), area.assess(caseId).healthScore());
+    }
+    var snapshot = new HealthSnapshot(score, Instant.now(), components);
+    history.computeIfAbsent(caseId, k -> new ArrayDeque<>()).addLast(snapshot);
+    // Trim history to bounded window
   }
 
   public double delta(UUID caseId, int windowMinutes) {
     // Current score minus score at windowMinutes ago
   }
 }
+```
+
+**No parallel metrics infrastructure.** Health scoring consumes `CapabilityArea.assess()` — the SPI that already exists for each area. Each area's `assess()` implementation derives its `healthScore` from available data (EventLog entries, ActivityTracker state, signal registry). External metrics (CI pass rate, test coverage, build time) are provided by capability area implementations that query external systems — not by a separate metrics pipeline. The `MetricsSnapshot` record is removed.
 ```
 
 ### ImprovementCircuitBreaker
@@ -523,14 +696,16 @@ public record HealthPolicy(
 
   public Map<String, Double> effectiveWeights() {
     if (weights != null) return weights;
+    // Default weights keyed by capability area ID from the bootstrap areas (§6)
     return Map.of(
-        "ciPassRate", 0.2,
-        "testCoverage", 0.15,
-        "lintViolations", 0.15,
-        "dependencyFreshness", 0.15,
-        "buildTime", 0.1,
-        "flakyTestRate", 0.15,
-        "improvementSuccessRate", 0.1);
+        "stability", 0.2,
+        "performance", 0.15,
+        "execution", 0.1,
+        "safety", 0.15,
+        "integration", 0.1,
+        "autonomy", 0.1,
+        "cognitive-reasoning", 0.1,
+        "coordination", 0.1);
   }
 }
 ```
@@ -544,6 +719,22 @@ public record HealthPolicy(
 | `improvement:circuit-breaker:reset` | HALF_OPEN → CLOSED (or manual reset) |
 
 All transitions produce an `EventLog` entry with the health score, delta, and triggering metrics.
+
+### Restart recovery — event-sourced state reconstruction
+
+The circuit breaker state is safety-critical — it must survive restarts. On startup, `ImprovementCircuitBreaker` reconstructs its state from the most recent `CIRCUIT_BREAKER_*` EventLog entry:
+
+```java
+public void restoreFromEventLog(UUID caseId, EventLogRepository repository) {
+  // Query for most recent improvement:circuit-breaker:* event for this case
+  // Reconstruct state, halfOpenCount, and health baseline from event payload
+  // If no events found, defaults to CLOSED (clean start)
+}
+```
+
+`HealthScoreTracker` history is NOT persisted — it rebuilds naturally as `refresh()` is called. The first few ticks after restart may have insufficient history for accurate delta computation; the circuit breaker treats missing history as "no trend data" (delta = 0), which is conservative (won't trip on delta alone).
+
+`ImprovementCategoryTracker` pause state is reconstructed from EventLog entries for regression events. Active pauses with remaining duration are restored; expired pauses are ignored.
 
 ### Trade-off: lagging indicator
 
@@ -618,13 +809,18 @@ Conflicting improvements are queued, not rejected. When the blocking improvement
 
 Improvements with `estimatedSize <= trivialThreshold` (default 10 lines) touching a single file are exempt from directory-level conflict detection. They still check file-level overlap. This prevents a large refactor from blocking all small fixes in the same module.
 
-### Integration with budget enforcer
+### Integration with the evolution pipeline
 
-`ConflictDetector.check()` is called after budget enforcement passes, before the improvement case is spawned. The check is an additional gate in the goal formation pipeline:
+`ConflictDetector.check()` is called by `EvolutionTicker` after `proposeImprovements()` produces candidate proposals, before the improvement case is spawned. See §1 for the complete gate pipeline.
 
-```
-consensus → circuit breaker check → conflict check → budget check → spawn case
-```
+### Conflict scope trade-off
+
+The path-based approach (file and directory level) is intentionally simple and build-tool agnostic. It has known trade-offs:
+
+- **False positives (safe):** Two independent lint fixes in the same directory are serialized even though they don't conflict. This is conservative — slower but safe.
+- **False negatives (rare):** A dependency update (`pom.xml`) and a lint fix in a deep directory won't trigger directory overlap. However, root-level files like `pom.xml` are typically caught by file-level overlap since multiple dependency updates would target the same file.
+
+Module-level conflict detection (Maven module awareness) would reduce false positives but introduces build-tool coupling. The `IntrospectionResult.affectedPaths()` could be enhanced with module scope information in a future iteration, allowing the conflict detector to operate at module granularity when available and fall back to path-based matching otherwise.
 
 ## 6. Growth Direction — Capability Area Taxonomy
 
@@ -836,6 +1032,31 @@ public class ResearchPipelineOrchestrator {
 }
 ```
 
+### Trigger mechanism
+
+The research pipeline is triggered by `EvolutionTicker` when:
+1. A capability area assessment shows `LandscapePosition.BEHIND` or `ABSENT`
+2. The area's last assessment is older than `ResearchMethodology.effectiveAreaRefreshStalenessThresholdDays()` (default: 30 days)
+3. The circuit breaker is not OPEN
+
+```java
+// In EvolutionTicker, after improvement proposals but before return:
+if (circuitBreaker.state(caseId) != CircuitBreakerState.OPEN) {
+  for (CapabilityArea area : areaRegistry.active()) {
+    var assessment = area.assess(caseId);
+    if (isStaleOrBehind(assessment, config.effectiveResearchMethodology())) {
+      var hypotheses = researchPipeline.execute(
+          selectDepth(assessment), assessment, driveContext(caseId));
+      for (var hypothesis : hypotheses) {
+        depositHypothesisSignal(caseId, hypothesis);
+      }
+    }
+  }
+}
+```
+
+Research hypotheses are deposited as `improvement:capability:*` signals. They enter the normal consensus → goal formation path — no special wiring. Multiple independent research cycles reinforcing the same hypothesis builds consensus for a capability improvement.
+
 ### Engine defaults
 
 Engine provides rule-based skeleton implementations:
@@ -1027,6 +1248,34 @@ public record ResearchMethodology(
 }
 ```
 
+### Backwards-compatible constructor
+
+`ImprovementConfig` expands from 5 to 11 fields. A backwards-compatible constructor is provided for existing call sites:
+
+```java
+public ImprovementConfig(
+    @Nullable String signalNamespace,
+    @Nullable Integer consensusMinSources,
+    @Nullable List<String> enabledCategories,
+    @Nullable ImprovementBudget budget,
+    @Nullable String caseTemplateId) {
+  this(signalNamespace, consensusMinSources, enabledCategories, budget, caseTemplateId,
+       null, null, null, null, null, null);
+}
+```
+
+This follows the same pattern as `StigmergyConfig` (3-arg constructor that passes `null` for improvement).
+
+### YAML record codegen
+
+The new nested records require YAML codegen entries (following the #1114 pattern for `ImprovementConfig` and `ImprovementBudget`):
+
+| Record | Codegen entry |
+|--------|--------------|
+| `RollbackPolicy` | `io.casehub.api.model.stigmergy.RollbackPolicy` |
+| `HealthPolicy` | `io.casehub.api.model.stigmergy.HealthPolicy` |
+| `ResearchMethodology` | `io.casehub.api.model.stigmergy.ResearchMethodology` |
+
 ## 11. Module Placement
 
 | Component | Module | Package |
@@ -1043,7 +1292,9 @@ public record ResearchMethodology(
 | `ImprovementHypothesis` | `api` | `io.casehub.api.model.stigmergy` |
 | `HilQueueEntry` | `api` | `io.casehub.api.model.stigmergy` |
 | `GapMap` | `api` | `io.casehub.api.model.stigmergy` |
-| `MetricsSnapshot` | `api` | `io.casehub.api.model.stigmergy` |
+| `ImprovementCategoryTracker` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `RollbackHistory` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `ImprovementRevertWorker` | `runtime-core` | `io.casehub.engine.internal.improvement.worker` |
 | `ResearchDepth` | `api` | `io.casehub.api.spi.improvement` |
 | `CapabilityArea` SPI | `api` | `io.casehub.api.spi.improvement` |
 | `ResearchScoper` SPI | `api` | `io.casehub.api.spi.improvement` |
@@ -1102,15 +1353,18 @@ public record ResearchMethodology(
 
 | Test class | What it covers |
 |------------|---------------|
-| `EvolutionTickerTest` | Timer tick invokes goal formation, respects circuit breaker state, opt-in guard |
-| `RegressionDetectorTest` | All three confidence tiers, anti-oscillation, anti-cascade, anti-flaky guards |
+| `EvolutionTickerTest` | Complete gate pipeline: opt-in guard, health refresh, circuit breaker, goal formation, conflict detection |
+| `RegressionDetectorTest` | All three confidence tiers, anti-cascade, anti-flaky guards, category pause via tracker |
 | `ConfidenceScorerTest` | Composable weights — each signal contribution, clamping to [0, 1] |
-| `HealthScoreTrackerTest` | Metric normalisation, weighted aggregation, delta computation over window |
-| `ImprovementCircuitBreakerTest` | State transitions: CLOSED→OPEN, OPEN→HALF_OPEN, HALF_OPEN→CLOSED, manual reset |
+| `HealthScoreTrackerTest` | Capability area-based aggregation, weight normalisation, delta computation over window |
+| `ImprovementCircuitBreakerTest` | State transitions: CLOSED→OPEN, OPEN→HALF_OPEN, HALF_OPEN→CLOSED, manual reset, event-sourced recovery |
 | `ConflictDetectorTest` | File overlap, directory overlap, no overlap, trivial exemption |
 | `CapabilityAreaRegistryTest` | Register, deprecate, active list, bootstrap |
 | `ResearchPipelineOrchestratorTest` | Pipeline execution with mock SPIs at each depth tier |
 | `InMemoryResearchCorpusTest` | Store, search, HIL queue lifecycle |
+| `ImprovementCategoryTrackerTest` | Outcome tracking, suppression logic (3+ failures, 3 rejections), pause/unpause |
+| `RollbackHistoryTest` | Record, lookup, window-based expiry |
+| `ImprovementRevertWorkerTest` | Revert commit creation, conflict detection/escalation |
 
 ### Integration tests
 
@@ -1123,13 +1377,16 @@ public record ResearchMethodology(
 
 ### Critical test scenarios
 
-1. **Loop closure:** Outcome signals from improvement A feed back and contribute to consensus for improvement B
+1. **Loop closure:** Outcome from improvement A → `ImprovementCategoryTracker` boosts category → detection signals reach consensus → improvement B proposed
 2. **Circuit breaker blocks improvements:** Health score drops → OPEN → `EvolutionTicker.tick()` returns without proposing goals
-3. **High-confidence auto-revert:** CI failure after merge → confidence ≥ 0.9 → rollback case spawned
-4. **Anti-oscillation:** Improvement reverted → same improvement re-proposed → CBR suppresses re-attempt
-5. **Conflict queueing:** Two dependency updates in the same module → second queued → first completes → second re-introspects
-6. **Trivial exemption:** Small fix (5 lines, 1 file) runs concurrently with broad refactor in same directory
-7. **Evolution is opt-in:** Default `ImprovementConfig` → `evolutionEnabled == false` → ticker does nothing
+3. **High-confidence auto-revert:** CI failure after merge → confidence ≥ 0.9 → rollback case spawned → category paused
+4. **Anti-oscillation (engine-only):** Improvement reverted → `RollbackHistory.record()` → same improvement re-proposed → suppressed by `wasRecentlyRolledBack()`
+5. **Anti-oscillation (with CBR):** Same as above but CBR provides richer context matching for similar (not exact) targets
+6. **Conflict queueing:** Two dependency updates in the same module → second queued → first completes → second re-introspects
+7. **Trivial exemption:** Small fix (5 lines, 1 file) runs concurrently with broad refactor in same directory
+8. **Evolution is opt-in:** Default `ImprovementConfig` → `evolutionEnabled == false` → ticker does nothing
+9. **Category suppression:** 3 failures in dependency-update → category suppressed → no proposals until window expires or manual reset
+10. **Circuit breaker restart recovery:** Process restarts with OPEN circuit breaker → EventLog entry → state reconstructed → improvements still blocked
 
 ## 14. References
 
