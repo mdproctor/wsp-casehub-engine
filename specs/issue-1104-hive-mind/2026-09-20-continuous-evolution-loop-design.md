@@ -155,6 +155,7 @@ public class EvolutionTicker implements Resettable {
   private final ImprovementGoalFormationStrategy goalFormation;
   private final ImprovementCircuitBreaker circuitBreaker;
   private final HealthScoreTracker healthTracker;
+  private final RegressionDetector regressionDetector;
   private final GoalFormationService goalFormationService;
 
   public void tick(UUID caseId, String tenancyId, ImprovementConfig config) {
@@ -165,6 +166,10 @@ public class EvolutionTicker implements Resettable {
 
     // Gate 2: refresh health score
     healthTracker.refresh(caseId, config.effectiveHealthPolicy());
+
+    // Regression monitoring: compare current health against per-improvement baselines
+    regressionDetector.checkActiveMonitors(caseId, healthTracker,
+        config.effectiveRollbackPolicy());
 
     // Gate 3: evaluate circuit breaker (may trip OPEN based on health)
     circuitBreaker.evaluate(caseId, healthTracker, config.effectiveHealthPolicy());
@@ -191,12 +196,12 @@ public class EvolutionTicker implements Resettable {
 **Gate pipeline (complete and canonical):**
 
 ```
-evolutionEnabled → health refresh → circuit breaker evaluate → circuit breaker check
-  → consensus scan → category suppression → anti-oscillation → budget check
-  → conflict check → GoalFormationService.propose()
+evolutionEnabled → health refresh → regression monitoring → circuit breaker evaluate
+  → circuit breaker check → consensus scan → category suppression → anti-oscillation
+  → budget check → conflict check → GoalFormationService.propose()
 ```
 
-Gates 1–4 live in `EvolutionTicker`. Gates 5–9 are internal to `proposeImprovements()`. Gate 10 uses `GoalFormationService.propose()` — the same standard goal lifecycle path used by the existing convergence detection code. This produces `GOAL_FORMED` and `GOAL_PROPOSED` EventLog entries and enters the standard case template binding via `SubCaseBinding`.
+Gates 1–2 and regression monitoring live in `EvolutionTicker`. Regression monitoring runs after health refresh because it needs the current health snapshot to compare against per-improvement baselines. Gates 3–4 (circuit breaker) follow — a regression detected during monitoring may trigger a rollback and category pause, which affects subsequent proposal gates. Gates 5–9 are internal to `proposeImprovements()`. Gate 10 uses `GoalFormationService.propose()` — the same standard goal lifecycle path used by the existing convergence detection code. This produces `GOAL_FORMED` and `GOAL_PROPOSED` EventLog entries and enters the standard case template binding via `SubCaseBinding`.
 
 **No parallel spawning mechanism.** The ticker does NOT call `spawnImprovementCase()` or any custom case-spawning method. It produces a `GoalFormationProposal` and delegates to `GoalFormationService.propose()` — the same API the convergence detection handler already uses.
 
@@ -344,7 +349,7 @@ public Map<UUID, ImprovementRequest> activeImprovementRequests(UUID caseId) {
 
 ```java
 // ImprovementOutcomeEventCapture — #1115 addition
-// Add ImprovementCategoryTracker as a constructor dependency
+// Add ImprovementCategoryTracker and RegressionDetector as constructor dependencies
 
 public void onImprovementComplete(@ObservesAsync ImprovementCaseCompleted event) {
   var outcome = event.outcome();
@@ -354,10 +359,11 @@ public void onImprovementComplete(@ObservesAsync ImprovementCaseCompleted event)
   budgetEnforcer.recordCompletion(outcome.improvementCaseId());            // Layer 4: Budget
   categoryTracker.recordOutcome(event.caseId(),                           // Layer 5: Category
       outcome.category(), outcome.status());
+  regressionDetector.onOutcome(event.caseId(), outcome);                  // Layer 6: Regression
 }
 ```
 
-Without this wiring, `ImprovementCategoryTracker` never sees outcomes — it never increments success/failure/rejection counts, never suppresses categories on repeated failures, and the feedback loop remains open for non-regression outcomes.
+Layer 6 starts regression monitoring for MERGED outcomes (see §3 for full specification).
 
 **Note:** `GoalRevisionEvaluator` operates within the eidos agent goal system (`AgentDescriptor`, `AgentGoal`, `GoalEvolution`) and has no concept of `GoalKind` or improvement-specific logic. Improvement outcome processing lives entirely in `ImprovementCategoryTracker` and `ImprovementGoalFormationStrategy`.
 
@@ -385,42 +391,109 @@ When an improvement lands and makes things worse, the system detects and respond
 ```java
 // runtime-core, io.casehub.engine.internal.improvement
 @ApplicationScoped
-public class RegressionDetector {
+public class RegressionDetector implements Resettable {
+
+  public record MonitoredImprovement(
+      UUID improvementCaseId, String category, String target,
+      HealthSnapshot baseline, Instant mergedAt, int checksRemaining) {}
+
+  private final ConcurrentHashMap<UUID, List<MonitoredImprovement>> monitors =
+      new ConcurrentHashMap<>();  // caseId → active monitors
 
   private final ConfidenceScorer scorer;
   private final ImprovementCategoryTracker categoryTracker;
   private final RollbackHistory rollbackHistory;
   private final SignalRegistry signalRegistry;
 
-  public void evaluate(UUID caseId, ImprovementOutcome outcome) {
+  /**
+   * Called from ImprovementOutcomeEventCapture (Layer 6) when an improvement completes.
+   * For MERGED outcomes, captures the current health snapshot as a "before" baseline
+   * and registers the improvement for periodic monitoring.
+   */
+  public void onOutcome(UUID caseId, ImprovementOutcome outcome) {
     if (outcome.status() != ImprovementOutcome.OutcomeStatus.MERGED) {
       return;
     }
+    // Capture current health as the "before" baseline
+    // (health state at the moment the improvement merged)
+    var baseline = healthTracker.latestSnapshot(caseId);
+    if (baseline == null) { return; }
 
-    // Monitor metrics within the regression window
-    // (invoked periodically after merge, not just once)
+    monitors.computeIfAbsent(caseId, k -> new CopyOnWriteArrayList<>())
+        .add(new MonitoredImprovement(
+            outcome.improvementCaseId(), outcome.category(), outcome.target(),
+            baseline, Instant.now(),
+            policy.effectiveSustainedFailureCount()));
   }
 
-  public void onMetricsDegraded(
-      UUID caseId, UUID improvementCaseId, String category,
+  /**
+   * Called from EvolutionTicker.tick() after health refresh (Gate 2).
+   * For each monitored improvement within its regression window,
+   * compares the baseline snapshot against the current health.
+   */
+  public void checkActiveMonitors(UUID caseId, HealthScoreTracker healthTracker,
+      RollbackPolicy policy) {
+    var caseMonitors = monitors.get(caseId);
+    if (caseMonitors == null || caseMonitors.isEmpty()) { return; }
+
+    var current = healthTracker.latestSnapshot(caseId);
+    if (current == null) { return; }
+
+    var windowDuration = Duration.ofMinutes(policy.effectiveRegressionWindowMinutes());
+    var iterator = caseMonitors.iterator();
+    while (iterator.hasNext()) {
+      var monitor = iterator.next();
+
+      // Window expired — no regression detected, stop monitoring
+      if (Duration.between(monitor.mergedAt(), Instant.now()).compareTo(windowDuration) > 0) {
+        iterator.remove();
+        continue;
+      }
+
+      // Check for health degradation
+      if (current.score() < monitor.baseline().score()) {
+        onMetricsDegraded(caseId, monitor, policy, monitor.baseline(), current);
+      }
+    }
+  }
+
+  private void onMetricsDegraded(
+      UUID caseId, MonitoredImprovement monitor,
       RollbackPolicy policy, HealthSnapshot before, HealthSnapshot after) {
-    double confidence = scorer.score(caseId, improvementCaseId, before, after);
+    double confidence = scorer.score(caseId, monitor.improvementCaseId(), before, after);
 
     if (confidence >= policy.effectiveAutoRevertThreshold()) {
-      spawnRollbackCase(caseId, improvementCaseId, confidence);
-      categoryTracker.pauseCategory(caseId, category,
+      spawnRollbackCase(caseId, monitor.improvementCaseId(), confidence);
+      categoryTracker.pauseCategory(caseId, monitor.category(),
           Duration.ofMinutes(policy.effectiveRegressionWindowMinutes()));
-      rollbackHistory.record(caseId, improvementCaseId, category);
+      rollbackHistory.record(caseId, monitor.improvementCaseId(),
+          monitor.category(), monitor.target());
     } else if (confidence >= policy.effectivePauseThreshold()) {
-      emitRegressionSignal(caseId, improvementCaseId, confidence);
-      categoryTracker.pauseCategory(caseId, category,
+      emitRegressionSignal(caseId, monitor.improvementCaseId(), confidence);
+      categoryTracker.pauseCategory(caseId, monitor.category(),
           Duration.ofMinutes(policy.effectiveRegressionWindowMinutes()));
     } else {
-      emitRegressionSignal(caseId, improvementCaseId, confidence);
+      emitRegressionSignal(caseId, monitor.improvementCaseId(), confidence);
     }
   }
 }
 ```
+
+**Trigger mechanism — two phases:**
+
+1. **Initial capture (Layer 6 in `onImprovementComplete`):** `onOutcome()` captures the current health snapshot as the "before" baseline at merge time and registers the improvement for monitoring. Only MERGED outcomes are monitored.
+
+2. **Periodic monitoring (in `EvolutionTicker.tick()`):** `checkActiveMonitors()` is called after health refresh (Gate 2) — see below. For each monitored improvement within its regression window, it compares baseline vs current health. If degradation is detected, `onMetricsDegraded()` fires the confidence scorer and triggers the tiered response (rollback/pause/signal). When the regression window expires without degradation, monitoring stops.
+
+**EvolutionTicker integration:**
+
+```java
+// In EvolutionTicker.tick(), after Gate 2 (health refresh):
+regressionDetector.checkActiveMonitors(caseId, healthTracker,
+    config.effectiveRollbackPolicy());
+```
+
+This runs on every tick — both event-driven and timer-triggered — ensuring regression is detected promptly regardless of how the tick fires.
 
 ### ConfidenceScorer
 
@@ -602,7 +675,8 @@ public class RollbackHistory implements Resettable {
   private final ConcurrentHashMap<UUID, List<RollbackRecord>> history =
       new ConcurrentHashMap<>();
 
-  public void record(UUID caseId, UUID improvementCaseId, String category) { ... }
+  public void record(UUID caseId, UUID improvementCaseId,
+      String category, String target) { ... }
 
   public boolean wasRecentlyRolledBack(UUID caseId, String category,
       String target, Duration window) {
@@ -699,6 +773,11 @@ public class HealthScoreTracker implements Resettable {
     var snapshot = new HealthSnapshot(score, Instant.now(), components);
     history.computeIfAbsent(caseId, k -> new ArrayDeque<>()).addLast(snapshot);
     // Trim history to bounded window
+  }
+
+  public HealthSnapshot latestSnapshot(UUID caseId) {
+    var deque = history.get(caseId);
+    return (deque != null && !deque.isEmpty()) ? deque.peekLast() : null;
   }
 
   public double delta(UUID caseId, int windowMinutes) {
