@@ -220,21 +220,35 @@ public class RegressionDetector {
   }
 
   public void onMetricsDegraded(
-      UUID caseId, UUID improvementCaseId,
+      UUID caseId, UUID improvementCaseId, String category,
       RollbackPolicy policy, MetricsSnapshot before, MetricsSnapshot after) {
     double confidence = scorer.score(caseId, improvementCaseId, before, after);
 
     if (confidence >= policy.effectiveAutoRevertThreshold()) {
       spawnRollbackCase(caseId, improvementCaseId, confidence);
-      budgetEnforcer.pauseCategory(caseId, outcome.category());
+      budgetEnforcer.pauseCategory(caseId, category);
     } else if (confidence >= policy.effectivePauseThreshold()) {
       emitRegressionSignal(caseId, improvementCaseId, confidence);
-      budgetEnforcer.pauseCategory(caseId, outcome.category());
+      budgetEnforcer.pauseCategory(caseId, category);
     } else {
       emitRegressionSignal(caseId, improvementCaseId, confidence);
     }
   }
 }
+```
+
+### MetricsSnapshot
+
+```java
+// api/model/stigmergy
+public record MetricsSnapshot(
+    double ciPassRate,
+    double testCoverage,
+    int lintViolations,
+    double dependencyFreshness,
+    long buildTimeMs,
+    double flakyTestRate,
+    Instant capturedAt) {}
 ```
 
 ### ConfidenceScorer
@@ -531,6 +545,10 @@ public record HealthPolicy(
 
 All transitions produce an `EventLog` entry with the health score, delta, and triggering metrics.
 
+### Trade-off: lagging indicator
+
+The health score is a lagging indicator — by the time it drops below threshold, multiple problematic improvements may have landed. The delta threshold helps (catches trends earlier than the absolute threshold) but still lags. The weights need tuning from real deployment data; initial defaults are heuristic. Over-sensitive thresholds cause frequent false trips that block legitimate improvements. The rollback system (§3) handles individual regressions; the circuit breaker handles aggregate drift that rollback can't catch.
+
 ## 5. Concurrent Improvement Scheduling
 
 Conflict avoidance for concurrent improvements, preventing the merge conflicts and stale-context failures that LLMs handle poorly.
@@ -605,7 +623,7 @@ Improvements with `estimatedSize <= trivialThreshold` (default 10 lines) touchin
 `ConflictDetector.check()` is called after budget enforcement passes, before the improvement case is spawned. The check is an additional gate in the goal formation pipeline:
 
 ```
-consensus → budget check → circuit breaker check → conflict check → spawn case
+consensus → circuit breaker check → conflict check → budget check → spawn case
 ```
 
 ## 6. Growth Direction — Capability Area Taxonomy
@@ -1024,6 +1042,9 @@ public record ResearchMethodology(
 | `ResearchFinding` | `api` | `io.casehub.api.model.stigmergy` |
 | `ImprovementHypothesis` | `api` | `io.casehub.api.model.stigmergy` |
 | `HilQueueEntry` | `api` | `io.casehub.api.model.stigmergy` |
+| `GapMap` | `api` | `io.casehub.api.model.stigmergy` |
+| `MetricsSnapshot` | `api` | `io.casehub.api.model.stigmergy` |
+| `ResearchDepth` | `api` | `io.casehub.api.spi.improvement` |
 | `CapabilityArea` SPI | `api` | `io.casehub.api.spi.improvement` |
 | `ResearchScoper` SPI | `api` | `io.casehub.api.spi.improvement` |
 | `ResearchSearcher` SPI | `api` | `io.casehub.api.spi.improvement` |
