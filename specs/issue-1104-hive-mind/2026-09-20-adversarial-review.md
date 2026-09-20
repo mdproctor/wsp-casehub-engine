@@ -95,6 +95,8 @@ The 80/20 question: **DGM achieves SWE-bench 20→50% with approximately zero co
 
 **The honest assessment:** The research loop is aspirational. It's the most exciting part of the vision but the least grounded in current capability. It depends entirely on future LLM quality for synthesis and implementation. The engine can provide search API wrappers — but the actual intelligence is deferred to blocks, which is deferred to LLM capability that may or may not exist.
 
+> **Author rebuttal (2026-09-20):** This critique is empirically wrong. The entire hive mind epic (#1104) was built using exactly this research loop — with Claude Code as the LLM agent. The epic description cites 6 research papers (arXiv:2603.28990, arXiv:2608.26081, arXiv:2512.10166, arXiv:2608.30661, arXiv:2504.00587, Sakana AI DGM) that were searched, read, evaluated for applicability to CaseHub's specific architecture, and whose techniques were implemented as working code (91+ design decisions, 1000+ tests). The self-improvement research loop is not aspirational — it is the current development methodology being systematised. The reviewer attacked the claim abstractly ("can any LLM do this?") without the empirical context that this is literally how this codebase is being built. The "synthesis gap" and "implementation gap" are being bridged daily in this project. The remaining question is whether this can be automated end-to-end without human guidance — which is a fair narrower question than "is the research loop fantasy?"
+
 ### 4. Emergent Behaviour Unpredictability
 
 **Count the feedback loops:**
