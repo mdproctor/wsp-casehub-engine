@@ -2097,3 +2097,43 @@ D98's CBR traces are structured outcome records (what was tried, metrics delta, 
 **Depends on:** D97 (budget enforcement — rollback bypasses some constraints), D98 (outcome tracking provides regression signals), D106 (continuous loop — rollback feeds back into next cycle)
 **Exploration:** deep-analysis
 **Status:** captured
+
+## D108: Data autophagy prevention — health score + circuit breaker
+
+**Choice:** Two-layer proactive defense against quality degradation in the self-improvement loop:
+
+**Layer 1: Rolling health score.** An aggregate metric computed from multiple independent signals — CI pass rate, test coverage, lint violation count, dependency freshness, build time, flaky test rate. Each metric is normalised to [0, 1] and weighted. The health score is computed per evaluation cycle and tracked as a time series. This catches the case where individual improvements look positive but the aggregate trend is negative (each change is +0.1% coverage but adds subtle complexity).
+
+The health score uses the existing `ActivityTracker` infrastructure (D46) extended with improvement-specific metrics. It is NOT a single metric the system optimises for — it is a composite canary that detects drift across multiple dimensions simultaneously. Goodhart's Law applies to individual metrics; a composite across independent dimensions is harder to game because improving one at the expense of others shows up as a net decline.
+
+**Layer 2: Circuit breaker.** When the health score drops below a configurable absolute threshold OR drops by more than a configurable delta over a sliding window, the loop pauses itself — no new improvement cases are spawned until:
+- A human explicitly resets the breaker, OR
+- The health score recovers above the threshold for a sustained period (`recoveryWindowMinutes`)
+
+The circuit breaker emits a high-severity signal (`improvement:circuit-breaker:tripped`) and an EventLog entry. It does NOT revert past improvements — that's D107's job. It only prevents new ones from starting.
+
+**Circuit breaker states:** CLOSED (normal operation), OPEN (paused — health below threshold), HALF_OPEN (health recovered, running a limited number of improvements to confirm stability before fully closing). Same pattern as Hystrix/Resilience4j circuit breakers.
+
+**Configuration** via `HealthPolicy` on `ImprovementConfig`:
+- `healthThreshold` (default 0.6) — absolute floor
+- `healthDeltaThreshold` (default 0.15) — max decline over window
+- `healthWindowMinutes` (default 1440 / 24h) — sliding window for delta
+- `recoveryWindowMinutes` (default 120) — sustained recovery before HALF_OPEN → CLOSED
+- `halfOpenMaxImprovements` (default 2) — improvements allowed in HALF_OPEN to confirm stability
+- Metric weights configurable per-case
+
+**Alternatives:**
+- Per-metric thresholds only — doesn't catch multi-dimensional drift. Coverage could stay flat while complexity explodes.
+- Human review only (no circuit breaker) — too slow for autonomous operation. By the time a human notices a gradual decline, dozens of improvements may have landed.
+- Automated metric optimisation — the system tries to maximise the health score. This IS Goodhart's Law — the system would game whatever metric it optimises. The health score is a canary, not an objective function.
+
+**Rationale:** The DevTown review gate (D96) catches bad individual changes. The rollback system (D107) catches regression from specific improvements. The circuit breaker catches something neither can: gradual, multi-improvement drift where each change passes review and shows no individual regression, but the aggregate trajectory is downward. This is the most insidious form of data autophagy — no single change is bad, but the system is slowly getting worse.
+
+The circuit breaker pattern (CLOSED → OPEN → HALF_OPEN → CLOSED) is well-understood in distributed systems. Applying it to self-improvement is natural: the system has a "health" notion, it can detect degradation, and it needs a safe recovery protocol.
+
+**Trade-offs:** The health score is a lagging indicator — by the time it drops below threshold, multiple problematic improvements may have landed. The delta threshold helps (catches trends earlier) but still lags. The weights need tuning from real deployment data — initial defaults are heuristic. Over-sensitive thresholds cause frequent false trips that block legitimate improvements.
+
+**Sources:** ActivityTracker (D46), ImprovementOutcome metrics (D98), Goodhart's Law risk (vision spec §Open Risks), arXiv:2507.21046 (data autophagy), Resilience4j circuit breaker pattern, ImprovementBudgetEnforcer.java (budget gating model)
+**Depends on:** D97 (budget enforcement — circuit breaker is a budget-level gate), D98 (outcome metrics feed health score), D107 (rollback handles individual regressions; circuit breaker handles aggregate drift)
+**Exploration:** quick
+**Status:** captured
