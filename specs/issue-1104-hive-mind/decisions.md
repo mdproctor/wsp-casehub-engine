@@ -2363,3 +2363,41 @@ Strategy emerges from the Drive profile (D103) — not manually selected. Human 
 **Depends on:** D109 (capability areas — the taxonomy the methodology operates over), D110 (research cadence — the tiers the methodology defines), D111 (research corpus — the Living Systematic Review the methodology populates), D106 (continuous loop — research feeds goal formation)
 **Exploration:** deep-analysis
 **Status:** captured
+
+## D113: Concurrent improvement scheduling — conflict avoidance over parallelism
+
+**Choice:** Concurrent improvements are serialized when their target paths overlap. Only non-conflicting improvements run in parallel. This is a structural constraint, not a heuristic — overlapping file edits create merge conflicts and interleaved changes that LLMs handle poorly.
+
+**Conflict detection model:** Before an improvement case starts its `implement` phase, the system checks its `ImprovementRequest.targetPaths()` against all currently active improvements' target paths. If any path overlaps (same file, or same directory when the improvement is a broad refactor), the new improvement is **queued** — it waits until the conflicting improvement completes, then proceeds.
+
+| Overlap type | Action |
+|-------------|--------|
+| No path overlap | Run concurrently (within `maxConcurrent` budget) |
+| File-level overlap | Serialize — queue the later improvement |
+| Directory-level overlap (broad refactor) | Serialize — queue the later improvement |
+| Same module, different files | Run concurrently (low conflict risk) |
+
+**Queueing, not rejection:** A conflicting improvement is not denied — it is queued behind the active one. When the active improvement completes, the queued improvement's `introspect` phase re-runs against the updated codebase. This ensures the queued improvement sees the post-change state, not a stale snapshot.
+
+**Why LLMs need this:** LLMs produce correct code edits when they have a stable, consistent view of the files they're modifying. Concurrent modifications to the same files create three failure modes:
+1. **Merge conflicts** — two improvements edit the same lines. LLMs resolve merge conflicts poorly.
+2. **Stale context** — improvement B reads a file, improvement A modifies it, improvement B writes based on stale state.
+3. **Semantic interference** — improvement A changes an interface, improvement B adds code that uses the old interface. Both pass individually but conflict together.
+
+Serialization eliminates all three. The cost is reduced parallelism — but the budget cap (`maxConcurrent: 3`) already limits parallelism, and most improvements target different areas of the codebase. In practice, conflicts are the exception not the rule.
+
+**Trivial change exemption:** Improvements classified as trivial (estimated size < configurable threshold, default 10 lines, and touching only a single file) are exempt from directory-level conflict detection — they still check file-level overlap but are allowed to run concurrently with broad refactors if they touch different files in the same directory. This prevents a large refactor from blocking all small fixes in the same module.
+
+**Alternatives:**
+- Full parallelism with merge resolution — relies on the LLM to resolve conflicts. Known failure mode.
+- Full serialization (one improvement at a time) — too conservative. Non-conflicting improvements in different modules can safely run in parallel.
+- Optimistic concurrency (run in parallel, detect conflicts at PR time) — wastes the full implementation effort when a conflict is detected. Better to detect before starting.
+
+**Rationale:** The goal is reliable improvement execution, not maximum throughput. An improvement that produces a clean, correct change on the first attempt is worth more than three concurrent improvements that produce merge conflicts requiring human intervention. The conflict detection is cheap (path comparison against active improvements) and eliminates the most common LLM failure mode in concurrent editing.
+
+**Trade-offs:** Reduced parallelism when improvements target the same area. A large refactor in a core module could block several smaller improvements in that module. The trivial change exemption mitigates this. The queue could grow if one improvement takes a long time — but the budget enforcer's cooldown and daily limits already prevent unbounded queuing.
+
+**Sources:** ImprovementRequest.targetPaths() (existing field), ImprovementBudgetEnforcer.activeImprovements (existing tracking), D97 (budget enforcement), D107 (rollback — conflict-related regressions are harder to attribute)
+**Depends on:** D97 (budget enforcement — conflict check is an additional gate alongside budget), D107 (rollback — clean serialization makes causal attribution easier)
+**Exploration:** quick
+**Status:** captured
