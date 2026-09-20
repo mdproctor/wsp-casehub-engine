@@ -62,6 +62,14 @@ Consider the alternative: `if (consecutiveRejections > 3) { prioritise(STABILITY
 
 The paper anticipates this ("why not a rule?") but answers with aesthetics ("the emotional response IS the prioritisation mechanism") rather than evidence. The correct test is: run both, measure improvement quality, compare. Until that test is run, the cognitive machinery is an expensive hypothesis.
 
+> **Author rebuttal (2026-09-20):** Two counter-arguments the reviewer lacked context for:
+>
+> (a) **Empirical evidence from WackyManor.** The cognitive stack (PAD, drives, narrative, full CognitionCore) is deployed in WackyManor and produces "surprisingly well" results in practice. The "numerical state transitions" translate to meaningfully different agent behaviour in a production application. This is not theoretical.
+>
+> (b) **Model capability trajectory.** The "why not a simple rule?" challenge misses a fundamental asymmetry: a simple rule produces identical behaviour regardless of model capability. The cognitive architecture scales with the LLM. When MoodPromptSection, DrivePromptSection, and NarrativePromptSection feed cognitive state into the prompt, a smarter model produces better mood appraisals, richer narrative synthesis, more nuanced goal formation. On Opus, it works surprisingly well. On Fable, it works better. On future models, better still. The cognitive infrastructure is a capability amplifier that compounds with model improvement. The question isn't "does this beat a simple rule on today's model?" — it's "is this the right architecture to benefit from the next 5 years of model improvement?" A simple rule that works today becomes a ceiling tomorrow; cognitive modulation that works today becomes a floor.
+>
+> The A/B test recommendation stands — but the prior should be informed by WackyManor's empirical results, not by the absence of evidence in the self-improvement domain.
+
 **Mood-congruent retrieval may be actively harmful.** The paper treats mood-congruent retrieval as a feature: "a frustrated agent retrieves failure memories." But in clinical psychology, mood-congruent recall is associated with depression: negative mood biases recall toward negative memories, which reinforces the negative mood, which biases recall further. The `DriveComposer` does have exponential decay toward baseline, which limits this — but the feedback loop between mood-congruent retrieval and mood signals is a positive feedback loop that could amplify negative states before decay catches up. Has this been tested? The paper says nothing about it.
 
 ### 2. Complexity vs Value
