@@ -557,6 +557,25 @@ This is Goodhart's Law applied to self-improvement: when approval becomes the me
 
 This risk is structural and deserves dedicated attention in the spec. It is flagged here as an open design problem.
 
+### 7.6 The Human Interaction Thesis
+
+There is a second value thesis independent of automated decision quality: **cognitive agents are better collaboration partners for humans.**
+
+Even if automated decisions are no better than simple rules, the cognitive architecture transforms how humans interact with the self-improvement system. A mechanical system reports status: "CI red, 3 tests failing, proposing dependency bump." A cognitive agent shares experience: "I've been struggling with the planning module — three PRs rejected this month. But I found a paper on adaptive decay that connects to something I tried before. I'm cautiously optimistic about the per-signal variant."
+
+That conversation surfaces things a dashboard never could:
+
+- **Experience history the human didn't know about.** "I tried this before — it failed because the half-life was too aggressive." The human learns what the agent has explored, what worked, what didn't — without reading logs.
+- **Emotional associations that reveal judgment.** "I've been avoiding the routing module." Is that avoidance justified, or is the agent being irrationally cautious? The human can probe and redirect.
+- **Research connections the human wouldn't have made.** "This new paper connects to my past failure." The agent's associative memory surfaces cross-temporal insights that linear reporting misses.
+- **Shared direction-finding.** "I'm cautiously optimistic." The human can validate or challenge that assessment. The conversation produces directions neither human nor agent would have found alone.
+
+The cognitive state creates a shared mental model between human and agent. The agent's narrative, emotions, and memory give the human something to react to, challenge, redirect, and build on. This is qualitatively different from interacting with a tool — it's collaborating with a partner that has its own perspective.
+
+This value scales with model capability just as automated decisions do. A more capable model produces richer self-reflection, more nuanced emotional expression, and more insightful research connections — all of which make the human-agent conversation more productive. The cognitive architecture is a capability amplifier for collaboration, not just for automation.
+
+The "anthropomorphic theatre" critique may be technically correct — the system doesn't feel anything, it adjusts floating-point values. But if those floating-point values, rendered through prompt sections and interpreted by a capable LLM, produce conversations that lead to better engineering outcomes through human-agent collaboration, then the theatre is doing real work. The question is not "does the system genuinely feel frustration?" but "does the human-agent conversation that results from modelling frustration produce better directions than a status dashboard?"
+
 ---
 
 ## 8. Implementation Roadmap
