@@ -2039,3 +2039,61 @@ D98's CBR traces are structured outcome records (what was tried, metrics delta, 
 **Depends on:** D104 (cognitive agent uses CognitionCore), D98 (CBR traces complement MindMap), D95 (improvement taxonomy — research is one category of experience)
 **Exploration:** deep-analysis
 **Status:** revised — expanded from research-only memory to full lived experience across all interaction types
+
+## D106: Standing directive trigger — hybrid event-driven + timer backstop
+
+**Choice:** The continuous evolution loop uses two complementary trigger mechanisms: (1) event-driven re-entry as the primary mechanism — improvement outcome signals feed back into the signal registry, triggering the next evaluation cycle through the existing convergence detection pipeline; (2) a timer-based tick as a backstop that catches opportunities the event stream misses (new CVEs, dependencies aging past a threshold, external changes). The timer is the "look around even when nothing happened" pulse.
+
+**Alternatives:**
+- Timer-only — predictable but misses the natural re-entry from outcome feedback. Wastes cycles scanning when nothing changed. Doesn't leverage the existing signal infrastructure.
+- Event-only — elegant but blind to external changes that don't produce internal events. A dependency goes stale in the registry but no agent observed it yet.
+
+**Rationale:** The event-driven path is already half-built: `ImprovementOutcomeEventCapture` projects outcome signals (`improvement:outcome:positive:*`, `improvement:outcome:regression:*`), and `ImprovementGoalFormationStrategy` scans for consensus signals. Wiring outcome signals back into the next sensing cycle closes the loop with minimal new infrastructure. The timer backstop covers the gap — external state changes (CVE databases, package registries, CI status) that don't produce CaseHub-internal events.
+
+**Trade-offs:** Two trigger sources means the system must be idempotent — an evaluation cycle triggered by both event and timer within a short window shouldn't produce duplicate improvement cases. The existing consensus model (requiring N independent sources) provides natural deduplication.
+
+**Sources:** ImprovementOutcomeEventCapture.java, ImprovementGoalFormationStrategy.java, SignalRegistry.consensusSignals(), CognitionCore.tick() (blocks), DriveOrchestrator.tick() (blocks)
+**Depends on:** D92 (signal model), D98 (outcome tracking projects signals), D100 (scope boundary — #1115 adds the continuous loop)
+**Exploration:** quick
+**Status:** captured
+
+## D107: Rollback on regression — confidence-tiered proportional response
+
+**Choice:** Rollback response is proportional to causal attribution confidence. All three response levels coexist as bands on a single confidence spectrum, with thresholds configurable per-case/domain/category via `RollbackPolicy` on `ImprovementConfig`.
+
+**Confidence scoring** — composable signals with additive weights:
+- Improvement's own CI build failed: +0.5 (direct causation)
+- Failing tests touch files the improvement modified: +0.3 (proximate cause)
+- Regression within N minutes of merge: +0.2 (temporal proximity)
+- CBR says similar improvements caused regressions before: +0.1 (historical pattern)
+- Multiple independent metrics degraded: +0.1 (correlated evidence)
+- Regression in unrelated module: −0.2 (reduces confidence)
+- Other changes merged in same window: −0.3 (alternative explanations)
+
+**Response tiers:**
+- High confidence (≥ `autoRevertThreshold`, default 0.9): spawn rollback case (fast-track lifecycle), emit regression signal, pause category. Budget bypass: cooldown + daily limit skipped.
+- Medium confidence (≥ `pauseThreshold`, default 0.5): emit regression signal, pause category, propose revert (don't execute). No budget bypass.
+- Low confidence (< `pauseThreshold`): emit regression signal, enrich CBR trace, continue observing. No budget bypass.
+
+**Rollback is itself an improvement case** — shortened lifecycle: confirm-regression → revert → submit-pr → fast-track-review → integrate → record-outcome. Inherits review gate by default (`requireReviewForRevert: true`), configurable off for time-critical domains.
+
+**Safety guards:**
+- Anti-oscillation: CBR retrieval surfaces "this was tried and reverted" — goal formation suppresses re-attempts unless context materially changed.
+- Anti-cascade: before auto-reverting, check if later improvements depend on the change. If so, downgrade to signal + pause.
+- Anti-flaky: require `sustainedFailureCount` consecutive failures (default 2) before acting.
+
+**CBR learning:** Every regression event (true positive, false positive, missed) enriches traces. Over time, thresholds adapt per category: high-success categories widen auto-revert threshold, high-regression categories tighten it.
+
+**Alternatives:**
+- Fixed auto-revert for all — too aggressive for uncertain attribution; creates revert oscillation.
+- Signal-only for all — too passive for high-confidence regressions; broken state persists unnecessarily.
+- Fixed tiers without per-case configuration — misses domain-specific risk tolerance (financial vs R&D).
+
+**Rationale:** The right response to regression depends on how confident you are that a specific improvement caused it. A single flaky test shouldn't trigger auto-revert. A direct CI failure should. The confidence model makes this explicit and auditable, and the per-case configuration lets each domain set its own risk tolerance. Treating rollback as an improvement case means it gets the same audit trail, safety constraints, and CBR learning as any other change — it's not a special escape hatch that bypasses the system's own discipline.
+
+**Trade-offs:** Confidence scoring adds complexity. The composable weights need tuning — initial defaults are heuristic and should be validated against real regression data. The anti-cascade check requires dependency analysis between improvements, which is non-trivial if improvements touch overlapping files.
+
+**Sources:** ImprovementBudgetEnforcer.java (budget bypass model), ImprovementOutcomeEventCapture.java (outcome signals), ImprovementOutcome.OutcomeStatus.REGRESSION, CBR traces (D98), arXiv:2507.21046 (data autophagy), self-improvement.yaml (case template pattern)
+**Depends on:** D97 (budget enforcement — rollback bypasses some constraints), D98 (outcome tracking provides regression signals), D106 (continuous loop — rollback feeds back into next cycle)
+**Exploration:** deep-analysis
+**Status:** captured
