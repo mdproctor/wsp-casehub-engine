@@ -2317,3 +2317,49 @@ The queue is surfaced to humans via a standard signal (`improvement:research:hil
 **Depends on:** D110 (research pipeline — corpus is the persistence layer for pipeline outputs), D109 (capability areas — corpus entries are tagged by area)
 **Exploration:** quick
 **Status:** captured
+
+## D112: Continuous improvement methodology — structured process from scanning to implementation
+
+**Choice:** A formal methodology document (`2026-09-20-continuous-improvement-methodology.md`) governs the entire research-to-implementation pipeline. The methodology composes four established frameworks — Horizon Scanning, PRISMA Protocol, Technology Radar, and Wardley Mapping — into a single end-to-end process with standard terminology from foresight studies and innovation management.
+
+**Why this exists:** LLMs can read papers and produce impressive summaries indefinitely without ever producing actionable improvements. The methodology is a structural mitigation for this risk. Each phase has defined inputs, outputs, and gates. The PRISMA pipeline forces narrowing: identification → screening → eligibility → extraction → synthesis → triangulation → prioritisation → hypothesis formation. The Technology Radar forces commitment (Adopt/Trial/Assess/Hold). The tiered cadence (horizon scan → technology scouting → deep dive) prevents both under-investment (never looking) and over-investment (always looking, never acting).
+
+**The methodology document is the "rails":**
+- Tier 1 (Horizon Scan) → produces Technology Radar + Wardley Map + gap analysis
+- Tier 2 (Technology Scouting) → refreshes one capability area's radar section
+- Tier 3 (Deep Dive) → produces a concrete improvement hypothesis
+- Hypothesis → enters goal formation pipeline (D92, D106) → improvement case → implementation
+
+Without these rails, the system has no structured path from "read a paper" to "merge a PR." With them, every research activity has a defined purpose, a defined scope, and a defined output that feeds the next stage.
+
+**Selection strategies** use established innovation management terminology:
+- Incremental innovation (quick wins)
+- Sustaining innovation (Christensen — refine along current trajectory)
+- Architectural innovation (Henderson & Clark — restructure component relationships)
+- Radical innovation (frontier exploration)
+- Strategic pivot (Ries — redirect from failing direction)
+
+Strategy emerges from the Drive profile (D103) — not manually selected. Human can set a strategy bias override.
+
+**Signal categories** use horizon scanning terminology:
+- Megatrends (large, sustained forces)
+- Weak signals (early, ambiguous indicators)
+- Wild cards (low-probability, high-impact)
+
+**Living Systematic Review** replaces point-in-time research snapshots — the corpus is continuously updated, with freshness tracking per source type.
+
+**Future:** The methodology document could become a case template (the improvement system follows its own methodology as a case) or a skill (Claude follows the methodology when doing research work).
+
+**Alternatives:**
+- Ad-hoc research — no methodology. The LLM reads whatever looks interesting. Produces impressive but unfocused output.
+- Custom terminology — invent our own names for everything. Harder to communicate, no connection to established practice, no external validation.
+- Single framework only (e.g., PRISMA without Radar, or Radar without Wardley) — each framework solves a different problem. PRISMA structures the pipeline. Radar tracks maturity. Wardley maps position. Horizon scanning detects signals. All four are needed.
+
+**Rationale:** The methodology is the difference between "an LLM that reads papers" and "a system that systematically improves itself." The structured process ensures every research activity produces a defined output, every output feeds a downstream consumer, and the funnel narrows from unbounded scanning to concrete improvement hypotheses. Standard terminology means the process is immediately recognisable to anyone familiar with foresight, innovation management, or systematic review practice.
+
+**Trade-offs:** The methodology adds process overhead. Simple improvements (bump a dependency) don't need a full PRISMA pipeline — they go through the operational path (D95), not the research path. The tiered cadence prevents over-investment, but the tiers themselves need calibration from real usage.
+
+**Sources:** `2026-09-20-continuous-improvement-methodology.md` (the methodology document itself), Kitchenham & Charters (2007), PRISMA 2020, ThoughtWorks Technology Radar, Wardley Maps, Christensen (1997), Henderson & Clark (1990), Ries (2011), OECD Horizon Scanning, arXiv:2507.21046
+**Depends on:** D109 (capability areas — the taxonomy the methodology operates over), D110 (research cadence — the tiers the methodology defines), D111 (research corpus — the Living Systematic Review the methodology populates), D106 (continuous loop — research feeds goal formation)
+**Exploration:** deep-analysis
+**Status:** captured
