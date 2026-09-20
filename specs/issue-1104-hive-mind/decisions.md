@@ -1260,21 +1260,21 @@ Implementation path: the case initializer automatically adds `ScopeActivatedTrig
 
 ## D71: Evaluation backpressure — per-case event coalescing in serializer
 
-**Choice:** Explicit v1 trade-off: no backpressure mechanism beyond the existing `CaseEvaluationSerializer` per-case serialization and `BudgetConfig` cumulative caps. The serializer guarantees at most one evaluation per case at a time — concurrent context changes for the same case are queued and processed sequentially. Cross-case evaluation runs concurrently on virtual threads. `BudgetConfig` caps detect and terminate runaway cases after the fact. No bounded queue, no event dropping, no coalescing of duplicate context-change events.
+**Choice:** Per-case event coalescing in the `CaseEvaluationSerializer`'s pending queue, plus `BudgetConfig` cumulative caps as hard backstop. The serializer guarantees at most one evaluation per case at a time — concurrent context changes for the same case are queued. **Event coalescing:** when a `CONTEXT_CHANGED` event for a case is already pending in the serializer's queue, new events merge their `changedKeys` into the pending event (set-union) rather than queuing a separate evaluation. The context values are current (all writes are applied before the event fires), so the coalesced event represents the correct state. Cross-case evaluation runs concurrently on virtual threads. `BudgetConfig` caps detect and terminate runaway cases after the fact. No bounded queue, no event dropping — coalescing preserves all information while eliminating redundant evaluations.
 
 **Alternatives:**
-- Bounded queue per case with coalesced duplicate events — drops redundant `CONTEXT_CHANGED` events when the queue is full. Reduces evaluation pressure but risks losing meaningful context changes that appear identical to duplicates.
+- No coalescing (original v1 design) — a case can queue thousands of redundant evaluation cycles before budget enforcement stops it. Each queued evaluation runs the full 5-phase pipeline as wasted work. The interaction between D37 (context writes from rules) and sequential processing means non-idempotent rule writes create unbounded queuing up to the budget cap.
 - Rate limiter on evaluation cycles — caps evaluation frequency per case (e.g., max 10 cycles/second). Adds latency to legitimate high-activity cases. Better suited for multi-tenant production hardening than v1 correctness.
 - Cross-case evaluation thread pool with bounded queue — limits total concurrent evaluations. The virtual thread pool already provides this implicitly — virtual threads are cheap but the underlying carrier pool is bounded by CPU count.
 
-**Rationale:** For v1, the existing mechanisms are sufficient: per-case serialization prevents concurrent evaluation, virtual threads handle cross-case concurrency efficiently, and budget enforcement provides the hard safety net. The primary risk scenario (swarm with many cases and frequent signal deposits) is bounded by `maxSignalsPerCase` × case count. Event coalescing is the natural next step when multi-tenant production workloads surface the need — the serializer's pending-event queue is the right coalescing point.
+**Rationale:** Event coalescing is the minimal, safe backpressure mechanism. If pending event has changedKeys {a, b} and a new event has changedKeys {b, c}, the coalesced event has changedKeys {a, b, c}. The evaluation sees all changed keys in one pass rather than processing them sequentially. This eliminates redundant evaluations from non-idempotent rule writes (D37) creating cascading CONTEXT_CHANGED events. Budget enforcement remains as the hard backstop for pathological cases where coalescing still produces high evaluation counts.
 
-**Trade-offs:** A case can queue thousands of evaluation cycles before budget enforcement stops it. Each queued evaluation runs to completion (including observer evaluation, rule evaluation, convergence detection) — wasted work when the result would be identical. Acceptable for v1 because budget enforcement catches pathological cases, and the per-case serializer prevents fan-out.
+**Trade-offs:** Coalescing means the evaluation cycle sees a larger set of changed keys than any individual context change. This is semantically correct — the rules evaluate against current context state, not against individual deltas. The coalesced changedKeys set is the union of all pending changes, and the context values reflect all applied writes.
 
-**Sources:** `CaseEvaluationSerializer.java` (per-case gate), D48 (budget enforcement), D46 (ActivityTracker)
+**Sources:** `CaseEvaluationSerializer.java` (per-case gate), D48 (budget enforcement), D46 (ActivityTracker), D37 (context writes from rules — non-idempotent writes motivate coalescing)
 **Depends on:** D48 (budget enforcement as backstop)
 **Exploration:** quick (surfaced by ADR R1-14)
-**Status:** captured — made explicit from implicit v1 trade-off
+**Status:** revised — R1-12: added per-case event coalescing in serializer pending queue to prevent redundant evaluations from non-idempotent rule writes
 
 ## D72: Registry synchronization — ReentrantLock for virtual thread compatibility
 
@@ -1550,10 +1550,10 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 
 **Trade-offs:** Additional indirection — `evaluateAndDispatch()` delegates to a pipeline instead of calling methods directly. Acceptable — the abstraction boundary is already implicit in the five named methods. One shared CaseEvaluationContext object instead of repeating parameters across method signatures.
 
-**Sources:** `CaseContextChangedEventHandler.java:97-235` (constructor with 38 parameters), `CaseContextChangedEventHandler.java:257-308` (evaluateAndDispatch calling 5 phases)
+**Sources:** `CaseContextChangedEventHandler.java:99-205` (constructor with 40 parameters), `CaseContextChangedEventHandler.java:257-308` (evaluateAndDispatch calling 5 phases)
 **Depends on:** D5 (observation phase), D42 (local rule phase), D45 (convergence detection phase)
 **Exploration:** quick (surfaced by R1-03)
-**Status:** revised — ADR-R1-08: corrected constructor parameter count from 34 to 38 (26 regular fields + 5 Instance<> fields + 7 additional)
+**Status:** revised — ADR-R1-08: corrected constructor parameter count from 34 to 38; R1-06: corrected to 40 (26 regular fields + 1 Optional + 6 coordination registry fields + 7 Instance<> fields)
 
 ## D84: Provisioning trigger — Signal-based consensus
 
@@ -1603,10 +1603,18 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 
 **Defaults:** Bootstrap richness: 0.7 (high — new agents get most swarm context by default, reducing cold-start latency). Integration delay: 3 cycles (brief observation period before fingerprint influences detection — enough to avoid noise without excessive delay). Self-determination: 0.5 (balanced — engine pre-configures basic interests/rules from the provisioning signal's capability metadata, agent can override). These defaults prioritize operational safety (fast integration with moderate autonomy) over emergence (high autonomy with extended observation). CBR will tune from here.
 
+**Named integration profiles (presets):** Four named profiles bundle sensible axis combinations as the recommended configuration path. CBR learns which PROFILE works for a given swarm state (a tractable 4-way classification), then fine-tunes within successful profiles as observation count grows.
+- `rapid-integration`: bootstrap=0.9, delay=0, self-determination=0.2 (emergency scaling)
+- `standard`: bootstrap=0.7, delay=3, self-determination=0.5 (default)
+- `autonomous`: bootstrap=0.3, delay=5, self-determination=0.9 (research/exploration)
+- `cautious`: bootstrap=0.5, delay=10, self-determination=0.3 (regulated domains)
+
+Custom continuous tuning remains available as an advanced escape hatch for cases that need fine-tuning beyond the profiles.
+
 **Sources:** `StigmergyCoordinator.agentJoined()` (membership lifecycle), `RoleTracker` (fingerprinting), `TeamDetector` (affinity), `SwarmProgressTracker` (stability impact), `CbrRetrievalService` (outcome learning), issue #1113
 **Depends on:** D84 (signal triggers provisioning), D85 (capability resolution determines what agent), D73 (swarm extends stigmergy)
 **Exploration:** deep-analysis (first-principles exploration of three approaches and hybrid)
-**Status:** revised — ADR-R1-14: specified explicit defaults for three axes (bootstrap=0.7, delay=3 cycles, self-determination=0.5)
+**Status:** revised — ADR-R1-14: specified explicit defaults for three axes (bootstrap=0.7, delay=3 cycles, self-determination=0.5); R1-13: added named integration profiles as presets over continuous axes to improve CBR learnability
 
 ## D87: Budget enforcement — Layered caps
 
@@ -1738,10 +1746,12 @@ No new packages. Swarm is an extension of stigmergy — the package structure re
 
 **Trade-offs:** Larger implementation scope than stubs. Workers need real API integrations. Acceptable — rule-based improvements (dependency bumps, lint fixes, coverage analysis) are useful standalone and prove the architecture before blocks adds LLM intelligence.
 
+**Architectural boundary:** The engine provides the case lifecycle, signal→goal bridge, budget enforcement, and outcome tracking — domain-agnostic coordination primitives. The five rule-based worker categories (DependencyUpdateWorker, LintFixWorker, CoverageGapWorker, CITriageWorker, RecipeWorker) and their REST/GraphQL/MCP integrations live in a dedicated self-improvement application module (e.g., `casehub-self-improvement`), not in engine-api or engine-common. This follows the platform's architecture principle: "If the capability requires knowledge of software development, clinical trials, or financial crime, it belongs in an application repo."
+
 **Sources:** WorkerProvisioner.java:34 (external system integration pattern), SwarmProvisioner.java:37 (working engine implementation pattern), issue #1114
 **Depends on:** D93 (case model defines the steps workers implement)
 **Exploration:** deep-analysis
-**Status:** captured
+**Status:** revised — R1-07: worker implementations scoped to self-improvement application module, not engine-api/engine-common; engine provides domain-agnostic coordination primitives only
 
 ## D95: Improvement taxonomy — operational AND capability improvements with research
 
@@ -1759,7 +1769,7 @@ The case template is category-agnostic with conditional bindings. The research+a
 
 Engine provides: (a) search infrastructure — API calls to search engines, paper repositories, structured data fetching (rule-based); (b) detection metrics for both dimensions; (c) the full case lifecycle. Blocks provides: (d) paper understanding and synthesis (LLM); (e) architectural analysis and design (LLM); (f) capability implementation intelligence (LLM).
 
-Five initial engine rule-based worker categories for operational improvements: (1) DependencyUpdateWorker, (2) LintFixWorker, (3) CoverageGapWorker, (4) CITriageWorker, (5) RecipeWorker. Capability improvement workers are blocks-provided with engine search infrastructure support.
+Five initial rule-based worker categories for operational improvements: (1) DependencyUpdateWorker, (2) LintFixWorker, (3) CoverageGapWorker, (4) CITriageWorker, (5) RecipeWorker. **Module placement:** These workers live in a dedicated self-improvement application module (not engine-api/engine-common) — they are domain-specific to software development. The engine provides the case lifecycle, signal→goal bridge, and budget enforcement; the application module provides the domain-specific workers. Capability improvement workers are blocks-provided with engine search infrastructure support.
 
 **Alternatives:**
 - Operational only — the swarm fixes lint but never gets smarter; misses the core self-improvement promise
@@ -1777,7 +1787,7 @@ Connection to goal epic (#800): goal formation discovers capability gaps AND res
 **Sources:** Issue #1114, issue #800 (goal lifecycle), D86 (three-axis integration model), Darwin Gödel Machine (SWE-bench 20%→50%, autonomously discovered better tools), SICA (17%→53%), AlphaEvolve (0.7% of Google's worldwide compute recovered), Self-Evolving Agents Survey (arXiv:2507.21046)
 **Depends on:** D94 (workers are full implementations), D92 (signals detect both operational and capability gaps), D93 (case template supports conditional research bindings)
 **Exploration:** deep-analysis
-**Status:** revised — expanded to include research-driven capability growth loop
+**Status:** revised — expanded to include research-driven capability growth loop; R1-07: worker categories scoped to self-improvement application module
 
 ## D96: DevTown review gate — standard code-review capability
 
@@ -1807,10 +1817,12 @@ Connection to goal epic (#800): goal formation discovers capability gaps AND res
 
 **Trade-offs:** Configuration surface grows. Defaults must be conservative — improvements are opt-in and constrained by default. The budget can be relaxed as the system proves itself, which connects to the trust model naturally.
 
+**Structural self-modification denial — revised mechanism:** Primary: `@SelfModificationDenied` marker annotation on safety-critical Java classes (`ImprovementBudget`, `ImprovementBudgetEnforcer`, `SafetyConfig`). The annotation travels with the class through refactoring. `ImprovementBudgetEnforcer` checks for the annotation via reflection at improvement case spawn time. Removing the annotation is an explicit, deliberate action visible in code review. Secondary (defense-in-depth): path patterns remain for non-Java artifacts (improvement case template YAML, configuration files). Hardcoded path patterns for Java classes are REMOVED — the annotation is the sole mechanism for Java types. If both mechanisms disagree, the more restrictive interpretation wins.
+
 **Sources:** ProvisionBudget (api/model/stigmergy), SwarmProvisioner.java:86-159 (budget enforcement pattern), DispatchBudget, issue #1114
 **Depends on:** D92 (budget gates goal formation), D93 (budget checked before case spawn)
 **Exploration:** quick
-**Status:** revised — ADR-R1-15: added structural self-modification denial (hardcoded deniedPaths for safety infrastructure, non-overridable)
+**Status:** revised — ADR-R1-15: added structural self-modification denial; R1-16: replaced hardcoded path patterns for Java classes with @SelfModificationDenied marker annotation (refactoring-safe); path patterns retained for non-Java artifacts only
 
 ## D98: Outcome tracking — three-layer event-sourced model
 
@@ -1935,7 +1947,9 @@ The key insight: the Drive system found that "one doesn't take priority over the
 **Exploration:** deep-analysis
 **Status:** revised — replaced rigid tier hierarchy with Drive system integration; balanced competing needs instead of strict priority ordering. Further revised to include centralised cognitive agent model (D104).
 
-## D104: Self-improvement as a cognitive agent — full CognitionCore stack
+## D104: Self-improvement as a cognitive agent — cross-cutting design vision
+
+**Scope note:** This decision describes the full self-improvement agent vision spanning engine, blocks, and neocortex. **Engine scope:** rule-based drive sources, budget enforcement, signal infrastructure, case lifecycle. **Blocks scope:** CognitionCore stack (MoodOrchestrator, DriveOrchestrator, NarrativeOrchestrator, StrategyLearningOrchestrator, MentalModelOrchestrator, GoalProposalOrchestrator, MemoryHygieneOrchestrator), personality configuration, mood-drive feedback loop. **Neocortex scope:** MindMap integration, episodic memory, relationship memory, consolidation lifecycle. Engine degradation: in engine-only mode, the self-improvement system operates with rule-based drive sources and proportional budget allocation based on signal counts — functional but without cognitive depth.
 
 **Choice:** The self-improvement system is a cognitive agent running the full blocks `CognitionCore` stack. It is not a mechanical budgeting system — it is an entity with personality, drives, emotions, inner narrative, memory, strategy learning, and goals. Both centralised AND distributed:
 
@@ -1974,9 +1988,11 @@ The centralised+distributed model follows the same pattern as biological self-re
 **Sources:** CognitionCore.java, CognitionSnapshot.java, MoodOrchestrator (PAD), DriveOrchestrator, NarrativeOrchestrator, StrategyLearningOrchestrator, MentalModelOrchestrator, GoalProposalOrchestrator, DriveGoalFormationStrategy.java, neocortex#345 (goal cognition epic), issue #1114
 **Depends on:** D103 (Drive system integration), D92 (improvement signals), D93 (improvement case), D95 (improvement taxonomy), D99 (GoalKind.SELF_IMPROVEMENT)
 **Exploration:** deep-analysis
-**Status:** captured
+**Status:** revised — R1-08: reframed as cross-cutting design vision with explicit scope boundaries (engine/blocks/neocortex); engine-scope portions are degradation story, blocks/neocortex details are scope-labeled for their respective specs
 
-## D105: Full cognitive memory — MindMap as the agent's lived experience
+## D105: Full cognitive memory — cross-cutting design vision
+
+**Scope note:** This decision describes the full memory architecture spanning engine and neocortex. **Engine scope:** CBR traces (D98), EventLog-based outcome records. **Neocortex scope:** MindMap (semantic knowledge graph), episodic buffer, experience events, relationship memory, reflective diary, emotional associations, consolidation lifecycle. Engine degradation: in engine-only mode, memory falls back to EventLog + CBR traces — functional but without semantic navigation, emotional associations, or consolidation.
 
 **Choice:** The self-improvement agent uses the full neocortex memory architecture as its long-term memory of EVERYTHING it experiences — not just research findings, but build attempts, CI events, human interactions, agent coordination, improvement outcomes, platform state changes, and sessions. Sessions disappear; memory persists. The MindMap is the agent's lived experience as a semantic knowledge graph with typed edges, emotional associations, relationship memory, and consolidation lifecycle.
 
@@ -2038,7 +2054,7 @@ D98's CBR traces are structured outcome records (what was tried, metrics delta, 
 **Sources:** MindMap, CognitiveProfile, CognitiveDerivationEngine, CuriositySignalGenerator, ModulationFactor, ExperienceConsolidationPhase (#336), cognitive node type classification (#322), relationship memory (neocortex#184, #186), reflective diary (neocortex#186), neocortex#345 (goal cognition — affective valuation, goal-conditioned retrieval), D98 (CBR outcome traces), D104 (cognitive agent model)
 **Depends on:** D104 (cognitive agent uses CognitionCore), D98 (CBR traces complement MindMap), D95 (improvement taxonomy — research is one category of experience)
 **Exploration:** deep-analysis
-**Status:** revised — expanded from research-only memory to full lived experience across all interaction types
+**Status:** revised — expanded from research-only memory to full lived experience across all interaction types; R1-08: reframed as cross-cutting design vision with explicit scope boundaries (engine/neocortex)
 
 ## D106: Standing directive trigger — hybrid event-driven + timer backstop
 
@@ -2239,15 +2255,11 @@ The snapshot degrades over time (freshness decay — a 6-month-old competitor an
 | Prioritisation | Full ROI across all areas | Area-internal ranking | Single hypothesis evaluation |
 | Hypothesis | Multiple per area | One or two per area | One concrete proposal |
 
-Each phase is an SPI:
-- `ResearchScoper` — defines the question from drive/signal context
+Four core SPI interfaces (reduced from eight — the original eight-SPI decomposition was premature abstraction that would constrain blocks implementation):
+- `ResearchScoper` — defines the research question from drive/signal context
 - `ResearchSearcher` — executes structured queries against configured sources
-- `ResearchScreener` — filters for relevance and applicability
-- `ResearchExtractor` — extracts structured findings from each source
-- `ResearchSynthesizer` — groups findings into themes
-- `ResearchTriangulator` — cross-references themes against multiple evidence types (academic, industry, open-source, own CBR traces)
-- `ResearchPrioritizer` — ranks themes by impact, feasibility, risk, alignment
-- `HypothesisFormer` — converts top themes into concrete improvement hypotheses
+- `ResearchAnalyzer` — combines screening, extraction, synthesis, and triangulation (the intelligence-heavy work that should be one blocks concern, not four separate ones)
+- `HypothesisFormer` — converts analysis output into concrete improvement hypotheses
 
 Engine provides: pipeline orchestration, phase gating, depth parameter, default rule-based implementations where feasible (scoping from drive context, search via structured APIs, basic keyword screening). Blocks provides: LLM-powered implementations for intelligence-heavy phases (synthesis, triangulation, prioritisation, hypothesis formation).
 
@@ -2269,7 +2281,7 @@ The depth parameter on the SPI means the same pipeline logic handles all three t
 **Sources:** Vision spec §Epic 3 (Research Loop), vision spec §Epic 5 (Continuous Evolution), DriveOrchestrator.tick() (drive intensity as refresh trigger), CbrCaseMemoryStore (CBR traces as triangulation source), ImprovementConfig (methodology configuration), systematic literature review methodology (research practice)
 **Depends on:** D109 (capability areas — tiers operate over the area taxonomy), D106 (continuous loop — research cadence fits within the evaluation cycle), D103 (Drive system — drive intensity triggers area refreshes)
 **Exploration:** deep-analysis
-**Status:** captured
+**Status:** revised — R1-09: reduced SPI surface from eight interfaces to four core SPIs (ResearchScoper, ResearchSearcher, ResearchAnalyzer, HypothesisFormer); blocks owns the internal decomposition of analysis
 
 ## D111: Research corpus — persistent store with summaries and HIL queue
 
@@ -2362,7 +2374,7 @@ Strategy emerges from the Drive profile (D103) — not manually selected. Human 
 **Sources:** `2026-09-20-continuous-improvement-methodology.md` (the methodology document itself), Kitchenham & Charters (2007), PRISMA 2020, ThoughtWorks Technology Radar, Wardley Maps, Christensen (1997), Henderson & Clark (1990), Ries (2011), OECD Horizon Scanning, arXiv:2507.21046
 **Depends on:** D109 (capability areas — the taxonomy the methodology operates over), D110 (research cadence — the tiers the methodology defines), D111 (research corpus — the Living Systematic Review the methodology populates), D106 (continuous loop — research feeds goal formation)
 **Exploration:** deep-analysis
-**Status:** captured
+**Status:** revised — R1-09: reframed as methodology reference document that informs research pipeline implementation, not itself an engine design decision
 
 ## D113: Concurrent improvement scheduling — conflict avoidance over parallelism
 
@@ -2400,4 +2412,62 @@ Serialization eliminates all three. The cost is reduced parallelism — but the 
 **Sources:** ImprovementRequest.targetPaths() (existing field), ImprovementBudgetEnforcer.activeImprovements (existing tracking), D97 (budget enforcement), D107 (rollback — conflict-related regressions are harder to attribute)
 **Depends on:** D97 (budget enforcement — conflict check is an additional gate alongside budget), D107 (rollback — clean serialization makes causal attribution easier)
 **Exploration:** quick
+**Status:** captured
+
+## D114: Signal namespace — shared-by-default with naming convention
+
+**Choice:** Signal names are shared across all workers in a case by default — there is no per-worker namespace partitioning. Workers coordinate by reading each other's signals, which requires a common namespace. A naming convention provides human-readable structure without adding runtime enforcement.
+
+**Naming convention:** `{category}.{source}.{detail}` where:
+- `{category}` is the signal's semantic domain (e.g. `convergence`, `resource`, `quality`, `risk`)
+- `{source}` identifies the originating worker or observation type (e.g. `code-review`, `test-runner`, `build`)
+- `{detail}` is the specific signal (e.g. `stalled`, `coverage-low`, `complexity-high`)
+
+Example: `convergence.code-review.stalled`, `quality.test-runner.coverage-low`, `resource.build.duration-high`
+
+**Why shared namespace is correct for stigmergy:** Stigmergy coordination requires that workers can read signals they didn't emit — that's the entire mechanism. A worker observing `quality.test-runner.coverage-low` doesn't need to know which test-runner worker emitted it; it needs to know that coverage is low. Namespace partitioning would force explicit signal routing, which is orchestration, not stigmergy.
+
+**Collision handling:** If two workers emit the same signal name, the max() reinforcement semantics (D12) apply — the stronger signal wins. This is intentional: if two workers independently detect the same condition, the signal should be stronger, not duplicated. The `reinforcementCount` dimension (D12) already tracks how many times a signal has been reinforced.
+
+**Alternatives:**
+- Per-worker namespaces with explicit sharing — adds a routing layer that replicates what stigmergy already does. More complex, no benefit.
+- Hierarchical namespaces with access control — signals become a permission system. Completely at odds with the open, environmental nature of stigmergy.
+- Flat names with no convention — works but produces opaque signal names (`sig_7`, `flag_build_bad`) that make debugging and observation harder.
+
+**Rationale:** The naming convention is documentation, not enforcement. The runtime treats signal names as opaque strings. The convention exists so humans reading signal logs can understand what's happening, and so blocks/application authors have a consistent pattern to follow when defining new signals.
+
+**Trade-offs:** No runtime enforcement means nothing prevents a badly-named signal. This is acceptable — a badly-named signal still works correctly, it's just harder to debug. Convention enforcement can be added as a lint rule in blocks if needed.
+
+**Sources:** D10 (signal identity — signals are identified by name), D12 (max reinforcement — collision resolution), D13 (signal decay — all signals in the namespace decay uniformly)
+**Depends on:** D10, D12, D13
+**Exploration:** implicit — surfaced by R1-10
+**Status:** captured
+
+## D115: CaseHubEventType growth — flat enum with semantic grouping in documentation
+
+**Choice:** New stigmergy lifecycle events (SIGNAL_EMITTED, SIGNAL_DECAYED, OBSERVATION_RECORDED, RULE_FIRED, CONVERGENCE_DETECTED, IMPROVEMENT_STARTED, IMPROVEMENT_COMPLETED) are added as constants to the existing flat `CaseHubEventType` enum. No sub-enum hierarchy, no event type registry, no runtime categorisation.
+
+**Estimated growth:** The Hive Mind epic adds approximately 15–20 new event types across coordination (signals, observations, rules), provisioning (worker lifecycle), and self-improvement (improvement lifecycle). This brings the total from the current ~40 to ~55–60.
+
+**Why flat is correct:**
+1. **CDI observer pattern** — event handlers use `@Observes` with the event type as a discriminator. A flat enum means each handler method signature is self-documenting: `void onSignalEmitted(@Observes @CaseEvent(SIGNAL_EMITTED) CaseHubEvent e)`. Sub-enums would require nested matching or downcasting.
+2. **Serialisation stability** — events are persisted to the case event log. Flat enum values have stable ordinal/name serialisation. Hierarchical types would need a custom serialiser.
+3. **Grep-ability** — `SIGNAL_EMITTED` is found everywhere it's used. A hierarchical type like `Coordination.Signal.Emitted` fragments search results.
+
+**Semantic grouping in documentation, not code:** The event types are documented in groups (coordination events, provisioning events, improvement events) in the spec and Javadoc. This gives humans the categorisation they need without inflicting a type hierarchy on the runtime.
+
+**Growth trajectory is bounded:** The event type enum grows with new engine capabilities, not with user data. Each epic might add 10–20 events. Even at 200 events (which would imply ~10 more epics of Hive Mind's scope), a flat enum is manageable — Java enums handle thousands of constants without performance impact.
+
+**Alternatives:**
+- Event type hierarchy (sealed interface with sub-types) — type-safe at the cost of matching complexity. Every handler needs pattern matching instead of enum comparison. The type hierarchy would mirror the event payload hierarchy, creating redundant parallel structures.
+- Event type registry (runtime registration) — useful for plugin architectures where event types are unknown at compile time. CaseHub's event types are known at compile time — all engine code. A registry adds indirection without value.
+- Event categories as a separate dimension — `CaseHubEvent` could carry both a type and a category. This is over-engineering for documentation's job.
+
+**Rationale:** The flat enum is the simplest design that meets all runtime requirements (observer dispatch, serialisation, debugging). The reviewer correctly identified this as an implicit decision — making it explicit confirms that the growth is intentional, bounded, and manageable. Adding 15–20 constants to an enum is a routine change, not an architectural concern.
+
+**Trade-offs:** No compile-time grouping means you can't write a handler that catches "all coordination events" without listing them. This is acceptable — handlers should be specific about which events they handle, not pattern-match on categories. If a broad handler is needed in the future, a `Set<CaseHubEventType> COORDINATION_EVENTS = EnumSet.of(...)` constant serves the same purpose without a type hierarchy.
+
+**Sources:** CaseHubEventType enum (existing), CaseHubEvent (existing event class), D16 (CONTEXT_CHANGED event), D27 (PLANNING_COMPLETE event), D44 (CONVERGENCE_DETECTED event), D54 (OBSERVATION_RECORDED event), D68 (RULE_FIRED event), D81 (WORKER_PROVISIONED event), D90 (IMPROVEMENT_STARTED event)
+**Depends on:** D16, D27, D44, D54, D68, D81, D90
+**Exploration:** implicit — surfaced by R1-11
 **Status:** captured
