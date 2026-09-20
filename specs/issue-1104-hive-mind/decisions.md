@@ -2137,3 +2137,183 @@ The circuit breaker pattern (CLOSED → OPEN → HALF_OPEN → CLOSED) is well-u
 **Depends on:** D97 (budget enforcement — circuit breaker is a budget-level gate), D98 (outcome metrics feed health score), D107 (rollback handles individual regressions; circuit breaker handles aggregate drift)
 **Exploration:** quick
 **Status:** captured
+
+## D109: Growth direction — emergent capability taxonomy + selection strategies
+
+**Choice:** The system's understanding of its own capability areas is a living model that evolves through self-assessment and landscape analysis — not a fixed schema.
+
+**Bootstrap taxonomy:** An initial set of ~10 capability areas provides the starting point:
+
+| Area | Covers |
+|------|--------|
+| Stability | CI, tests, build reliability, error rates |
+| Performance | Latency, throughput, resource usage |
+| Execution | Case lifecycle, worker dispatch, routing quality |
+| Coordination | Stigmergy, swarm, team formation, multi-agent quality |
+| Perception | Observation, signal detection, environment sensing |
+| Autonomy | Self-provisioning, self-improvement, self-direction |
+| Cognitive reasoning | Strategy, decision-making, planning, goal formation |
+| Cognitive memory | Knowledge storage, retrieval, consolidation, learning |
+| Safety | Trust, budget enforcement, guardrails, compliance |
+| Integration | API surface, cross-repo coherence, ecosystem |
+
+These are defaults. The system can discover new areas ("competitor X has a capability dimension we don't even have a name for"), merge areas that turn out to be the same concern, split areas that are too broad, and rename areas as its understanding matures. The taxonomy itself is part of what improves over time.
+
+**Capability area model:** Each area exposes:
+- Current health metrics (feeds fit-gap analysis)
+- Landscape position: ahead / at-parity / behind / absent (per competitor/paper)
+- Impact estimate for improvement in this area
+- Cost estimate for improvement in this area
+- Computed ROI (impact / cost)
+- Freshness — when this area's assessment was last updated
+
+**Architecture:** `CapabilityArea` is an SPI. Engine provides the registry and default bootstrap areas. Blocks can register LLM-discovered areas at runtime. The registry supports add, merge, split, rename, and deprecate operations — all audited via EventLog.
+
+**Fit-gap analysis:** The system compares its current capabilities against the landscape:
+- What do competitors have that we don't? (gaps to evaluate)
+- What do papers describe that we haven't implemented? (research opportunities)
+- Where are we ahead? (differentiators to protect and extend)
+- Where are we absent? (new territory to consider)
+
+The fit-gap produces a **gap map** — a structured artifact mapping each capability area to its landscape position, with specific gaps and opportunities identified. The gap map is the input to selection strategy.
+
+**Selection strategies** — how the system chooses where to focus, given the gap map and drive profile:
+
+| Strategy | Focus | Drive alignment | When it fits |
+|----------|-------|-----------------|-------------|
+| **Tactical** | Quick wins, immediate value, close obvious gaps | High COMPETENCE | System under pressure, stability concerns |
+| **Polish** | Refine existing capabilities to excellence | Moderate COMPETENCE | System stable, room to improve quality |
+| **Strategic** | Long-term capability investment, close major gaps | High AUTONOMY | System healthy, wants to expand |
+| **Pioneering** | Build what nobody has, explore frontier | High CURIOSITY | System strong, research reveals novel opportunities |
+| **Pivoting** | Redirect effort from a failing direction | Triggered by negative outcome patterns | CBR shows repeated failures in current direction |
+
+The selection strategy **emerges from the drive profile** — a system under stability pressure naturally selects tactical/polish; a healthy system drifts toward strategic/pioneering. But the human can set a **strategy bias** override ("focus on polish this quarter") that modulates drive weights without overriding them.
+
+**The taxonomy evolution loop:** Landscape analysis and competitor research don't just identify gaps — they also reveal how others categorize their capabilities. This feeds back into the taxonomy itself. "Papers in this field distinguish between 'short-term memory' and 'working memory' as separate concerns — maybe our 'cognitive memory' area should be split." The system's self-model evolves alongside the system.
+
+**Alternatives:**
+- Fixed taxonomy — hardcoded areas that never change. Too rigid. The platform's understanding of itself in 2027 shouldn't be constrained by what we thought in 2026.
+- No taxonomy — the system just picks individual improvements without a strategic framework. Leads to fragmented, unfocused effort.
+- Human-managed taxonomy — humans define and update areas. Correct but doesn't leverage the system's own intelligence and landscape knowledge.
+
+**Rationale:** The system that improves itself should also improve its model of itself. A fixed taxonomy assumes we know all the dimensions that matter — we don't. Competitor analysis, research trends, and the system's own experience will reveal dimensions we haven't thought of. Making the taxonomy evolvable means the system's strategic framework grows more sophisticated over time, not just its capabilities.
+
+The selection strategy alignment with drives means the system's strategic posture is emotionally grounded — not just "what has the best ROI" but "what do I care about right now, given my experience?" A system that just had a string of CI failures feels COMPETENCE pressure and naturally shifts tactical. A system that's been stable for weeks gets curious and pioneers. This is more adaptive than any fixed priority ordering.
+
+**Trade-offs:** An evolvable taxonomy can drift incoherently if not constrained. The bootstrap set provides anchoring. Taxonomy changes should require consensus (multiple signals, not a single observation) and audit trail. Over-fragmentation (too many areas) dilutes focus; the system needs a merge heuristic for areas that overlap.
+
+**Sources:** DriveOrchestrator, DriveComposer, DriveProfile (D103), ImprovementConfig (D92), CapabilityEvolutionProtocol (vision spec §Design Principles), AlphaEvolve (DeepMind, May 2025), arXiv:2507.21046 (self-evolution taxonomy)
+**Depends on:** D103 (Drive system — selection strategy aligns with drives), D108 (health score — area health metrics feed the gap map), D98 (outcome tracking — CBR traces inform landscape position)
+**Exploration:** deep-analysis
+**Status:** captured
+
+## D110: Research cadence — tiered depth with landscape snapshots
+
+**Choice:** The research methodology operates at three tiers of depth, not a uniform process every cycle. Each tier runs the same pipeline phases (D109's fit-gap → selection) but with different scope and thoroughness.
+
+| Tier | Scope | When | Cost | Output |
+|------|-------|------|------|--------|
+| **Full landscape** | All capability areas, all competitors, comprehensive research survey | Rare — first-ever run, quarterly refresh, major pivot, or when strategy bias changes | Large (hours of LLM time, many API calls) | Complete landscape snapshot |
+| **Area refresh** | One capability area, updated landscape for that area only | When drive intensity shifts significantly for an area, or on configurable schedule | Medium (tens of minutes) | Updated area section in snapshot |
+| **Focused iteration** | Specific gap within an already-mapped area — drill into one technique, one competitor feature, one paper's applicability | Every improvement cycle involving capability growth | Small (minutes) | Concrete improvement hypothesis or updated gap assessment |
+
+**Landscape snapshot** — a persistent artifact produced by full landscape analysis and incrementally updated by area refreshes. Contains:
+- Per-area: health metrics, landscape position, identified gaps, competitor map, research frontier
+- Cross-area: strategic posture (current selection strategy), overall health trajectory
+- Freshness metadata: per-area timestamps, staleness thresholds
+
+The snapshot degrades over time (freshness decay — a 6-month-old competitor analysis is stale). Area freshness triggers automatic area refresh when a threshold is crossed.
+
+**The focused iteration is the common case.** The system already knows "we're behind on adaptive signal decay" from the last landscape or area refresh. A focused iteration checks: has anything changed? Any new papers since last check? Did our last attempt work? — then either proposes a concrete improvement or updates the gap assessment.
+
+**Research methodology SPI** — the same pipeline phases exist at all three tiers, but scope and thoroughness scale with depth:
+
+| Phase | Full landscape | Area refresh | Focused iteration |
+|-------|---------------|--------------|-------------------|
+| Scoping | "What questions should I be asking?" | "What's changed in area X?" | "I know the question — check for updates" |
+| Search | Broad, multi-source, exhaustive | Targeted to one area | Narrow, specific query |
+| Screening | Strict relevance + applicability | Area-specific criteria | Already-filtered sources |
+| Extraction | All relevant sources | Area sources only | One or two sources |
+| Synthesis | Cross-area theme identification | Intra-area theme update | Confirmation or revision |
+| Triangulation | Full multi-source cross-reference | Area-scoped triangulation | Quick check against CBR |
+| Prioritisation | Full ROI across all areas | Area-internal ranking | Single hypothesis evaluation |
+| Hypothesis | Multiple per area | One or two per area | One concrete proposal |
+
+Each phase is an SPI:
+- `ResearchScoper` — defines the question from drive/signal context
+- `ResearchSearcher` — executes structured queries against configured sources
+- `ResearchScreener` — filters for relevance and applicability
+- `ResearchExtractor` — extracts structured findings from each source
+- `ResearchSynthesizer` — groups findings into themes
+- `ResearchTriangulator` — cross-references themes against multiple evidence types (academic, industry, open-source, own CBR traces)
+- `ResearchPrioritizer` — ranks themes by impact, feasibility, risk, alignment
+- `HypothesisFormer` — converts top themes into concrete improvement hypotheses
+
+Engine provides: pipeline orchestration, phase gating, depth parameter, default rule-based implementations where feasible (scoping from drive context, search via structured APIs, basic keyword screening). Blocks provides: LLM-powered implementations for intelligence-heavy phases (synthesis, triangulation, prioritisation, hypothesis formation).
+
+**The methodology itself is configurable** — a `ResearchMethodology` record on `ImprovementConfig` defines: which phases to run at each tier, phase-specific parameters (search depth, screening strictness, minimum triangulation sources), and when to trigger each tier (freshness thresholds, drive intensity thresholds).
+
+**Scope for #1115:** Design the SPIs, pipeline orchestration, depth model, and landscape snapshot structure. Provide skeleton implementations. Actual LLM-powered implementations land in Epic 3. The pipeline structure and phase contracts are #1115's contribution — when Epic 3 arrives, it plugs implementations into a well-defined framework.
+
+**Alternatives:**
+- Uniform depth every cycle — prohibitively expensive. A full landscape analysis every evaluation cycle would consume the entire improvement budget on research.
+- No persistent snapshot — every iteration starts from scratch. Wastes work and can't track trends.
+- Fixed schedule only — misses drive-triggered refreshes. If CURIOSITY suddenly spikes because of a discovery, waiting for the quarterly refresh is wrong.
+
+**Rationale:** The tiered model matches how humans do research — you don't re-read the entire literature every time you want to improve something. You do a deep survey occasionally, refresh specific areas when they matter, and do quick checks before each action. The persistent snapshot is the system's evolving understanding of the landscape — it gets richer over time without rebuilding from scratch.
+
+The depth parameter on the SPI means the same pipeline logic handles all three tiers. Phase implementations scale their effort based on depth — a `ResearchSearcher` at FULL depth does exhaustive multi-source queries; at FOCUSED depth it checks one or two sources for updates. This is simpler than separate pipelines per tier.
+
+**Trade-offs:** The landscape snapshot is a complex persistent artifact that needs its own lifecycle (creation, incremental update, staleness tracking, archival). Stale sections can mislead — the freshness decay model must be conservative (mark stale early rather than late). The tier thresholds (when to trigger area refresh vs focused iteration) need tuning from real usage patterns.
+
+**Sources:** Vision spec §Epic 3 (Research Loop), vision spec §Epic 5 (Continuous Evolution), DriveOrchestrator.tick() (drive intensity as refresh trigger), CbrCaseMemoryStore (CBR traces as triangulation source), ImprovementConfig (methodology configuration), systematic literature review methodology (research practice)
+**Depends on:** D109 (capability areas — tiers operate over the area taxonomy), D106 (continuous loop — research cadence fits within the evaluation cycle), D103 (Drive system — drive intensity triggers area refreshes)
+**Exploration:** deep-analysis
+**Status:** captured
+
+## D111: Research corpus — persistent store with summaries and HIL queue
+
+**Choice:** The research pipeline stores its findings in a persistent, searchable **research corpus** — not ephemeral processing output. The corpus grows over time as the system does more research, avoiding re-pulling and re-analyzing sources it has already processed.
+
+**Corpus structure:**
+
+| Component | What it stores | Purpose |
+|-----------|---------------|---------|
+| **Source records** | Full text or structured extract of each paper/article/doc/repo | Avoid re-downloading |
+| **Summaries** | Per-source: key technique, claimed benefits, limitations, applicability assessment, relevance to each capability area | Avoid re-analyzing — summaries are the indexed unit for future retrieval |
+| **Metadata** | Source URL, authors, date, retrieval date, freshness, citation count, provenance (which research tier retrieved it) | Searchability and staleness tracking |
+| **Cross-references** | Links between sources that address the same technique or contradict each other | Supports synthesis and triangulation |
+| **Extraction artifacts** | Structured findings extracted during the extraction phase | Reusable across multiple research cycles |
+
+**Index:** The corpus is searchable by capability area, technique, keyword, date range, and relevance score. When a focused iteration needs to check "what do we know about adaptive signal decay?", it queries the corpus first before hitting external sources. The index includes the summaries — not just titles/metadata — so the system can determine relevance without re-reading full sources.
+
+**HIL (human-in-the-loop) queue:** Papers behind paywalls, institutional access walls, or sources that require manual retrieval are added to a **pending retrieval queue** rather than silently skipped. The queue records:
+- Source URL / DOI / citation
+- Why the system wants it (which capability area, which gap, what it expects to learn)
+- Priority (based on how many research paths reference it)
+- Date queued
+
+The queue is surfaced to humans via a standard signal (`improvement:research:hil-needed`) and can be viewed through the case context. When a human retrieves and provides a paper, it enters the corpus and triggers re-evaluation of any blocked research paths.
+
+**Architecture:** The corpus is a specialised store — not the MindMap (which is the agent's lived experience) and not CBR traces (which are structured outcome records). It is closer to a **document store with semantic search**. Implementation options:
+- Engine provides the corpus SPI and in-memory reference implementation
+- Neocortex could provide a persistent implementation backed by MindMap nodes (research findings as semantic knowledge nodes with typed edges)
+- The two complement each other: corpus stores the raw/summarised sources, MindMap stores the agent's understanding and emotional associations derived from them
+
+**Freshness:** Corpus entries have a `retrievedAt` timestamp and a configurable staleness threshold per source type (papers rarely go stale; competitor feature docs go stale quickly; blog posts are intermediate). Stale entries are flagged for re-check during the next area refresh, not automatically discarded.
+
+**Scope for #1115:** Design the corpus SPI and HIL queue contract. Provide in-memory skeleton. Persistent implementation lands with Epic 3/4 (neocortex integration).
+
+**Alternatives:**
+- Ephemeral processing only — every research cycle starts from scratch. Prohibitively expensive and loses institutional knowledge.
+- MindMap only — conflates research sources with the agent's lived experience. The agent's understanding of a paper is different from the paper itself.
+- External search only (no local corpus) — re-downloads and re-processes every time. Wastes API calls and LLM time.
+
+**Rationale:** Research without a corpus is like a researcher who reads papers but never takes notes and can't find them again. The corpus is the system's research library. Summaries are the card catalogue. The HIL queue acknowledges that autonomous systems can't access everything — some sources require human help, and that should be a first-class workflow, not a silent failure.
+
+**Trade-offs:** The corpus is another persistent store with its own lifecycle, storage, and search infrastructure. It adds complexity. But the alternative — re-processing everything every cycle — is more expensive and less effective. The HIL queue introduces a human dependency that could block research paths indefinitely if not attended to; the priority ranking and drive integration help surface urgent requests.
+
+**Sources:** Vision spec §Epic 3 (Research Loop), MindMap (neocortex — potential persistent backend), CbrCaseMemoryStore (complementary structured store), ResearchExtractor SPI (D110 — extraction phase produces corpus entries)
+**Depends on:** D110 (research pipeline — corpus is the persistence layer for pipeline outputs), D109 (capability areas — corpus entries are tagged by area)
+**Exploration:** quick
+**Status:** captured
