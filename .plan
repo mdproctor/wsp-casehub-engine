@@ -18,22 +18,28 @@ date: 2026-09-15
 - [x] casehubio/engine#1111 — feat: Stigmergy execution model — indirect coordination via shared environment
 - [x] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence
 - [x] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
-- [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown ← active
-  - [x] Batch 1: B1
-    - [x] Task 1: T1-APITypes-BudgetConfig
-    - [x] Task 2: T2-APITypes-GoalKindRecords
-  - [x] Batch 2: B2
-    - [x] Task 3: T3-BudgetEnforcer
-  - [x] Batch 3: B3
-    - [x] Task 4: T4-SignalContext-GoalFormation
-    - [x] Task 5: T5-OutcomeRecording
-  - [x] Batch 4: B4
-    - [x] Task 6: T6-PipelineWiring
-    - [x] Task 7: T7-IntegrationWorker
-  - [x] Batch 5: B5
-    - [x] Task 8: T8-CaseTemplate
-    - [x] Task 9: T9-OperationalWorkers
-    - [x] Task 10: T10-EventCapture
-  - [x] Batch 6: B6
-    - [x] Task 11: T11-IntegrationTest
-- [ ] casehubio/engine#1115 — feat: Continuous evolution loop — self-directed growth with quality gates
+- [x] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown
+- [ ] casehubio/engine#1115 — feat: Continuous evolution loop — self-directed growth with quality gates ← active
+  - [ ] Batch 1: B1-Config
+    - [ ] Task 1: T1-RollbackPolicy-HealthPolicy-ResearchMethodology
+    - [ ] Task 2: T2-ImprovementConfig-Expansion
+    - [ ] Task 3: T3-CaseHubEventType-CapabilityArea-SPI
+  - [ ] Batch 2: B2-ResearchAPI
+    - [ ] Task 4: T4-Research-Records-SPIs
+  - [ ] Batch 3: B3-CategoryBudget
+    - [ ] Task 5: T5-ImprovementCategoryTracker
+    - [ ] Task 6: T6-RollbackHistory-BudgetEnforcer-Enhancement
+  - [ ] Batch 4: B4-HealthConflict
+    - [ ] Task 7: T7-ConflictDetector
+    - [ ] Task 8: T8-CapabilityAreaRegistry-HealthScoreTracker
+  - [ ] Batch 5: B5-SafetyInfra
+    - [ ] Task 9: T9-ImprovementCircuitBreaker
+    - [ ] Task 10: T10-ConfidenceScorer-RegressionDetector
+  - [ ] Batch 6: B6-EvolutionPipeline
+    - [ ] Task 11: T11-EvolutionTicker
+    - [ ] Task 12: T12-GoalFormation-Enhancement-OutcomeCapture-Wiring
+  - [ ] Batch 7: B7-ResearchRollback
+    - [ ] Task 13: T13-Research-Pipeline-Corpus
+    - [ ] Task 14: T14-RevertWorker-RollbackTemplate
+  - [ ] Batch 8: B8-IntegrationTest
+    - [ ] Task 15: T15-ContinuousEvolutionIntegrationTest
