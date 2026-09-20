@@ -515,7 +515,47 @@ The honest answer: we don't know yet. The research suggests yes:
 - Park et al. [21] showed reflection was critical for long-horizon behavioural coherence
 - The "Drop the Hierarchy and Roles" paper [17] showed role autonomy outperforms rigid structure by 14%
 
-But none of these studied cognitive architecture applied specifically to self-improvement. This is genuinely novel territory. The mitigation is: the engine foundation (epic 1) delivers value without cognitive integration. If cognitive depth doesn't help, the mechanical system still works. If it does help, the cognitive system is strictly better.
+But none of these studied cognitive architecture applied specifically to self-improvement. This is genuinely novel territory.
+
+### 7.4 The Design Principle: Head in the Clouds, Feet on the Ground
+
+The mitigation for all integration risk is a single design principle: **every cognitive capability is independently configurable, independently measurable, and independently toggleable.**
+
+`CognitionConfig` already provides this pattern — `CognitionConfig.all()` for full depth, `.none()` for mechanical mode, `.without(narrative, mentalModel)` for anything in between. The self-improvement system follows the same pattern:
+
+| Layer | What it adds | Toggle | Measure |
+|-------|-------------|--------|---------|
+| Engine foundation | Case lifecycle, rule-based workers, DevTown, CBR | Always on | Merge rate, regression rate |
+| Drive-based prioritisation | Balanced competing needs replace fixed rules | `drivesEnabled` | Does it pick better targets? |
+| PAD mood feedback | Emotional response to outcomes modulates drives | `moodEnabled` | Does emotional modulation reduce regressions? |
+| Narrative continuity | Inner monologue for cross-session coherence | `narrativeEnabled` | Does temporal coherence improve decision quality? |
+| Strategy learning | Learn what improvement approaches work | `strategyEnabled` | Does the approval rate improve over time? |
+| Mental model | Track reviewer preferences, platform fragility | `mentalModelEnabled` | Does it avoid known-fragile areas? |
+| Research loop | External knowledge acquisition | `curiosityEnabled` + research bindings | Do research-informed improvements outperform rule-based? |
+| Full cognitive agent | Everything on, inner life enabled | `CognitionConfig.all()` | Full A/B comparison vs mechanical baseline |
+
+Each layer is independently toggleable. If 6 coupled feedback loops produce unpredictable behaviour — reduce to 2. If mood-congruent retrieval causes negative spirals — disable mood modulation on retrieval. If the research loop doesn't produce actionable improvements — turn it off.
+
+This resolves the adversarial reviewer's core concerns:
+- **Emergent behaviour unpredictability (#4):** Toggle off the layers producing unpredictable interactions
+- **Testing problem (#5):** Each layer has its own A/B metric; composition is tested by progressively enabling layers
+- **Grounding problem (#6):** Domain transfer from social cognition is validated per-layer, not all-at-once
+- **Scope and delivery risk (#7):** Each layer is independently deliverable and independently valuable
+
+The platform aspires to the full cognitive stack — head in the clouds. But it can be configured for feet on the ground at any moment, at any granularity.
+
+### 7.5 Open Risk: Approval Optimisation (Goodhart's Law)
+
+One adversarial concern is NOT resolved by configurability: the system may optimise for DevTown approval rather than actual improvement quality. Successful PRs produce positive pleasure, reinforcing patterns that led to approval. Over time, the system learns "small, safe, incremental changes get approved; large systemic changes get rejected" and shifts toward the former. The platform improves at the margins but never tackles systemic issues.
+
+This is Goodhart's Law applied to self-improvement: when approval becomes the measure, the system optimises for approval rather than for quality. Mitigations to explore:
+
+1. **Improvement impact metrics** alongside approval rate — track not just "was the PR approved?" but "did coverage/stability/performance actually improve after merge?"
+2. **Diversity incentives** — the ImprovementBudget could reserve capacity for high-risk/high-reward improvements, preventing convergence on safe-only changes
+3. **Periodic human review of improvement patterns** — a meta-review that asks "is the system tackling the right problems, or gaming approval?"
+4. **Goal revision from outcome metrics** — GoalRevisionEvaluator adjusts improvement direction based on platform health trends, not just PR outcomes
+
+This risk is structural and deserves dedicated attention in the spec. It is flagged here as an open design problem.
 
 ---
 
