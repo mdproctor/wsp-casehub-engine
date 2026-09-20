@@ -1166,11 +1166,11 @@ if (improvementStrategyInstance.isResolvable()) {
         caseInstance.getUuid(), improvementConfig);
     if (proposal != null && !proposal.goals().isEmpty()
         && goalFormationServiceInstance.isResolvable()) {
-      for (var goal : proposal.goals()) {
-        goalFormationServiceInstance.get().propose(
-            goal.name(), caseInstance.tenancyId,
-            new GoalFormationProposal(List.of(goal), proposal.rationale()));
-      }
+      // Use a synthetic agent ID for the improvement system
+      String agentId = "improvement-system";
+      goalFormationServiceInstance.get().propose(
+          agentId, caseInstance.tenancyId, proposal);
+    
     }
   }
 }
@@ -1324,11 +1324,515 @@ git commit -m "feat(#1114): add ImprovementIntegrationWorker — review hard gat
 
 ---
 
-## Batch 5: Full Lifecycle Integration Test
+## Batch 5: Case Template + Workers + Event Capture
+
+After this batch: the improvement case template YAML exists with conditional bindings. Five skeleton operational workers establish the capability routing contract. The `ImprovementOutcomeEventCapture` CDI observer composes all three outcome layers.
+
+### Task 8: Improvement Case Template YAML
+
+**Files:**
+- Create: `runtime/src/main/resources/case-templates/self-improvement.yaml`
+
+**Interfaces:**
+- Produces: case template with ID `self-improvement`, 10 bindings covering operational and capability improvement paths
+
+- [ ] **Step 1: Create the case template directory if needed**
+
+```bash
+ls runtime/src/main/resources/case-templates/ 2>/dev/null || mkdir -p runtime/src/main/resources/case-templates/
+```
+
+- [ ] **Step 2: Write the case template YAML**
+
+Create `runtime/src/main/resources/case-templates/self-improvement.yaml`:
+
+```yaml
+id: self-improvement
+name: Self-Improvement
+description: Autonomous improvement lifecycle — introspect, implement, review, integrate
+
+bindings:
+  - name: introspect
+    trigger:
+      type: on-create
+    capability: improvement-introspect
+
+  - name: research
+    trigger:
+      type: on-complete
+      source: introspect
+    when: "context.layer('WORKING').get('improvementType') == 'capability'"
+    capability: improvement-research
+
+  - name: analyse
+    trigger:
+      type: on-complete
+      source: research
+    when: "context.layer('WORKING').get('improvementType') == 'capability'"
+    capability: improvement-analyse
+
+  - name: implement
+    trigger:
+      type: on-complete
+      source: introspect
+    when: "context.layer('WORKING').get('improvementType') == 'operational'"
+    capability: improvement-implement
+
+  - name: implement-capability
+    trigger:
+      type: on-complete
+      source: analyse
+    capability: improvement-implement
+
+  - name: submit-pr
+    trigger:
+      type: on-complete
+      source: implement
+    capability: improvement-submit-pr
+
+  - name: submit-pr-capability
+    trigger:
+      type: on-complete
+      source: implement-capability
+    capability: improvement-submit-pr
+
+  - name: review
+    trigger:
+      type: on-signal
+      signal: "improvement:pr-submitted"
+    capability: code-review
+
+  - name: integrate
+    trigger:
+      type: on-complete
+      source: review
+    when: "context.layer('WORKING').get('reviewOutcome') == 'approved'"
+    capability: improvement-integrate
+
+  - name: record-outcome
+    trigger:
+      type: on-complete
+      source: integrate
+    capability: improvement-outcome
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add runtime/src/main/resources/case-templates/self-improvement.yaml
+git commit -m "feat(#1114): add self-improvement case template — conditional bindings for operational and capability paths"
+```
+
+### Task 9: Skeleton Operational Workers
+
+**Files:**
+- Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/DependencyUpdateWorker.java`
+- Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/LintFixWorker.java`
+- Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/CoverageGapWorker.java`
+- Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/CITriageWorker.java`
+- Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/RecipeWorker.java`
+- Test: `runtime-core/src/test/java/io/casehub/engine/internal/improvement/worker/OperationalWorkerTest.java`
+
+**Interfaces:**
+- Produces: five `@ApplicationScoped` workers, each declaring its capability via `getCapabilities()` returning a singleton set with the worker's capability string
+- Each worker has `introspect(ImprovementRequest)` → `IntrospectionResult` and `implement(IntrospectionResult)` → `ImprovementOutcome`
+
+- [ ] **Step 1: Write failing tests for worker capability declarations**
+
+```java
+package io.casehub.engine.internal.improvement.worker;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.casehub.api.model.stigmergy.ImprovementRequest;
+import io.casehub.api.model.stigmergy.IntrospectionResult;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class OperationalWorkerTest {
+
+  @Test
+  void dependencyUpdateWorkerDeclaresCapability() {
+    var worker = new DependencyUpdateWorker();
+    assertThat(worker.category()).isEqualTo("dependency-update");
+  }
+
+  @Test
+  void lintFixWorkerDeclaresCapability() {
+    var worker = new LintFixWorker();
+    assertThat(worker.category()).isEqualTo("lint-fix");
+  }
+
+  @Test
+  void coverageGapWorkerDeclaresCapability() {
+    var worker = new CoverageGapWorker();
+    assertThat(worker.category()).isEqualTo("coverage-gap");
+  }
+
+  @Test
+  void ciTriageWorkerDeclaresCapability() {
+    var worker = new CITriageWorker();
+    assertThat(worker.category()).isEqualTo("ci-triage");
+  }
+
+  @Test
+  void recipeWorkerDeclaresCapability() {
+    var worker = new RecipeWorker();
+    assertThat(worker.category()).isEqualTo("recipe");
+  }
+
+  @Test
+  void dependencyUpdateIntrospectProducesResult() {
+    var worker = new DependencyUpdateWorker();
+    var request = new ImprovementRequest(
+        "operational", "dependency-update", "hibernate-core",
+        "casehubio/engine", List.of("pom.xml"), 20, Map.of());
+    var result = worker.introspect(request);
+    assertThat(result).isNotNull();
+    assertThat(result.category()).isEqualTo("dependency-update");
+  }
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `TESTCONTAINERS_RYUK_DISABLED=true mvn test -pl runtime-core -Dtest=OperationalWorkerTest -q`
+Expected: compilation failure
+
+- [ ] **Step 3: Implement all five workers**
+
+Each worker follows the same pattern. Use `ide_create_file` for each.
+
+`DependencyUpdateWorker.java`:
+
+```java
+package io.casehub.engine.internal.improvement.worker;
+
+import io.casehub.api.model.stigmergy.ImprovementRequest;
+import io.casehub.api.model.stigmergy.IntrospectionResult;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
+import java.util.Map;
+
+@ApplicationScoped
+public class DependencyUpdateWorker {
+
+  public String category() {
+    return "dependency-update";
+  }
+
+  public IntrospectionResult introspect(ImprovementRequest request) {
+    return new IntrospectionResult(
+        category(),
+        "Dependency update: " + request.target(),
+        request.targetPaths().isEmpty() ? List.of("pom.xml") : request.targetPaths(),
+        request.estimatedSize() > 0 ? request.estimatedSize() : 30,
+        "Update " + request.target() + " to latest version",
+        Map.of("source", "dependency-staleness-check"));
+  }
+}
+```
+
+`LintFixWorker.java`:
+
+```java
+package io.casehub.engine.internal.improvement.worker;
+
+import io.casehub.api.model.stigmergy.ImprovementRequest;
+import io.casehub.api.model.stigmergy.IntrospectionResult;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
+import java.util.Map;
+
+@ApplicationScoped
+public class LintFixWorker {
+
+  public String category() {
+    return "lint-fix";
+  }
+
+  public IntrospectionResult introspect(ImprovementRequest request) {
+    return new IntrospectionResult(
+        category(),
+        "Lint fix: " + request.target(),
+        request.targetPaths(),
+        request.estimatedSize() > 0 ? request.estimatedSize() : 15,
+        "Apply lint/checkstyle fixes for " + request.target(),
+        Map.of("source", "lint-violation-report"));
+  }
+}
+```
+
+`CoverageGapWorker.java`:
+
+```java
+package io.casehub.engine.internal.improvement.worker;
+
+import io.casehub.api.model.stigmergy.ImprovementRequest;
+import io.casehub.api.model.stigmergy.IntrospectionResult;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
+import java.util.Map;
+
+@ApplicationScoped
+public class CoverageGapWorker {
+
+  public String category() {
+    return "coverage-gap";
+  }
+
+  public IntrospectionResult introspect(ImprovementRequest request) {
+    return new IntrospectionResult(
+        category(),
+        "Coverage gap: " + request.target(),
+        request.targetPaths(),
+        request.estimatedSize() > 0 ? request.estimatedSize() : 50,
+        "Generate test skeletons for uncovered code in " + request.target(),
+        Map.of("source", "coverage-report"));
+  }
+}
+```
+
+`CITriageWorker.java`:
+
+```java
+package io.casehub.engine.internal.improvement.worker;
+
+import io.casehub.api.model.stigmergy.ImprovementRequest;
+import io.casehub.api.model.stigmergy.IntrospectionResult;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.Map;
+
+@ApplicationScoped
+public class CITriageWorker {
+
+  public String category() {
+    return "ci-triage";
+  }
+
+  public IntrospectionResult introspect(ImprovementRequest request) {
+    return new IntrospectionResult(
+        category(),
+        "CI triage: " + request.target(),
+        request.targetPaths(),
+        request.estimatedSize() > 0 ? request.estimatedSize() : 25,
+        "Diagnose CI failure pattern for " + request.target(),
+        Map.of("source", "ci-failure-log"));
+  }
+}
+```
+
+`RecipeWorker.java`:
+
+```java
+package io.casehub.engine.internal.improvement.worker;
+
+import io.casehub.api.model.stigmergy.ImprovementRequest;
+import io.casehub.api.model.stigmergy.IntrospectionResult;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.Map;
+
+@ApplicationScoped
+public class RecipeWorker {
+
+  public String category() {
+    return "recipe";
+  }
+
+  public IntrospectionResult introspect(ImprovementRequest request) {
+    return new IntrospectionResult(
+        category(),
+        "Code recipe: " + request.target(),
+        request.targetPaths(),
+        request.estimatedSize() > 0 ? request.estimatedSize() : 40,
+        "Apply code transformation recipe for " + request.target(),
+        Map.of("source", "pattern-detection"));
+  }
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `TESTCONTAINERS_RYUK_DISABLED=true mvn test -pl runtime-core -Dtest=OperationalWorkerTest -q`
+Expected: all 6 tests pass
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/DependencyUpdateWorker.java runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/LintFixWorker.java runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/CoverageGapWorker.java runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/CITriageWorker.java runtime-core/src/main/java/io/casehub/engine/internal/improvement/worker/RecipeWorker.java runtime-core/src/test/java/io/casehub/engine/internal/improvement/worker/OperationalWorkerTest.java
+git commit -m "feat(#1114): add 5 skeleton operational workers — dependency, lint, coverage, CI, recipe"
+```
+
+### Task 10: ImprovementOutcomeEventCapture
+
+**Files:**
+- Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementOutcomeEventCapture.java`
+- Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementCaseCompleted.java`
+- Test: `runtime-core/src/test/java/io/casehub/engine/internal/improvement/ImprovementOutcomeEventCaptureTest.java`
+
+**Interfaces:**
+- Consumes: `ImprovementOutcomeRecorder.record()`, `ImprovementSignalProjector.project()`, `ImprovementCbrProjector.project()`, `ImprovementBudgetEnforcer.recordCompletion()`
+- Produces: `ImprovementOutcomeEventCapture` CDI observer that composes all three layers
+- Produces: `ImprovementCaseCompleted` CDI event record
+
+- [ ] **Step 1: Write failing tests**
+
+```java
+package io.casehub.engine.internal.improvement;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.casehub.api.model.event.CaseHubEventType;
+import io.casehub.api.model.stigmergy.ImprovementOutcome;
+import io.casehub.engine.common.internal.signal.SignalRegistry;
+import io.casehub.testing.TestEventLogRepository;
+import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class ImprovementOutcomeEventCaptureTest {
+
+  private ImprovementOutcomeEventCapture capture;
+  private TestEventLogRepository eventLogRepo;
+  private SignalRegistry signalRegistry;
+  private ImprovementBudgetEnforcer budgetEnforcer;
+  private UUID caseId;
+
+  @BeforeEach
+  void setUp() {
+    eventLogRepo = new TestEventLogRepository();
+    signalRegistry = new SignalRegistry();
+    budgetEnforcer = new ImprovementBudgetEnforcer();
+    capture = new ImprovementOutcomeEventCapture(
+        new ImprovementOutcomeRecorder(eventLogRepo),
+        new ImprovementSignalProjector(signalRegistry),
+        new ImprovementCbrProjector(),
+        budgetEnforcer);
+    caseId = UUID.randomUUID();
+  }
+
+  @Test
+  void captureRecordsAllThreeLayers() {
+    var improvementCaseId = UUID.randomUUID();
+    budgetEnforcer.recordStart(improvementCaseId);
+
+    var outcome = new ImprovementOutcome(
+        caseId, improvementCaseId, "dependency-update", "hibernate-core",
+        ImprovementOutcome.OutcomeStatus.MERGED, "https://pr/1",
+        0, 1.5, -2, Instant.now(), Map.of());
+    var event = new ImprovementCaseCompleted(caseId, "tenant-1", outcome);
+
+    capture.onImprovementComplete(event);
+
+    // Layer 1: EventLog
+    var entries = eventLogRepo.findByCaseAndTypes(
+        caseId, java.util.List.of(CaseHubEventType.IMPROVEMENT_OUTCOME), "tenant-1");
+    assertThat(entries).hasSize(1);
+
+    // Layer 2: Signal
+    var signals = signalRegistry.getAllSignals(caseId);
+    assertThat(signals).containsKey("improvement:outcome:positive:pr-merged");
+
+    // Budget state updated
+    assertThat(budgetEnforcer.activeCount()).isEqualTo(0);
+  }
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `TESTCONTAINERS_RYUK_DISABLED=true mvn test -pl runtime-core -Dtest=ImprovementOutcomeEventCaptureTest -q`
+Expected: compilation failure
+
+- [ ] **Step 3: Create ImprovementCaseCompleted event record**
+
+Use `ide_create_file` for `runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementCaseCompleted.java`:
+
+```java
+package io.casehub.engine.internal.improvement;
+
+import io.casehub.api.model.stigmergy.ImprovementOutcome;
+import java.util.UUID;
+
+public record ImprovementCaseCompleted(
+    UUID caseId,
+    String tenancyId,
+    ImprovementOutcome outcome) {}
+```
+
+- [ ] **Step 4: Add activeCount() to ImprovementBudgetEnforcer**
+
+Use `ide_insert_member` on `ImprovementBudgetEnforcer` to add:
+
+```java
+public int activeCount() {
+  return activeImprovements.size();
+}
+```
+
+- [ ] **Step 5: Implement ImprovementOutcomeEventCapture**
+
+Use `ide_create_file` for `runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementOutcomeEventCapture.java`:
+
+```java
+package io.casehub.engine.internal.improvement;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.ObservesAsync;
+import jakarta.inject.Inject;
+
+@ApplicationScoped
+public class ImprovementOutcomeEventCapture {
+
+  private final ImprovementOutcomeRecorder outcomeRecorder;
+  private final ImprovementSignalProjector signalProjector;
+  private final ImprovementCbrProjector cbrProjector;
+  private final ImprovementBudgetEnforcer budgetEnforcer;
+
+  @Inject
+  public ImprovementOutcomeEventCapture(
+      ImprovementOutcomeRecorder outcomeRecorder,
+      ImprovementSignalProjector signalProjector,
+      ImprovementCbrProjector cbrProjector,
+      ImprovementBudgetEnforcer budgetEnforcer) {
+    this.outcomeRecorder = outcomeRecorder;
+    this.signalProjector = signalProjector;
+    this.cbrProjector = cbrProjector;
+    this.budgetEnforcer = budgetEnforcer;
+  }
+
+  public void onImprovementComplete(@ObservesAsync ImprovementCaseCompleted event) {
+    var outcome = event.outcome();
+    outcomeRecorder.record(event.caseId(), event.tenancyId(), outcome);
+    signalProjector.project(event.caseId(), outcome);
+    cbrProjector.project(event.tenancyId(), outcome);
+    budgetEnforcer.recordCompletion(outcome.improvementCaseId());
+  }
+}
+```
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+Run: `TESTCONTAINERS_RYUK_DISABLED=true mvn test -pl runtime-core -Dtest=ImprovementOutcomeEventCaptureTest -q`
+Expected: all pass
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementCaseCompleted.java runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementOutcomeEventCapture.java runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementBudgetEnforcer.java runtime-core/src/test/java/io/casehub/engine/internal/improvement/ImprovementOutcomeEventCaptureTest.java
+git commit -m "feat(#1114): add ImprovementOutcomeEventCapture — CDI observer composing all 3 outcome layers"
+```
+
+---
+
+## Batch 6: Full Lifecycle Integration Test
 
 After this batch: end-to-end verification that the improvement pipeline works — signal deposit → consensus → goal formation → budget check → outcome recording (all 3 layers). This validates the full data flow.
 
-### Task 8: Self-Improvement Integration Test
+### Task 11: Self-Improvement Integration Test
 
 **Files:**
 - Test: `runtime-core/src/test/java/io/casehub/engine/internal/improvement/SelfImprovementIntegrationTest.java`
