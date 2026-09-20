@@ -36,10 +36,11 @@ What's missing is the word "continuously." The single-shot cycle must be trigger
 │  ┌────────────────────────────────────────────────────────────────────┐  │
 │  │                    Trigger Layer                                    │  │
 │  │                                                                    │  │
-│  │  EvolutionTicker (timer backstop)                                 │  │
+│  │  EvolutionTicker (single entry point — event + timer)              │  │
 │  │       │                                                            │  │
 │  │       ▼                                                            │  │
-│  │  ImprovementGoalFormationStrategy ◄── outcome signals (feedback)   │  │
+│  │  ImprovementGoalFormationStrategy                                 │  │
+│  │       │ ◄── ImprovementCategoryTracker (outcome feedback §2)      │  │
 │  │       │                                                            │  │
 │  │       ▼                                                            │  │
 │  │  ImprovementCircuitBreaker ── OPEN? → block                       │  │
@@ -73,7 +74,7 @@ What's missing is the word "continuously." The single-shot cycle must be trigger
 │  │       │                                                            │  │
 │  │       ├─→ HealthScoreTracker → ImprovementCircuitBreaker           │  │
 │  │       │                                                            │  │
-│  │       └─→ outcome signals ──────────────────────► (back to top)    │  │
+│  │       └─→ ImprovementCategoryTracker ────────────► (back to top)   │  │
 │  └────────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
@@ -98,16 +99,15 @@ What's missing is the word "continuously." The single-shot cycle must be trigger
 
 **Data flow — continuous cycle:**
 
-1. `EvolutionTicker` fires periodically (timer backstop) OR outcome signals arrive (event-driven re-entry)
-2. `ImprovementGoalFormationStrategy` scans for improvement signal consensus
-3. `ImprovementCircuitBreaker` checks health score — blocks new improvements if OPEN
-4. `ConflictDetector` checks target paths against active improvements — queues if overlap
-5. `ImprovementBudgetEnforcer` validates budget constraints (existing)
-6. Improvement case executes through existing lifecycle
-7. `ImprovementOutcomeEventCapture` records outcome (existing — 3 layers)
-8. `RegressionDetector` evaluates whether the outcome caused regression
-9. `HealthScoreTracker` updates the rolling health score
-10. Outcome signals feed back into the signal registry → next cycle
+1. `EvolutionTicker.tick()` fires — either from `CaseContextChangedEventHandler` (event-driven) or periodic timer (backstop)
+2. Ticker checks: opt-in → health refresh → circuit breaker evaluate → block if OPEN
+3. `ImprovementGoalFormationStrategy.proposeImprovements()` scans consensus, checks category suppression, anti-oscillation, budget, and conflict detection
+4. Ticker calls `GoalFormationService.propose()` → standard goal lifecycle → improvement case spawned
+5. Improvement case executes through existing lifecycle
+6. `ImprovementOutcomeEventCapture` records outcome (5 layers: EventLog, signals, CBR, budget, category tracker)
+7. `RegressionDetector` evaluates whether the outcome caused regression
+8. `HealthScoreTracker` updates the rolling health score
+9. `ImprovementCategoryTracker` modulates category priority → next evaluation cycle's `proposeImprovements()` consults `isSuppressed()`
 
 ## 1. Standing Directive — Hybrid Trigger Model
 
@@ -115,13 +115,37 @@ The continuous evolution loop uses two complementary trigger mechanisms that tog
 
 ### Event-driven re-entry (primary)
 
-The existing `CaseContextChangedEventHandler` already calls `ImprovementGoalFormationStrategy.proposeImprovements()` during the convergence detection phase (after swarm activity, signal deposits, and context mutations). This means improvement proposals are evaluated on every case evaluation cycle — the event-driven path already exists.
+The existing `CaseContextChangedEventHandler` calls improvement proposals during the convergence detection phase. **This call must route through `EvolutionTicker.tick()`** — not call `proposeImprovements()` directly — so that all safety gates apply on every invocation path.
 
-Outcome signals projected by `ImprovementOutcomeEventCapture` (existing, D98) feed back into the signal registry. These signals — `improvement:outcome:positive:*`, `improvement:outcome:regression:*`, `improvement:outcome:rejected:*` — modulate the priority of detection signals in the same category. However, outcome signals are **not** improvement requests — they don't carry `ImprovementRequest` context in `ImprovementSignalContext` and are not consumed by the `proposeImprovements()` consensus scan. Instead, outcome signals influence the feedback loop through category priority modulation (§2).
+The convergence detection path changes from:
 
-The primary re-entry path is: outcome recorded → `ImprovementOutcomeEventCapture` fires → signal projected + category priority updated → next evaluation cycle picks up detection signals with adjusted priority → new improvements proposed if consensus conditions met.
+```java
+// BEFORE (existing code, line 1496 — bypasses all safety gates)
+var proposal = improvementStrategy.proposeImprovements(caseInstance.getUuid(), improvementConfig);
+if (proposal != null && !proposal.goals().isEmpty() && goalFormationServiceInstance.isResolvable()) {
+  goalFormationServiceInstance.get().propose(agentId, caseInstance.tenancyId, proposal);
+}
+```
+
+to:
+
+```java
+// AFTER (#1115 — routes through the complete gate pipeline)
+if (evolutionTickerInstance.isResolvable()) {
+  evolutionTickerInstance.get().tick(
+      caseInstance.getUuid(), caseInstance.tenancyId, improvementConfig);
+}
+```
+
+Outcome signals projected by `ImprovementOutcomeEventCapture` (existing, D98) feed back into the signal registry and modulate category priority via `ImprovementCategoryTracker` (§2). They are **not** improvement requests and are not consumed by the consensus scan. The feedback path is: outcome → category priority updated → next evaluation cycle → `EvolutionTicker.tick()` → detection signals evaluated with adjusted priority.
 
 ### Timer backstop (secondary)
+
+The ticker is also invoked periodically (configurable interval, default 60 minutes) as a backstop for cases where context changes are infrequent.
+
+### EvolutionTicker — unified gate pipeline
+
+`EvolutionTicker` is the **single entry point** for all improvement proposals. Both the event-driven path (convergence detection) and the timer backstop call `tick()`. This ensures every invocation passes through all safety gates.
 
 ```java
 // runtime-core, io.casehub.engine.internal.improvement
@@ -131,9 +155,9 @@ public class EvolutionTicker implements Resettable {
   private final ImprovementGoalFormationStrategy goalFormation;
   private final ImprovementCircuitBreaker circuitBreaker;
   private final HealthScoreTracker healthTracker;
-  private final ConflictDetector conflictDetector;
+  private final GoalFormationService goalFormationService;
 
-  public void tick(UUID caseId, ImprovementConfig config) {
+  public void tick(UUID caseId, String tenancyId, ImprovementConfig config) {
     // Gate 1: opt-in check
     if (!config.effectiveEvolutionEnabled()) {
       return;
@@ -150,28 +174,16 @@ public class EvolutionTicker implements Resettable {
       return;
     }
 
-    // Gate 5: propose improvements (internally: consensus scan → category check → budget check)
+    // Gate 5: propose improvements
+    // (internally: consensus → category suppression → anti-oscillation
+    //  → budget check → conflict check)
     var proposal = goalFormation.proposeImprovements(caseId, config);
     if (proposal == null || proposal.goals().isEmpty()) {
       return;
     }
 
-    // Gate 6: conflict detection per proposal (path overlap with active improvements)
-    // Conflicting proposals are queued, not rejected
-    for (var goal : proposal.goals()) {
-      var request = goalFormation.extractRequest(caseId, goal);
-      if (request != null) {
-        var check = conflictDetector.check(
-            request, budgetEnforcer.activeRequests(caseId),
-            config.effectiveConflictTrivialThreshold());
-        if (check instanceof ConflictCheck.Conflicting) {
-          goalFormation.queueForLater(caseId, goal, request);
-          continue;
-        }
-      }
-      // Gate 7: spawn improvement case
-      spawnImprovementCase(caseId, config, goal);
-    }
+    // Gate 6: enter the standard goal lifecycle
+    goalFormationService.propose("improvement-system", tenancyId, proposal);
   }
 }
 ```
@@ -180,12 +192,13 @@ public class EvolutionTicker implements Resettable {
 
 ```
 evolutionEnabled → health refresh → circuit breaker evaluate → circuit breaker check
-  → consensus scan → category check → budget check → conflict check → spawn case
+  → consensus scan → category suppression → anti-oscillation → budget check
+  → conflict check → GoalFormationService.propose()
 ```
 
-The first four gates live in `EvolutionTicker`. The consensus/category/budget gates are internal to `proposeImprovements()`. The conflict check is applied per-proposal after formation.
+Gates 1–4 live in `EvolutionTicker`. Gates 5–9 are internal to `proposeImprovements()`. Gate 10 uses `GoalFormationService.propose()` — the same standard goal lifecycle path used by the existing convergence detection code. This produces `GOAL_FORMED` and `GOAL_PROPOSED` EventLog entries and enters the standard case template binding via `SubCaseBinding`.
 
-The ticker is invoked periodically by the case evaluation pipeline. The interval is configurable via `ImprovementConfig.evolutionTickIntervalMinutes()` (default: 60). The tick is lightweight — it refreshes the health score, evaluates the circuit breaker, and invokes the existing goal formation strategy.
+**No parallel spawning mechanism.** The ticker does NOT call `spawnImprovementCase()` or any custom case-spawning method. It produces a `GoalFormationProposal` and delegates to `GoalFormationService.propose()` — the same API the convergence detection handler already uses.
 
 ### Idempotency
 
@@ -260,13 +273,91 @@ public class ImprovementCategoryTracker implements Resettable {
 }
 ```
 
-### Outcome processing in ImprovementGoalFormationStrategy
+### Enhanced proposeImprovements() — complete internal gate pipeline
 
-`proposeImprovements()` consults `ImprovementCategoryTracker.isSuppressed()` as a gate before proposing improvements in each category. This replaces the previously incorrect reference to `GoalRevisionEvaluator`:
+`proposeImprovements()` now owns all proposal-level gates. It needs new dependencies: `ImprovementCategoryTracker`, `RollbackHistory`, and `ConflictDetector`. The full internal pipeline:
+
+```java
+public GoalFormationProposal proposeImprovements(UUID caseId, ImprovementConfig config) {
+  // ... consensus scan (existing) ...
+  for (var entry : consensus.entrySet()) {
+    // ... namespace filter, signalContext lookup (existing) ...
+    ImprovementRequest request = ctxOpt.get();
+
+    // Gate: category suppression (NEW — from ImprovementCategoryTracker)
+    if (categoryTracker.isSuppressed(caseId, request.category())) {
+      continue;
+    }
+
+    // Gate: anti-oscillation (NEW — from RollbackHistory, then CBR)
+    if (rollbackHistory.wasRecentlyRolledBack(caseId, request.category(),
+        request.target(), Duration.ofMinutes(
+            config.effectiveRollbackPolicy().effectiveRegressionWindowMinutes()))) {
+      continue;
+    }
+
+    // Gate: budget check (existing)
+    var budgetCheck = budgetEnforcer.check(caseId, config.effectiveBudget(), request);
+    if (budgetCheck instanceof BudgetCheck.Denied) { continue; }
+
+    // Gate: conflict detection (NEW — from ConflictDetector)
+    var conflictCheck = conflictDetector.check(
+        request, budgetEnforcer.activeImprovementRequests(caseId),
+        config.effectiveConflictTrivialThreshold());
+    if (conflictCheck instanceof ConflictCheck.Conflicting) { continue; }
+
+    // ... build ProposedGoal (existing) ...
+  }
+}
+```
+
+**Key design decisions:**
+
+- **Conflict detection is inside `proposeImprovements()`**, not in the ticker. This is where the `ImprovementRequest` object is available — the ticker never sees request objects, only `GoalFormationProposal` and `ProposedGoal`.
+- **Conflicting proposals are skipped, not queued.** They will be re-evaluated on the next tick when the blocking improvement completes and the `budgetEnforcer.activeImprovementRequests()` no longer contains it. This is simpler than maintaining a separate queue with dequeue triggers.
+- **`ImprovementBudgetEnforcer.activeImprovementRequests()`** returns `Map<UUID, ImprovementRequest>` — the enforcer is enhanced to store `ImprovementRequest` alongside timestamps in `recordStart()`:
+
+```java
+// Enhanced recordStart — stores request for conflict detection
+public void recordStart(UUID improvementCaseId, ImprovementRequest request) {
+  activeImprovements.put(improvementCaseId, request);
+  dailyCounts.computeIfAbsent(LocalDate.now(ZoneOffset.UTC), k -> new AtomicInteger(0))
+      .incrementAndGet();
+}
+
+public Map<UUID, ImprovementRequest> activeImprovementRequests(UUID caseId) {
+  return Map.copyOf(activeImprovements);
+}
+```
+
+### Outcome-driven suppression rules
+
+`ImprovementCategoryTracker.isSuppressed()` applies:
 
 - **Repeated failures:** 3+ FAILED outcomes in the same category within the health window → category suppressed until manual reset or health window expires.
 - **Repeated rejections:** 3 REJECTED PRs in the same improvement direction → category suppressed and emit `improvement:outcome:abandoned`.
 - **Regression:** Any REGRESSION outcome → `RegressionDetector` (§3) handles via `ImprovementCategoryTracker.pauseCategory()`.
+
+### Outcome capture wiring
+
+`ImprovementCategoryTracker` is wired into the existing `ImprovementOutcomeEventCapture` as a fifth layer:
+
+```java
+// ImprovementOutcomeEventCapture — #1115 addition
+// Add ImprovementCategoryTracker as a constructor dependency
+
+public void onImprovementComplete(@ObservesAsync ImprovementCaseCompleted event) {
+  var outcome = event.outcome();
+  outcomeRecorder.record(event.caseId(), event.tenancyId(), outcome);     // Layer 1: EventLog
+  signalProjector.project(event.caseId(), outcome);                       // Layer 2: Signals
+  cbrProjector.project(event.tenancyId(), outcome);                       // Layer 3: CBR
+  budgetEnforcer.recordCompletion(outcome.improvementCaseId());            // Layer 4: Budget
+  categoryTracker.recordOutcome(event.caseId(),                           // Layer 5: Category
+      outcome.category(), outcome.status());
+}
+```
+
+Without this wiring, `ImprovementCategoryTracker` never sees outcomes — it never increments success/failure/rejection counts, never suppresses categories on repeated failures, and the feedback loop remains open for non-regression outcomes.
 
 **Note:** `GoalRevisionEvaluator` operates within the eidos agent goal system (`AgentDescriptor`, `AgentGoal`, `GoalEvolution`) and has no concept of `GoalKind` or improvement-specific logic. Improvement outcome processing lives entirely in `ImprovementCategoryTracker` and `ImprovementGoalFormationStrategy`.
 
@@ -333,12 +424,15 @@ public class RegressionDetector {
 
 ### ConfidenceScorer
 
-Composable signals with additive weights:
+Composable signals with additive weights. All data derives from EventLog and case context — no external CI system query required.
 
 ```java
 // runtime-core, io.casehub.engine.internal.improvement
 @ApplicationScoped
 public class ConfidenceScorer {
+
+  private final EventLogRepository eventLogRepository;
+  private final CaseContextReader contextReader;
 
   public double score(
       UUID caseId, UUID improvementCaseId,
@@ -351,19 +445,19 @@ public class ConfidenceScorer {
     if (failingTestsTouchModifiedFiles(improvementCaseId, after)) {
       confidence += 0.3;
     }
-    if (regressionWithinWindow(improvementCaseId, after)) {
+    if (regressionWithinWindow(before, after)) {
       confidence += 0.2;
     }
     if (cbrShowsSimilarRegressions(improvementCaseId)) {
       confidence += 0.1;
     }
-    if (multipleMetricsDegraded(before, after)) {
+    if (multipleAreasDegraded(before, after)) {
       confidence += 0.1;
     }
-    if (regressionInUnrelatedModule(improvementCaseId, after)) {
+    if (regressionInUnrelatedArea(improvementCaseId, before, after)) {
       confidence -= 0.2;
     }
-    if (otherChangesMergedInWindow(improvementCaseId)) {
+    if (otherImprovementsMergedInWindow(caseId, improvementCaseId)) {
       confidence -= 0.3;
     }
 
@@ -371,6 +465,18 @@ public class ConfidenceScorer {
   }
 }
 ```
+
+**Data sources for each signal:**
+
+| Signal method | Data source | How |
+|--------------|------------|-----|
+| `improvementCiBuildFailed` | Case context of the improvement case | The `integrate` worker records CI outcome as `context.layer('WORKING').put('ciOutcome', ...)`. Query via `CaseContextReader`. |
+| `failingTestsTouchModifiedFiles` | Case context | Correlates `failingTests` (from CI outcome) with `affectedPaths` from `IntrospectionResult` stored in working context by the `introspect` worker. |
+| `regressionWithinWindow` | `HealthSnapshot` params | Pure comparison: `after.score() < before.score()` — the before/after snapshots are captured around the merge window by `RegressionDetector`. |
+| `cbrShowsSimilarRegressions` | CBR retriever (optional) | Queries neocortex for similar past regression patterns. Returns `false` without neocortex (conservative — doesn't add confidence). |
+| `multipleAreasDegraded` | `HealthSnapshot` params | Compares `before.componentScores()` vs `after.componentScores()` — counts areas where score dropped. Pure data comparison, no external query. |
+| `regressionInUnrelatedArea` | `HealthSnapshot` + case context | Checks if degraded areas in `after.componentScores()` are unrelated to the improvement's target area (from case context). Reduces confidence — regression in an unrelated area suggests another cause. |
+| `otherImprovementsMergedInWindow` | EventLog | Queries for `IMPROVEMENT_OUTCOME` events with MERGED status within the regression window, excluding the current improvement. Other concurrent merges reduce causal confidence. |
 
 ### RollbackPolicy
 
@@ -532,6 +638,7 @@ private static final Set<String> STRUCTURAL_DENIED_PATTERNS =
         "SafetyConfig",
         "improvement-case-template",
         // New (#1115) — safety-critical components
+        "EvolutionTicker",
         "ImprovementCircuitBreaker",
         "RegressionDetector",
         "ConfidenceScorer",
@@ -801,9 +908,9 @@ public class ConflictDetector implements Resettable {
 | Directory-level overlap (broad change) | Serialize — queue the later improvement |
 | Same module, different files | Run concurrently (low conflict risk) |
 
-### Queueing model
+### Conflict handling — skip, not queue
 
-Conflicting improvements are queued, not rejected. When the blocking improvement completes, the queued improvement's `introspect` phase re-runs against the updated codebase, ensuring it sees the post-change state.
+Conflicting proposals are **skipped** during `proposeImprovements()`, not queued. When the blocking improvement completes and is removed from `budgetEnforcer.activeImprovementRequests()`, the next evaluation cycle's `proposeImprovements()` will re-evaluate and the conflict check will pass. This is simpler than maintaining a separate queue with dequeue triggers — the consensus model already provides natural re-evaluation.
 
 ### Trivial change exemption
 
@@ -811,7 +918,7 @@ Improvements with `estimatedSize <= trivialThreshold` (default 10 lines) touchin
 
 ### Integration with the evolution pipeline
 
-`ConflictDetector.check()` is called by `EvolutionTicker` after `proposeImprovements()` produces candidate proposals, before the improvement case is spawned. See §1 for the complete gate pipeline.
+`ConflictDetector.check()` is called **inside** `proposeImprovements()` — it's the last gate before a proposal is included. This is where the `ImprovementRequest` object is available. The ticker never sees request objects; it works with `GoalFormationProposal` and delegates to `GoalFormationService.propose()`. See §1 for the complete gate pipeline and §2 for the enhanced `proposeImprovements()` code.
 
 ### Conflict scope trade-off
 
