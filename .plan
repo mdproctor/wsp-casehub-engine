@@ -2,12 +2,13 @@
 
 ## State
 branch: issue-1104-hive-mind
-state: active
+state: closing:promoted
 issue-repo: casehubio/engine
 covers: casehubio/engine#1105
 Current: casehubio/engine#1105 — feat: Environment observation SPI — full-context pattern detection beyond static triggers
 date: 2026-09-15
 
+evidence-era: true
 ## Queue
 - [x] casehubio/engine#1105 — feat: Environment observation SPI — full-context pattern detection beyond static triggers
 - [x] casehubio/engine#1106 — feat: Signal/pheromone model — temporal signals with decay & reinforcement in CaseContext
