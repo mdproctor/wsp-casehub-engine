@@ -1,0 +1,15 @@
+# Work Plan — issue-1130-ensemble-step-outcome
+
+## State
+branch: issue-1130-ensemble-step-outcome
+state: scaffolded
+project-sha: 5459f836bc2f85dc57c20bd14bf8ceaf40f180ba
+date: 2026-09-21
+issue-repo: casehubio/engine
+covers: 1130
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1130 — Issue #1130 ← active
