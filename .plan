@@ -19,10 +19,21 @@ date: 2026-09-15
 - [x] casehubio/engine#1112 — feat: Swarm execution model — self-organizing agents with role emergence
 - [x] casehubio/engine#1113 — feat: Self-provisioning swarm — dynamic agent scaling via WorkerProvisioner/ops
 - [ ] casehubio/engine#1114 — feat: Autonomous self-improvement — introspect, implement, PR through devtown ← active
-  - [ ] Batch 1: CaseTemplate
-    - [ ] Task 1: ImprovementCaseTemplateYAML
-  - [ ] Batch 2: Workers
-    - [ ] Task 2: 5-SkeletonOperationalWorkers
-  - [ ] Batch 3: EventCapture
-    - [ ] Task 3: ImprovementOutcomeEventCapture
+  - [x] Batch 1: B1
+    - [x] Task 1: T1-APITypes-BudgetConfig
+    - [x] Task 2: T2-APITypes-GoalKindRecords
+  - [x] Batch 2: B2
+    - [x] Task 3: T3-BudgetEnforcer
+  - [x] Batch 3: B3
+    - [x] Task 4: T4-SignalContext-GoalFormation
+    - [x] Task 5: T5-OutcomeRecording
+  - [x] Batch 4: B4
+    - [x] Task 6: T6-PipelineWiring
+    - [x] Task 7: T7-IntegrationWorker
+  - [x] Batch 5: B5
+    - [x] Task 8: T8-CaseTemplate
+    - [x] Task 9: T9-OperationalWorkers
+    - [x] Task 10: T10-EventCapture
+  - [x] Batch 6: B6
+    - [x] Task 11: T11-IntegrationTest
 - [ ] casehubio/engine#1115 — feat: Continuous evolution loop — self-directed growth with quality gates
