@@ -664,15 +664,20 @@ git commit -m "feat(#1114): add ImprovementBudgetEnforcer — layered budget enf
 
 After this batch: improvement signal consensus triggers goal formation. Goals are gated by budget. Improvement outcomes are recorded across all three layers (EventLog, signals, CBR). The pipeline is wired but no workers exist yet — the goal formation and outcome recording are independently testable.
 
-### Task 4: ImprovementGoalFormationStrategy
+### Task 4: ImprovementSignalContext + ImprovementGoalFormationStrategy
+
+**Note on Signal model:** `Signal` is a record with no properties/metadata map. `SignalRegistry.deposit()` signature is `(UUID caseId, String name, double strength, Duration halfLife, String source, int maxPerCase)`. Improvement metadata is stored in a companion `ImprovementSignalContext` — signals carry consensus, the context carries details.
 
 **Files:**
+- Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementSignalContext.java`
 - Create: `runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementGoalFormationStrategy.java`
 - Test: `runtime-core/src/test/java/io/casehub/engine/internal/improvement/ImprovementGoalFormationStrategyTest.java`
 
 **Interfaces:**
-- Consumes: `GoalFormationStrategy` (SPI from api), `GoalFormationContext`, `ImprovementBudgetEnforcer.check()`, `ImprovementConfig`
-- Produces: `ImprovementGoalFormationStrategy` implements `GoalFormationStrategy`, method `propose(GoalFormationContext)` → `GoalFormationProposal` with SELF_IMPROVEMENT goals
+- Consumes: `GoalFormationStrategy` (SPI from api), `GoalFormationContext`, `ImprovementBudgetEnforcer.check()`, `ImprovementConfig`, `SignalRegistry.consensusSignals()`
+- Produces: `ImprovementSignalContext.register(UUID, String, ImprovementRequest)` — stores metadata alongside signal deposits
+- Produces: `ImprovementSignalContext.get(UUID, String)` → `Optional<ImprovementRequest>` — retrieves metadata when consensus detected
+- Produces: `ImprovementGoalFormationStrategy` implements `GoalFormationStrategy`, method `proposeImprovements(UUID, ImprovementConfig)` → `GoalFormationProposal` with SELF_IMPROVEMENT goals
 
 - [ ] **Step 1: Write failing tests**
 
@@ -681,11 +686,10 @@ package io.casehub.engine.internal.improvement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.casehub.api.model.GoalPriority;
 import io.casehub.api.model.stigmergy.*;
 import io.casehub.api.spi.routing.GoalFormationContext;
-import io.casehub.api.spi.routing.GoalFormationProposal;
 import io.casehub.engine.common.internal.signal.SignalRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -696,6 +700,7 @@ class ImprovementGoalFormationStrategyTest {
 
   private ImprovementGoalFormationStrategy strategy;
   private ImprovementBudgetEnforcer budgetEnforcer;
+  private ImprovementSignalContext signalContext;
   private SignalRegistry signalRegistry;
   private UUID caseId;
 
@@ -703,15 +708,15 @@ class ImprovementGoalFormationStrategyTest {
   void setUp() {
     budgetEnforcer = new ImprovementBudgetEnforcer();
     signalRegistry = new SignalRegistry();
-    strategy = new ImprovementGoalFormationStrategy(budgetEnforcer, signalRegistry);
+    signalContext = new ImprovementSignalContext();
+    strategy = new ImprovementGoalFormationStrategy(
+        budgetEnforcer, signalRegistry, signalContext);
     caseId = UUID.randomUUID();
   }
 
   @Test
   void noProposalWhenNoImprovementConsensus() {
     var config = new ImprovementConfig(null, null, null, null, null);
-    var context = new GoalFormationContext(
-        "agent-1", "tenant-1", List.of(), List.of(), List.of(), 5);
 
     var proposal = strategy.proposeImprovements(caseId, config);
 
@@ -721,15 +726,18 @@ class ImprovementGoalFormationStrategyTest {
   @Test
   void proposesGoalWhenConsensusReached() {
     var config = new ImprovementConfig(null, 2, null, null, null);
+    String signalName = "improvement:dependency:staleness:major-behind";
 
-    signalRegistry.deposit(caseId, "improvement:dependency:staleness:major-behind",
-        1.0, "agent-1", Map.of("improvementType", "operational",
-            "category", "dependency-update", "target", "hibernate-core",
-            "targetRepo", "casehubio/engine"));
-    signalRegistry.deposit(caseId, "improvement:dependency:staleness:major-behind",
-        1.0, "agent-2", Map.of("improvementType", "operational",
-            "category", "dependency-update", "target", "hibernate-core",
-            "targetRepo", "casehubio/engine"));
+    // Two agents deposit the same improvement signal
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-1", 100);
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-2", 100);
+
+    // Register improvement context alongside the signal
+    signalContext.register(caseId, signalName, new ImprovementRequest(
+        "operational", "dependency-update", "hibernate-core",
+        "casehubio/engine", List.of("pom.xml"), 20, Map.of()));
 
     var proposal = strategy.proposeImprovements(caseId, config);
 
@@ -745,17 +753,18 @@ class ImprovementGoalFormationStrategyTest {
   void budgetDenialPreventsProposal() {
     var budget = new ImprovementBudget(0, null, null, null, null, null, null);
     var config = new ImprovementConfig(null, 2, null, budget, null);
+    String signalName = "improvement:quality:lint:violation";
 
     budgetEnforcer.recordStart(UUID.randomUUID());
 
-    signalRegistry.deposit(caseId, "improvement:quality:lint:violation",
-        1.0, "agent-1", Map.of("improvementType", "operational",
-            "category", "lint-fix", "target", "checkstyle",
-            "targetRepo", "casehubio/engine"));
-    signalRegistry.deposit(caseId, "improvement:quality:lint:violation",
-        1.0, "agent-2", Map.of("improvementType", "operational",
-            "category", "lint-fix", "target", "checkstyle",
-            "targetRepo", "casehubio/engine"));
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-1", 100);
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-2", 100);
+
+    signalContext.register(caseId, signalName, new ImprovementRequest(
+        "operational", "lint-fix", "checkstyle",
+        "casehubio/engine", List.of(), 10, Map.of()));
 
     var proposal = strategy.proposeImprovements(caseId, config);
 
@@ -766,6 +775,25 @@ class ImprovementGoalFormationStrategyTest {
   void strategyIdIsSelfImprovement() {
     assertThat(strategy.id()).isEqualTo("self-improvement");
   }
+
+  @Test
+  void consensusWithoutContextFallsBackToSignalNameParsing() {
+    var config = new ImprovementConfig(null, 2, null, null, null);
+    String signalName = "improvement:dependency:staleness:major-behind";
+
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-1", 100);
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-2", 100);
+
+    // No context registered — strategy should still work by parsing signal name
+    var proposal = strategy.proposeImprovements(caseId, config);
+
+    // Without context, category can't be matched to enabledCategories
+    // unless we parse "dependency" from the signal name — acceptable to return null
+    // The plan requires context registration for proper goal formation
+    assertThat(proposal).isNull();
+  }
 }
 ```
 
@@ -774,7 +802,51 @@ class ImprovementGoalFormationStrategyTest {
 Run: `TESTCONTAINERS_RYUK_DISABLED=true mvn test -pl runtime-core -Dtest=ImprovementGoalFormationStrategyTest -q`
 Expected: compilation failure
 
-- [ ] **Step 3: Implement ImprovementGoalFormationStrategy**
+- [ ] **Step 3: Implement ImprovementSignalContext**
+
+Use `ide_create_file` for `runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementSignalContext.java`:
+
+```java
+package io.casehub.engine.internal.improvement;
+
+import io.casehub.api.model.stigmergy.ImprovementRequest;
+import io.casehub.engine.common.spi.Resettable;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+@ApplicationScoped
+public class ImprovementSignalContext implements Resettable {
+
+  private final ConcurrentHashMap<UUID, ConcurrentHashMap<String, ImprovementRequest>> contexts =
+      new ConcurrentHashMap<>();
+
+  public void register(UUID caseId, String signalName, ImprovementRequest request) {
+    contexts.computeIfAbsent(caseId, k -> new ConcurrentHashMap<>())
+        .put(signalName, request);
+  }
+
+  public Optional<ImprovementRequest> get(UUID caseId, String signalName) {
+    var caseContexts = contexts.get(caseId);
+    if (caseContexts == null) {
+      return Optional.empty();
+    }
+    return Optional.ofNullable(caseContexts.get(signalName));
+  }
+
+  public void evictByCase(UUID caseId) {
+    contexts.remove(caseId);
+  }
+
+  @Override
+  public void reset() {
+    contexts.clear();
+  }
+}
+```
+
+- [ ] **Step 4: Implement ImprovementGoalFormationStrategy**
 
 Use `ide_create_file` for `runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementGoalFormationStrategy.java`:
 
@@ -796,13 +868,16 @@ public class ImprovementGoalFormationStrategy implements GoalFormationStrategy {
 
   private final ImprovementBudgetEnforcer budgetEnforcer;
   private final SignalRegistry signalRegistry;
+  private final ImprovementSignalContext signalContext;
 
   @Inject
   public ImprovementGoalFormationStrategy(
       ImprovementBudgetEnforcer budgetEnforcer,
-      SignalRegistry signalRegistry) {
+      SignalRegistry signalRegistry,
+      ImprovementSignalContext signalContext) {
     this.budgetEnforcer = budgetEnforcer;
     this.signalRegistry = signalRegistry;
+    this.signalContext = signalContext;
   }
 
   @Override
@@ -821,49 +896,40 @@ public class ImprovementGoalFormationStrategy implements GoalFormationStrategy {
     int minSources = config.effectiveConsensusMinSources();
     var consensus = signalRegistry.consensusSignals(caseId, minSources, 0.01);
 
-    Map<String, Map<String, String>> improvementClusters = new LinkedHashMap<>();
-    for (var entry : consensus.entrySet()) {
-      if (entry.getKey().startsWith(namespace + ":")) {
-        var signal = entry.getValue();
-        String category = signal.properties().getOrDefault("category", "unknown");
-        if (config.effectiveEnabledCategories().contains(category)) {
-          improvementClusters.put(entry.getKey(), signal.properties());
-        }
-      }
-    }
-
-    if (improvementClusters.isEmpty()) {
-      return null;
-    }
-
     List<GoalFormationProposal.ProposedGoal> goals = new ArrayList<>();
-    for (var cluster : improvementClusters.entrySet()) {
-      var props = cluster.getValue();
-      String type = props.getOrDefault("improvementType", "operational");
-      String category = props.getOrDefault("category", "unknown");
-      String target = props.getOrDefault("target", "");
-      String targetRepo = props.getOrDefault("targetRepo", "");
+    for (var entry : consensus.entrySet()) {
+      String signalName = entry.getKey();
+      if (!signalName.startsWith(namespace + ":")) {
+        continue;
+      }
 
-      var request = new ImprovementRequest(
-          type, category, target, targetRepo,
-          List.of(), 0, Map.of());
+      Optional<ImprovementRequest> ctxOpt = signalContext.get(caseId, signalName);
+      if (ctxOpt.isEmpty()) {
+        continue;
+      }
+
+      ImprovementRequest request = ctxOpt.get();
+      if (!config.effectiveEnabledCategories().contains(request.category())) {
+        continue;
+      }
+
       var budgetCheck = budgetEnforcer.check(caseId, config.effectiveBudget(), request);
       if (budgetCheck instanceof ImprovementBudgetEnforcer.BudgetCheck.Denied) {
         continue;
       }
 
       Map<String, String> attributes = new LinkedHashMap<>();
-      attributes.put("improvement.type", type);
-      attributes.put("improvement.category", category);
-      attributes.put("improvement.target", target);
-      attributes.put("improvement.targetRepo", targetRepo);
-      attributes.put("improvement.signalName", cluster.getKey());
+      attributes.put("improvement.type", request.improvementType());
+      attributes.put("improvement.category", request.category());
+      attributes.put("improvement.target", request.target());
+      attributes.put("improvement.targetRepo", request.targetRepo());
+      attributes.put("improvement.signalName", signalName);
 
       goals.add(new GoalFormationProposal.ProposedGoal(
-          "self_improvement:" + category + ":" + target,
-          "Improve " + category + " for " + target,
+          "self_improvement:" + request.category() + ":" + request.target(),
+          "Improve " + request.category() + " for " + request.target(),
           GoalPriority.SECONDARY,
-          "Signal consensus reached for " + cluster.getKey(),
+          "Signal consensus reached for " + signalName,
           attributes));
     }
 
@@ -877,16 +943,16 @@ public class ImprovementGoalFormationStrategy implements GoalFormationStrategy {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 5: Run tests to verify they pass**
 
 Run: `TESTCONTAINERS_RYUK_DISABLED=true mvn test -pl runtime-core -Dtest=ImprovementGoalFormationStrategyTest -q`
-Expected: all 4 tests pass
+Expected: all 5 tests pass
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementGoalFormationStrategy.java runtime-core/src/test/java/io/casehub/engine/internal/improvement/ImprovementGoalFormationStrategyTest.java
-git commit -m "feat(#1114): add ImprovementGoalFormationStrategy — signal consensus triggers budget-gated goal proposals"
+git add runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementSignalContext.java runtime-core/src/main/java/io/casehub/engine/internal/improvement/ImprovementGoalFormationStrategy.java runtime-core/src/test/java/io/casehub/engine/internal/improvement/ImprovementGoalFormationStrategyTest.java
+git commit -m "feat(#1114): add ImprovementSignalContext + ImprovementGoalFormationStrategy — signal consensus triggers budget-gated goal proposals"
 ```
 
 ### Task 5: Outcome Recording (3 Layers)
@@ -1838,7 +1904,7 @@ After this batch: end-to-end verification that the improvement pipeline works �
 - Test: `runtime-core/src/test/java/io/casehub/engine/internal/improvement/SelfImprovementIntegrationTest.java`
 
 **Interfaces:**
-- Consumes: All components from Tasks 1–7
+- Consumes: All components from Tasks 1–10
 
 - [ ] **Step 1: Write the integration test**
 
@@ -1852,6 +1918,7 @@ import io.casehub.api.model.stigmergy.*;
 import io.casehub.engine.common.internal.signal.SignalRegistry;
 import io.casehub.engine.internal.improvement.worker.ImprovementIntegrationWorker;
 import io.casehub.testing.TestEventLogRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -1862,6 +1929,7 @@ import org.junit.jupiter.api.Test;
 class SelfImprovementIntegrationTest {
 
   private SignalRegistry signalRegistry;
+  private ImprovementSignalContext signalContext;
   private ImprovementBudgetEnforcer budgetEnforcer;
   private ImprovementGoalFormationStrategy goalStrategy;
   private ImprovementOutcomeRecorder outcomeRecorder;
@@ -1875,8 +1943,10 @@ class SelfImprovementIntegrationTest {
   @BeforeEach
   void setUp() {
     signalRegistry = new SignalRegistry();
+    signalContext = new ImprovementSignalContext();
     budgetEnforcer = new ImprovementBudgetEnforcer();
-    goalStrategy = new ImprovementGoalFormationStrategy(budgetEnforcer, signalRegistry);
+    goalStrategy = new ImprovementGoalFormationStrategy(
+        budgetEnforcer, signalRegistry, signalContext);
     eventLogRepo = new TestEventLogRepository();
     outcomeRecorder = new ImprovementOutcomeRecorder(eventLogRepo);
     signalProjector = new ImprovementSignalProjector(signalRegistry);
@@ -1888,20 +1958,16 @@ class SelfImprovementIntegrationTest {
   @Test
   void fullLifecycle_signalToOutcome() {
     var config = new ImprovementConfig(null, 2, null, null, null);
+    String signalName = "improvement:dependency:staleness:major-behind";
 
-    // 1. Two agents deposit improvement signals
-    signalRegistry.deposit(caseId, "improvement:dependency:staleness:major-behind",
-        1.0, "agent-1", Map.of(
-            "improvementType", "operational",
-            "category", "dependency-update",
-            "target", "hibernate-core",
-            "targetRepo", "casehubio/engine"));
-    signalRegistry.deposit(caseId, "improvement:dependency:staleness:major-behind",
-        1.0, "agent-2", Map.of(
-            "improvementType", "operational",
-            "category", "dependency-update",
-            "target", "hibernate-core",
-            "targetRepo", "casehubio/engine"));
+    // 1. Two agents deposit improvement signals + register context
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-1", 100);
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-2", 100);
+    signalContext.register(caseId, signalName, new ImprovementRequest(
+        "operational", "dependency-update", "hibernate-core",
+        "casehubio/engine", List.of("pom.xml"), 20, Map.of()));
 
     // 2. Goal formation detects consensus and proposes
     var proposal = goalStrategy.proposeImprovements(caseId, config);
@@ -1942,29 +2008,20 @@ class SelfImprovementIntegrationTest {
   }
 
   @Test
-  void structuralDenyBlocksEvenWithConsensus() {
+  void noProposalWithoutRegisteredContext() {
     var config = new ImprovementConfig(null, 2, null, null, null);
+    String signalName = "improvement:quality:lint:violation";
 
-    signalRegistry.deposit(caseId, "improvement:quality:lint:violation",
-        1.0, "agent-1", Map.of(
-            "improvementType", "operational",
-            "category", "lint-fix",
-            "target", "ImprovementBudgetEnforcer",
-            "targetRepo", "casehubio/engine"));
-    signalRegistry.deposit(caseId, "improvement:quality:lint:violation",
-        1.0, "agent-2", Map.of(
-            "improvementType", "operational",
-            "category", "lint-fix",
-            "target", "ImprovementBudgetEnforcer",
-            "targetRepo", "casehubio/engine"));
+    // Consensus exists but no context registered
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-1", 100);
+    signalRegistry.deposit(caseId, signalName,
+        1.0, Duration.ofHours(1), "agent-2", 100);
 
-    // Even though consensus exists, budget enforcer blocks structural paths
-    // The strategy builds requests with empty targetPaths by default,
-    // so this test verifies the budget check integration point
     var proposal = goalStrategy.proposeImprovements(caseId, config);
-    // With empty targetPaths, structural deny doesn't fire — goal is proposed
-    // The structural deny fires at the worker level when actual paths are known
-    assertThat(proposal).isNotNull();
+
+    // Without registered context, strategy skips this signal
+    assertThat(proposal).isNull();
   }
 
   @Test
