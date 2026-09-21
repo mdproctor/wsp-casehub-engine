@@ -1,0 +1,408 @@
+# Evolution Readiness Methodology — Design Spec
+
+**Issue:** casehubio/engine#1131
+**Epic:** casehubio/engine#1104 (Hive Mind)
+**Parent spec:** `2026-09-20-continuous-evolution-loop-design.md` (#1115)
+**Decisions:** D1–D9 in `decisions.md`
+**Date:** 2026-09-21
+
+## Problem
+
+The evolution loop infrastructure (#1115) is complete: `EvolutionTicker`, `HealthScoreTracker`, `ImprovementCircuitBreaker`, `RegressionDetector`, `ImprovementCategoryTracker`, `ConflictDetector`, and the full research pipeline are all implemented with 296 passing tests. But `CapabilityArea.assess()` is an empty SPI — no concrete implementations exist. Without real health data flowing:
+
+- `HealthScoreTracker.computeScore()` returns 0.0 (no registered areas)
+- `ImprovementCircuitBreaker` never trips (no health signal)
+- `RegressionDetector` never detects regression (no baseline to compare)
+- The entire feedback loop is inert
+
+Projects need a methodology to become evolution-capable — a progression from "nothing configured" to "fully autonomous improvement."
+
+## Scope
+
+This spec covers:
+
+1. Ten concrete `CapabilityArea` implementations (all bootstrap areas from D109)
+2. `ComplianceLevel` enum (L0–L3) and per-area `ComplianceChecklist`
+3. `ReadinessValidator` producing `ReadinessReport`
+4. CDI bootstrap observer for auto-registering capability areas
+5. `HealthPolicy.effectiveWeights()` update (8 → 10 areas)
+6. EventLog persistence for compliance state transitions
+
+Out of scope: command centre UI (#1132), evolution-from-zero bootstrapping, LLM-powered area assessment (Epics 2-3).
+
+## 1. Compliance Levels
+
+Four progressive levels define the evolution readiness journey. Each level is a superset of the previous.
+
+```java
+// api, io.casehub.api.model.stigmergy
+public enum ComplianceLevel {
+  L0_INERT,       // nothing configured — evolution disabled
+  L1_OBSERVE,     // health data flows — monitoring without action
+  L2_PROPOSE,     // system proposes improvements — HIL approval required
+  L3_AUTONOMOUS   // system executes improvements — HIL oversight
+}
+```
+
+### Level requirements
+
+| Level | What's needed | Behaviour |
+|-------|--------------|-----------|
+| L0_INERT | Nothing — default state | `evolutionEnabled: false`. No areas registered, no health tracking. |
+| L1_OBSERVE | ≥1 CapabilityArea with non-trivial `assess()`, `evolutionEnabled: false` | Health scores computed and tracked. HealthScoreTracker records snapshots. Circuit breaker evaluated but moot (evolution disabled). Dashboard-ready. |
+| L2_PROPOSE | L1 + `evolutionEnabled: true`, signal sources configured, consensus threshold met | EvolutionTicker.tick() runs the full gate pipeline. Proposals generated. GoalFormationService.propose() fires. Improvement cases spawned but require HIL review (existing `submit-pr → review → integrate` lifecycle). |
+| L3_AUTONOMOUS | L2 + auto-integration configured, rollback policy configured, health threshold configured | Same as L2 but improvement cases can auto-integrate without HIL review. Rollback policy active. Circuit breaker and regression detection protect against degradation. |
+
+### Per-area compliance
+
+Each `CapabilityArea` can be at a different compliance level. A project can be L3 for stability (CI data flows, auto-fix works) while remaining L0 for cognitive-reasoning (no cognitive layer yet). The **project-level compliance** is `min(area levels)` — a conservative single indicator.
+
+```java
+// api, io.casehub.api.model.stigmergy
+public record ComplianceChecklist(
+    String areaId,
+    ComplianceLevel level,
+    List<CheckRequirement> requirements) {
+
+  public record CheckRequirement(
+      String name,
+      String description,
+      CheckType type) {
+
+    public enum CheckType {
+      DATA_FLOW,      // area receives real data (not stub defaults)
+      CONFIGURATION,  // required ImprovementConfig fields set
+      INFRASTRUCTURE  // supporting infrastructure present (e.g. signal sources)
+    }
+  }
+}
+```
+
+## 2. Capability Area Implementations
+
+### Architecture
+
+Each `CapabilityArea` implementation:
+- Is `@ApplicationScoped` with `@DefaultBean` — consumers can override
+- Directly queries its data sources (EventLog, signal registry, CDI-injected services) — no intermediate MetricSource SPI (D2)
+- Returns a `CapabilityAreaAssessment` with computed `healthScore` (0.0–1.0), `landscapePosition`, and cost/impact/ROI estimates
+- Lives in `runtime-core`, package `io.casehub.engine.internal.improvement.area`
+
+### Data access pattern
+
+```
+CapabilityArea.assess(caseId)
+    └── queries EventLog for domain events
+    └── queries signal registry for detection signals
+    └── queries CDI-injected services (ActivityTracker, etc.)
+    └── computes healthScore from available data
+    └── returns CapabilityAreaAssessment
+```
+
+When no data is available (no events, no injected services), the default `assess()` returns a neutral assessment: `healthScore=0.5`, `landscapePosition=ABSENT`, `impactEstimate=0.0`, `costEstimate=0.0`, `roi=0.0`. This is the L0_INERT baseline — present but providing no signal.
+
+### The 10 bootstrap areas
+
+| # | Area ID | assess() data sources | Rule-based health metric |
+|---|---------|----------------------|--------------------------|
+| 1 | `stability` | EventLog: BUILD_*, TEST_* events | Ratio of successful to total build/test events in window |
+| 2 | `performance` | EventLog: case lifecycle timing events | Ratio of cases completing within SLA to total |
+| 3 | `execution` | EventLog: WORKER_DISPATCHED, WORKER_COMPLETED events | Worker success rate and dispatch efficiency |
+| 4 | `safety` | EventLog: TRUST_*, BUDGET_* events, circuit breaker state | Inverse of trust violations and budget overruns in window |
+| 5 | `integration` | EventLog: API/contract events (if present) | Ratio of successful integrations to total |
+| 6 | `coordination` | EventLog: STIGMERGY_*, SWARM_* events | Signal convergence rate and team formation success |
+| 7 | `perception` | Signal registry: signal deposit rate, staleness | Ratio of fresh to stale signals across namespaces |
+| 8 | `autonomy` | EventLog: IMPROVEMENT_* events, self-provisioning events | Ratio of autonomous actions to HIL-assisted actions |
+| 9 | `cognitive-reasoning` | EventLog: GOAL_FORMED, PLAN_* events | Goal achievement rate (goals formed vs goals completed) |
+| 10 | `cognitive-memory` | EventLog: CBR_* events (if present) | CBR retrieval hit rate and reuse frequency |
+
+### Health score computation
+
+Each area computes its health score as a ratio in [0.0, 1.0]:
+
+```java
+// Example: StabilityCapabilityArea
+@DefaultBean
+@ApplicationScoped
+public class StabilityCapabilityArea implements CapabilityArea {
+
+  private final EventLogRepository eventLog;
+
+  @Inject
+  public StabilityCapabilityArea(EventLogRepository eventLog) {
+    this.eventLog = eventLog;
+  }
+
+  @Override
+  public String id() { return "stability"; }
+
+  @Override
+  public String name() { return "Stability"; }
+
+  @Override
+  public String description() {
+    return "CI, tests, build reliability, error rates";
+  }
+
+  @Override
+  public CapabilityAreaAssessment assess(UUID caseId) {
+    var events = eventLog.findByCaseId(caseId); // scoped query
+    long buildEvents = events.stream()
+        .filter(e -> e.type().name().startsWith("BUILD_"))
+        .count();
+    if (buildEvents == 0) {
+      return neutralAssessment(); // L0: no data
+    }
+    long successes = events.stream()
+        .filter(e -> e.type() == CaseHubEventType.BUILD_SUCCEEDED)
+        .count();
+    double healthScore = (double) successes / buildEvents;
+
+    return new CapabilityAreaAssessment(
+        "stability", healthScore,
+        positionFromScore(healthScore),
+        impactEstimate(healthScore),
+        costEstimate(healthScore),
+        roi(healthScore),
+        Instant.now());
+  }
+}
+```
+
+Areas that lack real data sources (perception, cognitive-memory, cognitive-reasoning) provide heuristic defaults. When the EventLog has no relevant events, they return the neutral assessment. This is architecturally correct — the @DefaultBean pattern means blocks/neocortex replaces them with LLM-powered assessment when the cognitive layer ships.
+
+### Landscape position derivation
+
+Each area derives its `LandscapePosition` from its health score:
+
+| Health score range | Position | Meaning |
+|-------------------|----------|---------|
+| No data (0 events) | `ABSENT` | Area not active — no signal to assess |
+| 0.0 – 0.4 | `BEHIND` | Significantly below acceptable health |
+| 0.4 – 0.7 | `AT_PARITY` | Functional but room for improvement |
+| 0.7 – 1.0 | `AHEAD` | Strong health — focus elsewhere |
+
+These thresholds are in the area implementation, not configurable — the compliance level model (not landscape position) governs progression decisions.
+
+## 3. CDI Bootstrap Observer
+
+A startup observer discovers all `@ApplicationScoped` `CapabilityArea` beans and registers them with the `CapabilityAreaRegistry`. This preserves the registry's runtime mutability (register/deprecate) for taxonomy evolution while automating initial population.
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@ApplicationScoped
+public class CapabilityAreaBootstrap {
+
+  @Inject
+  CapabilityAreaRegistry registry;
+
+  @Inject
+  @Any
+  Instance<CapabilityArea> areaInstances;
+
+  void onStartup(@Observes StartupEvent event) {
+    for (CapabilityArea area : areaInstances) {
+      registry.register(area);
+    }
+  }
+}
+```
+
+This runs once at startup. Runtime taxonomy evolution (merge, split, deprecate) continues to use `CapabilityAreaRegistry` directly.
+
+## 4. Readiness Validator
+
+The `ReadinessValidator` checks all registered `CapabilityArea` implementations against the compliance checklist for a target level and produces a `ReadinessReport`.
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@ApplicationScoped
+public class ReadinessValidator {
+
+  private final CapabilityAreaRegistry areaRegistry;
+  private final ComplianceChecklistProvider checklistProvider;
+
+  public ReadinessReport validate(UUID caseId, ComplianceLevel targetLevel) {
+    // For each registered area:
+    //   1. Run the area's ComplianceChecklist for the target level
+    //   2. Assess each CheckRequirement
+    //   3. Collect results into AreaCompliance
+    // Compute project-level compliance as min(area levels)
+    // Return ReadinessReport with per-area breakdown
+  }
+}
+```
+
+### ReadinessReport
+
+```java
+// api, io.casehub.api.model.stigmergy
+public record ReadinessReport(
+    ComplianceLevel targetLevel,
+    ComplianceLevel projectLevel,
+    List<AreaCompliance> areas,
+    boolean passed,
+    Instant evaluatedAt) {
+
+  public record AreaCompliance(
+      String areaId,
+      ComplianceLevel areaLevel,
+      List<CheckResult> checks) {}
+
+  public record CheckResult(
+      String name,
+      boolean satisfied,
+      String expected,
+      String actual,
+      @Nullable String remediation) {}
+}
+```
+
+### ComplianceChecklistProvider
+
+Provides the `ComplianceChecklist` for each area at each level. Implemented as a `@DefaultBean @ApplicationScoped` bean so consumers can override the default checklists.
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@DefaultBean
+@ApplicationScoped
+public class DefaultComplianceChecklistProvider implements ComplianceChecklistProvider {
+
+  public ComplianceChecklist checklistFor(String areaId, ComplianceLevel level) {
+    // Returns the built-in checklist for the area at the level.
+    // L0: no requirements (always satisfied)
+    // L1: area must be registered + assess() returns non-neutral data
+    // L2: L1 + evolutionEnabled=true + signal sources configured
+    // L3: L2 + rollback policy + health threshold + auto-integration
+  }
+}
+```
+
+### Example checklist: stability at L1
+
+| Requirement | Type | Check |
+|-------------|------|-------|
+| `stability-area-registered` | INFRASTRUCTURE | CapabilityAreaRegistry.get("stability") present |
+| `stability-has-build-events` | DATA_FLOW | EventLog has BUILD_* events for the case |
+| `stability-non-neutral-score` | DATA_FLOW | assess().healthScore != 0.5 (not the neutral default) |
+
+### Example checklist: stability at L2
+
+| Requirement | Type | Check |
+|-------------|------|-------|
+| All L1 requirements | — | — |
+| `evolution-enabled` | CONFIGURATION | ImprovementConfig.evolutionEnabled == true |
+| `stability-signals-configured` | INFRASTRUCTURE | SignalRegistry has `improvement:quality:*` signals |
+| `consensus-threshold-met` | CONFIGURATION | ImprovementConfig.consensusMinSources >= 1 |
+
+## 5. HealthPolicy Update
+
+`HealthPolicy.effectiveWeights()` must be updated from 8 to 10 areas to match the D109 bootstrap taxonomy:
+
+```java
+// Current (8 areas):
+Map.of(
+    "stability", 0.2,
+    "performance", 0.15,
+    "execution", 0.1,
+    "safety", 0.15,
+    "integration", 0.1,
+    "autonomy", 0.1,
+    "cognitive-reasoning", 0.1,
+    "coordination", 0.1);
+
+// Updated (10 areas — adds perception and cognitive-memory):
+Map.of(
+    "stability", 0.15,
+    "performance", 0.12,
+    "execution", 0.10,
+    "safety", 0.12,
+    "integration", 0.08,
+    "autonomy", 0.08,
+    "cognitive-reasoning", 0.10,
+    "cognitive-memory", 0.08,
+    "coordination", 0.08,
+    "perception", 0.09);
+```
+
+Weights are re-normalised to sum to 1.0. Stability and safety remain the highest-weighted areas. The two new areas (perception, cognitive-memory) receive lower weights reflecting their initially heuristic assessment quality.
+
+## 6. EventLog Persistence
+
+Compliance state transitions are recorded as EventLog entries, following the pattern established by `ImprovementCircuitBreaker`:
+
+- New `CaseHubEventType` values: `COMPLIANCE_LEVEL_CHANGED`, `READINESS_EVALUATED`
+- `COMPLIANCE_LEVEL_CHANGED` — emitted when the project's compliance level changes (e.g. L0 → L1 after configuring health sensors)
+- `READINESS_EVALUATED` — emitted when `ReadinessValidator.validate()` runs, capturing the full `ReadinessReport` as event data
+
+On restart, the current compliance level for each case reconstructs from the most recent `COMPLIANCE_LEVEL_CHANGED` EventLog entry.
+
+## 7. Module Placement
+
+Following the #1115 placement pattern (D5):
+
+| Component | Module | Package |
+|-----------|--------|---------|
+| `ComplianceLevel` enum | `api` | `io.casehub.api.model.stigmergy` |
+| `ComplianceChecklist` record | `api` | `io.casehub.api.model.stigmergy` |
+| `ReadinessReport` record | `api` | `io.casehub.api.model.stigmergy` |
+| `ComplianceChecklistProvider` SPI | `api` | `io.casehub.api.spi.improvement` |
+| `StabilityCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `PerformanceCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `ExecutionCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `SafetyCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `IntegrationCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `CoordinationCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `PerceptionCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `AutonomyCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `CognitiveReasoningCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `CognitiveMemoryCapabilityArea` | `runtime-core` | `io.casehub.engine.internal.improvement.area` |
+| `CapabilityAreaBootstrap` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `ReadinessValidator` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `DefaultComplianceChecklistProvider` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+
+## 8. Test Strategy
+
+### Unit tests
+
+| Test class | What it covers |
+|------------|---------------|
+| `StabilityCapabilityAreaTest` | Health score from BUILD events, neutral on no data, landscape position thresholds |
+| `PerformanceCapabilityAreaTest` | Health score from case lifecycle timing, SLA adherence |
+| `ExecutionCapabilityAreaTest` | Worker success rate, dispatch efficiency |
+| `SafetyCapabilityAreaTest` | Trust violations, budget overruns, circuit breaker state |
+| `IntegrationCapabilityAreaTest` | API/contract event ratios |
+| `CoordinationCapabilityAreaTest` | Stigmergy/swarm event success rates |
+| `PerceptionCapabilityAreaTest` | Signal freshness ratios (heuristic) |
+| `AutonomyCapabilityAreaTest` | Autonomous vs HIL action ratios (heuristic) |
+| `CognitiveReasoningCapabilityAreaTest` | Goal achievement rate (heuristic) |
+| `CognitiveMemoryCapabilityAreaTest` | CBR retrieval hit rate (heuristic) |
+| `CapabilityAreaBootstrapTest` | CDI discovery and registration at startup |
+| `ReadinessValidatorTest` | All 4 levels validated, per-area breakdown, project-level min |
+| `DefaultComplianceChecklistProviderTest` | Correct checklist for each area at each level |
+
+### Integration tests
+
+| Test class | What it covers |
+|------------|---------------|
+| `ReadinessProgressionIntegrationTest` | Full L0 → L1 → L2 → L3 progression: start with no config, add areas, enable evolution, configure auto-integration |
+| `HealthScoreWithRealAreasTest` | HealthScoreTracker aggregation with all 10 registered areas, weight normalisation |
+
+## References
+
+- `api/src/main/java/io/casehub/api/spi/improvement/CapabilityArea.java` — existing SPI interface
+- `api/src/main/java/io/casehub/api/model/stigmergy/CapabilityAreaAssessment.java` — assessment record
+- `api/src/main/java/io/casehub/api/model/stigmergy/HealthPolicy.java` — weights (needs update 8→10)
+- `api/src/main/java/io/casehub/api/model/stigmergy/ImprovementConfig.java` — evolution config
+- `runtime-core/src/main/java/io/casehub/engine/internal/improvement/CapabilityAreaRegistry.java` — area registry
+- `runtime-core/src/main/java/io/casehub/engine/internal/improvement/HealthScoreTracker.java` — score aggregation
+- `runtime-core/src/main/java/io/casehub/engine/internal/improvement/EvolutionTicker.java` — tick pipeline
+- `specs/issue-1104-hive-mind/2026-09-20-continuous-evolution-loop-design.md` §6 (capability areas), §11 (module placement), D109 (bootstrap taxonomy)
+- `specs/issue-1104-hive-mind/decisions.md` D109 — 10 bootstrap areas with coverage table
+- `docs/guides/contributor-guide.md` §SPI Architecture — SPI placement rules
+- `docs/guides/contributor-guide.md` §CDI Conventions — @DefaultBean pattern
+- issue #1131 — problem statement and scope
+- issue #1132 — command centre conductor (consumes ReadinessReport)
+- Memory: `evolution-readiness-methodology` — priority ordering
+- Memory: `evolution-from-zero` — bootstrap from zero with HIL briefing
+- Memory: `command-centre-conductor` — observability and HIL intervention
