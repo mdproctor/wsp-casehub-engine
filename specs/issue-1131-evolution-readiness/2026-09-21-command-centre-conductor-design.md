@@ -70,13 +70,11 @@ EvolutionTicker.tick()
     ├── gate blocked → CDI event → EvolutionStreamBroadcaster
     ├── proposal generated → CDI event → EvolutionStreamBroadcaster
     │
-    ├── GatePolicy check → GATED? → ConductorInboxEntry → inbox
-    │                     → AUTO? → proceed
-    │                     → NOTIFY? → proceed + inbox notification
-    │
-    └── EscalationPolicy check → any layer triggers?
-                                → yes → promote to inbox
-                                → no → auto-proceed
+    └── Gate evaluation (GatePolicy + EscalationPolicy combined):
+          GATED mode → block → PENDING inbox entry
+          AUTO/NOTIFY + escalation triggers → block → PENDING inbox entry
+          NOTIFY + no escalation → proceed + AUTO_APPROVED inbox entry
+          AUTO + no escalation → proceed (no entry)
 ```
 
 ## 1. Observe — State Snapshot and Event Stream
@@ -548,9 +546,9 @@ public record GatePolicy(
     @Nullable Integer gateTimeoutMinutes) {
 
   public enum GateMode {
-    GATED,    // blocks until HIL resolves
-    AUTO,     // auto-approve, escalation policy may still surface to inbox
-    NOTIFY    // auto-approve + always surface in inbox
+    GATED,    // always blocks until conductor resolves
+    AUTO,     // auto-approve unless escalation triggers → then blocks
+    NOTIFY    // auto-approve + AUTO_APPROVED inbox entry; escalation still blocks
   }
 
   public GatePolicy {
@@ -806,14 +804,25 @@ public record ConductorInboxEntry(
     // Resolution
     @Nullable ConductorDecision decision) {
 
-  public enum Status { PENDING, APPROVED, REJECTED, REDIRECTED, TIMED_OUT }
+  public enum Status { PENDING, APPROVED, REJECTED, REDIRECTED, TIMED_OUT, AUTO_APPROVED }
 }
 
 public record ConductorDecision(
     ConductorInboxEntry.Status outcome,
-    @Nullable String redirectTarget,
+    @Nullable GateResolutionPayload payload,
     @Nullable String reason,
     @Nullable String feedback) {}
+
+public sealed interface GateResolutionPayload
+    permits GateResolutionPayload.ScopeModification,
+            GateResolutionPayload.HypothesisSelection {
+  record ScopeModification(
+      @Nullable List<String> keywords,
+      @Nullable String depth,
+      @Nullable List<String> channels) implements GateResolutionPayload {}
+  record HypothesisSelection(
+      List<Integer> approvedIndices) implements GateResolutionPayload {}
+}
 ```
 
 ### Research steering (D22) — checkpoint model
@@ -822,6 +831,15 @@ The research pipeline does NOT block threads. When a gate is reached, the pipeli
 
 ```java
 // api, io.casehub.api.model.stigmergy
+public sealed interface GateCheckpoint
+    permits GateCheckpoint.ScopeCheckpoint,
+            GateCheckpoint.HypothesisCheckpoint {
+  record ScopeCheckpoint(ResearchScope scope)
+      implements GateCheckpoint {}
+  record HypothesisCheckpoint(List<ImprovementHypothesis> hypotheses)
+      implements GateCheckpoint {}
+}
+
 public sealed interface ResearchPipelineResult
     permits ResearchPipelineResult.Completed,
             ResearchPipelineResult.AwaitingGate {
@@ -832,12 +850,24 @@ public sealed interface ResearchPipelineResult
   record AwaitingGate(
       ImprovementStage stage,
       String inboxEntryId,
-      Object checkpoint) implements ResearchPipelineResult {}
+      GateCheckpoint checkpoint) implements ResearchPipelineResult {}
 }
 ```
 
 ```java
 // Enhanced ResearchPipelineOrchestrator
+
+enum GateOutcome { BLOCK, NOTIFY, PROCEED }
+
+private GateOutcome evaluateGate(GateMode mode, UUID caseId,
+    String tenancyId, ImprovementStage stage,
+    EscalationPolicy policy, EscalationContext context) {
+  if (mode == GateMode.GATED) return GateOutcome.BLOCK;
+  var result = escalationProvider.evaluate(policy, context);
+  if (result.hasAnyTrigger()) return GateOutcome.BLOCK;
+  return mode == GateMode.NOTIFY ? GateOutcome.NOTIFY : GateOutcome.PROCEED;
+}
+
 public ResearchPipelineResult execute(
     UUID caseId, String tenancyId,
     ResearchDepth depth, CapabilityAreaAssessment area,
@@ -847,13 +877,20 @@ public ResearchPipelineResult execute(
   var scope = scoper.scope(depth, area, driveContext);
 
   // Checkpoint 1: Research scope gate
-  if (shouldGate(gatePolicy.effectiveMode(ImprovementStage.RESEARCH_SCOPE),
+  var scopeCheckpoint = new GateCheckpoint.ScopeCheckpoint(scope);
+  var scopeOutcome = evaluateGate(
+      gatePolicy.effectiveMode(ImprovementStage.RESEARCH_SCOPE),
       caseId, tenancyId, ImprovementStage.RESEARCH_SCOPE,
-      scope, escalationPolicy)) {
+      escalationPolicy, buildContext(scope));
+
+  if (scopeOutcome == GateOutcome.BLOCK) {
     var entryId = enqueueForApproval(
-        caseId, ImprovementStage.RESEARCH_SCOPE, scope);
+        caseId, ImprovementStage.RESEARCH_SCOPE, scopeCheckpoint);
     return new ResearchPipelineResult.AwaitingGate(
-        ImprovementStage.RESEARCH_SCOPE, entryId, scope);
+        ImprovementStage.RESEARCH_SCOPE, entryId, scopeCheckpoint);
+  }
+  if (scopeOutcome == GateOutcome.NOTIFY) {
+    createNotification(caseId, ImprovementStage.RESEARCH_SCOPE, scope);
   }
 
   return executeFromScope(caseId, tenancyId, depth, area,
@@ -862,24 +899,21 @@ public ResearchPipelineResult execute(
 
 public ResearchPipelineResult resume(
     UUID caseId, String tenancyId,
-    ImprovementStage fromStage, ConductorDecision decision,
+    ConductorDecision decision,
     ResearchDepth depth, CapabilityAreaAssessment area,
     Map<String, String> driveContext, GatePolicy gatePolicy,
-    EscalationPolicy escalationPolicy, Object checkpoint) {
+    EscalationPolicy escalationPolicy, GateCheckpoint checkpoint) {
 
-  return switch (fromStage) {
-    case RESEARCH_SCOPE -> {
-      var scope = applyDecision(decision, (ResearchScope) checkpoint);
+  return switch (checkpoint) {
+    case GateCheckpoint.ScopeCheckpoint sc -> {
+      var scope = applyDecision(decision, sc.scope());
       yield executeFromScope(caseId, tenancyId, depth, area,
           driveContext, scope, gatePolicy, escalationPolicy);
     }
-    case HYPOTHESIS_APPROVAL -> {
-      var hypotheses = applyDecision(
-          decision, (List<ImprovementHypothesis>) checkpoint);
+    case GateCheckpoint.HypothesisCheckpoint hc -> {
+      var hypotheses = applyDecision(decision, hc.hypotheses());
       yield new ResearchPipelineResult.Completed(hypotheses);
     }
-    default -> throw new IllegalArgumentException(
-        "Cannot resume from " + fromStage);
   };
 }
 
@@ -895,31 +929,47 @@ private ResearchPipelineResult executeFromScope(
   var hypotheses = hypothesisFormer.form(analysis, area);
 
   // Checkpoint 2: Hypothesis approval gate
-  if (shouldGate(gatePolicy.effectiveMode(
-      ImprovementStage.HYPOTHESIS_APPROVAL),
+  var hypoCheckpoint = new GateCheckpoint.HypothesisCheckpoint(hypotheses);
+  var hypoOutcome = evaluateGate(
+      gatePolicy.effectiveMode(ImprovementStage.HYPOTHESIS_APPROVAL),
       caseId, tenancyId, ImprovementStage.HYPOTHESIS_APPROVAL,
-      hypotheses, escalationPolicy)) {
+      escalationPolicy, buildContext(hypotheses));
+
+  if (hypoOutcome == GateOutcome.BLOCK) {
     var entryId = enqueueForApproval(
-        caseId, ImprovementStage.HYPOTHESIS_APPROVAL, hypotheses);
+        caseId, ImprovementStage.HYPOTHESIS_APPROVAL, hypoCheckpoint);
     return new ResearchPipelineResult.AwaitingGate(
-        ImprovementStage.HYPOTHESIS_APPROVAL, entryId, hypotheses);
+        ImprovementStage.HYPOTHESIS_APPROVAL, entryId, hypoCheckpoint);
+  }
+  if (hypoOutcome == GateOutcome.NOTIFY) {
+    createNotification(
+        caseId, ImprovementStage.HYPOTHESIS_APPROVAL, hypotheses);
   }
 
   return new ResearchPipelineResult.Completed(hypotheses);
 }
 ```
 
+**Gate evaluation semantics:** `evaluateGate()` combines `GatePolicy` and `EscalationPolicy` into a single blocking decision:
+- **GATED mode**: always blocks — the conductor must explicitly approve/reject/redirect
+- **AUTO mode + escalation triggers**: blocks — escalation is a safety net that promotes AUTO to blocking when the escalation policy fires (category rule, watch pattern, or confidence scoring)
+- **AUTO mode + no escalation**: proceeds silently — no inbox entry
+- **NOTIFY mode + escalation triggers**: blocks — same safety net as AUTO
+- **NOTIFY mode + no escalation**: proceeds and creates an `AUTO_APPROVED` inbox entry for audit visibility
+
+This means AUTO genuinely auto-approves unless the escalation policy disagrees. The conductor trusts AUTO for normal operation; the escalation policy catches edge cases (e.g., a watch pattern matching security-critical areas, or confidence below threshold). To guarantee no blocking, set escalation policy to empty rules and no watch patterns.
+
 **Gate resolution flow:**
-1. Pipeline returns `AwaitingGate` → case lifecycle persists checkpoint to case context
+1. Pipeline returns `AwaitingGate(stage, entryId, GateCheckpoint)` → case lifecycle persists typed checkpoint to case context
 2. Case transitions to GATED state (`StageProgress.StageStatus.GATED`)
 3. `ConductorInboxManager` holds the pending entry with `GATE_PENDING` EventLog
-4. Conductor resolves gate → `ConductorInboxManager.resolve()` writes `GATE_RESOLVED` EventLog → fires CDI event
-5. Case lifecycle receives event → calls `pipeline.resume()` with checkpoint and decision
-6. Pipeline continues from checkpoint with the conductor's modifications applied
+4. Conductor resolves gate with `ConductorDecision(outcome, @Nullable GateResolutionPayload, reason, feedback)` → `ConductorInboxManager.resolve()` writes `GATE_RESOLVED` EventLog → fires CDI event
+5. Case lifecycle receives event → calls `pipeline.resume()` with typed `GateCheckpoint` and `ConductorDecision`
+6. `resume()` pattern-matches on checkpoint type (exhaustive, compiler-enforced) and applies the decision's `GateResolutionPayload` if present
 
 **Timeout:** `ConductorInboxManager` checks pending entries on each tick. Entries past `gateTimeoutMinutes` are auto-rejected (`TIMED_OUT` status) with a `GATE_RESOLVED` EventLog entry. The case lifecycle handles the timeout like a REJECTED decision — the improvement case transitions to a terminal state.
 
-**Restart recovery:** On restart, `ConductorInboxManager.onStartup()` reconstructs pending entries from `GATE_PENDING` events not matched by `GATE_RESOLVED`. Improvement cases in GATED state have their checkpoint persisted in case context. When a gate subsequently resolves, the case lifecycle resumes the pipeline normally.
+**Restart recovery:** On restart, `ConductorInboxManager.onStartup()` reconstructs pending entries from `GATE_PENDING` events not matched by `GATE_RESOLVED`. Improvement cases in GATED state have their typed `GateCheckpoint` (record) persisted in case context — serialization contract is guaranteed by the sealed hierarchy's record types (`ScopeCheckpoint` wraps `ResearchScope`, `HypothesisCheckpoint` wraps `List<ImprovementHypothesis>`, both already serializable records). When a gate subsequently resolves, the case lifecycle deserializes the checkpoint and resumes the pipeline normally.
 
 **Concurrency:** Each improvement case has its own checkpoint and inbox entry — fully independent per-case.
 
@@ -1107,7 +1157,7 @@ public class DefaultEngineEvolutionApi {
   public void resolveGate(
       @PathParam UUID caseId, String tenancyId,
       String entryId, String decision,
-      @Nullable String redirectTarget,
+      @Nullable Map<String, Object> payload,
       @Nullable String reason,
       @Nullable String feedback) { ... }
 
@@ -1151,6 +1201,12 @@ public class DefaultEngineEvolutionApi {
       UUID improvementCaseId) { ... }
 }
 ```
+
+**`resolveGate()` payload deserialization:** The `payload` parameter is a JSON map at the API boundary (MCP tool arguments are JSON). The server-side implementation looks up the entry's `ImprovementStage` and deserializes the map into the appropriate `GateResolutionPayload` variant:
+- `RESEARCH_SCOPE` entry → `ScopeModification` (keys: `keywords`, `depth`, `channels`)
+- `HYPOTHESIS_APPROVAL` entry → `HypothesisSelection` (keys: `approvedIndices`)
+
+Payload is `null` for simple APPROVED/REJECTED decisions with no modifications. For REDIRECTED decisions, payload is required — the API validates this.
 
 ## 7. Bootstrap from Zero (D14)
 
@@ -1257,6 +1313,8 @@ public record ImprovementConfig(
 | `EvolutionEvent` | `api` | `io.casehub.api.view` |
 | `ConductorInboxEntry` | `api` | `io.casehub.api.model.stigmergy` |
 | `ConductorDecision` | `api` | `io.casehub.api.model.stigmergy` |
+| `GateResolutionPayload` | `api` | `io.casehub.api.model.stigmergy` |
+| `GateCheckpoint` | `api` | `io.casehub.api.model.stigmergy` |
 | `ResearchPipelineResult` | `api` | `io.casehub.api.model.stigmergy` |
 | `EscalationResult` | `api` | `io.casehub.api.model.stigmergy` |
 | `EscalationContext` | `api` | `io.casehub.api.model.stigmergy` |
@@ -1305,7 +1363,7 @@ public record ImprovementConfig(
 | `DenyPatternPersistenceTest` | Dynamic patterns survive restart via EventLog replay |
 | `ConductorInboxPersistenceTest` | Pending gate decisions survive restart via EventLog replay |
 | `ImprovementCoordinatorPersistenceTest` | Manual blocks survive restart via EventLog replay |
-| `ResearchPipelineCheckpointTest` | Pipeline returns AwaitingGate at checkpoint → resume after gate resolution → pipeline continues from checkpoint |
+| `ResearchPipelineCheckpointTest` | Pipeline returns AwaitingGate with typed GateCheckpoint → resume with ConductorDecision/GateResolutionPayload → pattern match on checkpoint type → pipeline continues |
 
 ### Critical test scenarios
 
@@ -1313,12 +1371,14 @@ public record ImprovementConfig(
 2. **Tick trace gate visibility:** tick() blocked at circuit breaker → TickTrace shows `circuit_breaker_check: BLOCKED`, earlier gates `PASSED`
 3. **Smart escalation union:** Category rule says "always escalate architecture", watch pattern doesn't match, confidence is high → item escalates (category rule alone is sufficient)
 4. **Gate timeout:** GATED stage with 1440-minute timeout → entry expires → auto-reject with TIMED_OUT status
-5. **Research scope modification:** HIL modifies research scope via `modifyResearchScope()` → modified scope used for search → research findings reflect new keywords
+5. **Research scope redirect:** HIL resolves RESEARCH_SCOPE gate with REDIRECTED + ScopeModification payload → `resume()` applies modification → modified scope used for search → research findings reflect new keywords
 6. **Hypothesis selective approval:** HIL approves 2 of 5 hypotheses → only approved hypotheses become improvement signals → rejected hypotheses recorded in manifest
 7. **Deny pattern safety:** Attempt to remove a static deny pattern via API → rejected (safety invariant preserved)
 8. **Bootstrap L0→L1:** No events → readiness fails → generate events → readiness passes → compliance level changes → CDI event fired → stream receives notification
 9. **Heartbeat liveness:** 24 uneventful ticks → TICK_HEARTBEAT EventLog entry persisted → restart → first tick has context ("loop was active")
 10. **Artifact trail completeness:** Improvement runs introspect → research → implement → integrate → artifact manifest has 4+ entries in chronological order
+11. **AUTO + escalation safety net:** Gate mode AUTO, watch pattern matches "security" area → `evaluateGate()` returns BLOCK → pipeline checkpoints → conductor sees PENDING entry with escalation triggers → conductor approves → pipeline resumes
+12. **NOTIFY mode audit trail:** Gate mode NOTIFY, no escalation triggers → pipeline proceeds + AUTO_APPROVED inbox entry created → conductor sees what auto-approved after the fact
 
 ## References
 
