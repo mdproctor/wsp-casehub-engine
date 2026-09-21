@@ -259,7 +259,7 @@
 **Depends on:** D12 (API surface — mutations for gate decisions), D13 (streaming — gate pending events in the evolution stream)
 **Sources:** issue #1132 ("manual controls", "HIL intervention at every decision point"), HilQueueEntry.java (existing queue entry model), ActionGate pattern (existing ACTION_GATE_PENDING/APPROVED/REJECTED events)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised (expanded: GatePolicy default mode is AUTO with smart escalation, not GATED; see D23 for escalation model)
 
 ## D21: SPI-based layered summarization
 
@@ -284,5 +284,35 @@
 **Trade-offs:** Two blocking checkpoints per research cycle. If the HIL queue is dormant, research stalls. Mitigated by GatePolicy timeout configuration (D20) and by the NOTIFY mode that auto-approves but alerts the HIL.
 **Depends on:** D20 (gate policy — research checkpoints are gate stages), D21 (summarization — checkpoint summaries use the SummarizationProvider)
 **Sources:** ResearchPipelineOrchestrator.java (existing pipeline), ResearchScoper.java, HypothesisFormer.java, HilQueueEntry.java, issue #1132 ("research visibility", "bootstrap from zero — research pipeline discovers what good looks like")
+**Exploration:** quick
+**Status:** captured
+
+## D23: Composable escalation policy — three layers
+
+**Choice:** The escalation policy composes three complementary layers. An item escalates to the HIL inbox if ANY layer triggers. The inbox entry includes which layer(s) triggered and the reason.
+**Layer 1 — Category rules:** Static baseline. Certain categories always escalate (architecture, safety, new-area). Others never escalate (lint-fix, trivial dependency patch). Configured as a CategoryEscalationPolicy on ImprovementConfig with allow/deny lists per category.
+**Layer 2 — Watch patterns:** HIL-declared interest patterns. The conductor specifies patterns via command centre mutations: "notify me about anything in cognitive-reasoning", "escalate dependency changes with estimatedSize > 100", "watch improvements targeting EvolutionTicker." Pattern matching on improvement metadata (category, target, estimatedSize, targetPaths, capabilityArea). Persisted as EventLog entries (pattern added/removed) for restart survival.
+**Layer 3 — Confidence scoring:** Catches everything the static rules don't. Each gate stage produces a confidence score. Below a configurable threshold → escalate with context ("why I'm uncertain"). The EscalationProvider SPI computes confidence; the default uses heuristics: CBR novelty (no similar past outcomes → low confidence), outcome history (category with recent failures → low confidence), scope size (large changes → low confidence), conflicting research findings. Blocks provides LLM-powered confidence scoring later.
+**Alternatives:**
+- Single escalation strategy — pick one of the three. Loses coverage: category rules can't handle novel situations, watch patterns require upfront configuration, confidence scoring alone can't express "architecture always needs review."
+- Union with priority — layers have precedence (category overrides confidence). Unnecessarily complex — union (any layer triggers) is simpler and safe (more escalation is conservative, not dangerous).
+**Rationale:** Each layer covers different scenarios: category rules handle the known-important (architecture always matters), watch patterns handle the HIL's current focus (I'm working on cognitive-reasoning this sprint), confidence scoring handles the unknown-uncertain (this is novel, I'm not sure). Together they provide defense-in-depth for escalation without requiring the HIL to pre-configure everything. The composable model means a new project starts with just category rules (no watch patterns, conservative confidence threshold) and gains precision as the HIL adds patterns and tunes thresholds.
+**Trade-offs:** Over-escalation risk — with three layers, the inbox could be noisy if all thresholds are conservative. Mitigated by the NOTIFY mode (auto-proceed but surface in inbox) for low-stakes escalations, and by the HIL's ability to tune each layer independently. Under-escalation risk is minimal — the union model means adding a layer only adds coverage, never removes it.
+**Depends on:** D20 (gate policy — escalation triggers determine which gates fire), D12 (API surface — watch pattern mutations, inbox query)
+**Sources:** issue #1132 ("HIL intervention at every decision point"), HilQueueEntry.java (existing queue model), ImprovementBudgetEnforcer.java (STRUCTURAL_DENIED_PATTERNS as precedent for static rules), ConfidenceScorer.java (existing confidence scoring pattern from regression detection)
+**Exploration:** quick
+**Status:** captured
+
+## D24: Artifact trail per improvement stream
+
+**Choice:** Each improvement/research stream maintains a chronological trail of on-disk artifacts (analysis docs, literature reviews, design specs, decisions, adversarial debate logs, diffs). The command centre surfaces these as a reviewable timeline per stream. Artifacts are tracked via an ArtifactManifest record stored in the improvement case context — a list of ArtifactEntry records with path, type (analysis/design/decision/debate/diff), stage (which lifecycle stage produced it), and timestamp. The command centre query returns the manifest; artifact content is read from disk via the existing diff viewer infrastructure.
+**Alternatives:**
+- No artifact tracking — artifacts exist on disk but the command centre doesn't know about them. The HIL must navigate the filesystem manually. Loses the timeline view.
+- Artifact content in EventLog — store artifact content in EventLog payloads. Queryable but bloats the EventLog with large text payloads (design specs can be thousands of lines).
+- Separate artifact store — new persistence layer for artifacts. Over-engineered when artifacts already live on disk.
+**Rationale:** Artifacts are already produced by the improvement lifecycle — introspection results, research findings, hypothesis documents, implementation diffs. They live on disk (case working context, git branches). What's missing is an index that associates artifacts with their improvement stream and lifecycle stage. The ArtifactManifest provides this index without moving or duplicating artifact content. The improvement case's workers (introspect, research, implement) record artifact entries as they produce outputs. The command centre reads the manifest from case context and returns it as part of the stream timeline. The existing diff viewer handles content rendering.
+**Trade-offs:** Workers must be instrumented to record ArtifactEntry when they produce outputs. This is a convention that must be followed by all improvement workers — not enforced by the type system. Mitigated by the ArtifactManifest being optional — missing entries mean incomplete timeline, not broken functionality.
+**Depends on:** D15 (snapshot model — manifest referenced from improvement stream view), D21 (summarization — summaries can reference artifacts)
+**Sources:** issue #1132 ("observable evolution"), case context (existing storage for improvement working data), diff viewer infrastructure (content rendering)
 **Exploration:** quick
 **Status:** captured
