@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1131-evolution-readiness
-state: active
+state: transitioning
 project-sha: 5459f836bc2f85dc57c20bd14bf8ceaf40f180ba
 date: 2026-09-21
 issue-repo: casehubio/engine
@@ -13,17 +13,5 @@ flyway-next-v: unknown
 issue-1131-title: feat: Evolution readiness methodology — L0-L3 compliance levels
 
 ## Queue
-- [ ] casehubio/engine#1131 — Issue #1131 ← active
-  - [x] Batch 1: SPI+Threading
-    - [x] Task 1: API model types and SPI changes
-    - [x] Task 2: Thread tenancyId and ABSENT exclusion
-  - [x] Batch 2: Core Areas
-    - [x] Task 3: Stability+Performance areas
-    - [x] Task 4: Execution+Safety areas
-  - [x] Batch 3: Extended Areas
-    - [x] Task 5: Integration+Coordination areas
-    - [x] Task 6: Heuristic areas (4)
-  - [x] Batch 4: Bootstrap+Validation
-    - [x] Task 7: Bootstrap+ChecklistProvider
-    - [x] Task 8: ReadinessValidator+integration tests
-- [ ] casehubio/engine#1132 — feat: Command centre conductor
+- [x] casehubio/engine#1131 — Issue #1131
+- [ ] casehubio/engine#1132 — feat: Command centre conductor ← active
