@@ -88,11 +88,22 @@ Each `CapabilityArea` implementation:
 - Returns a `CapabilityAreaAssessment` with computed `healthScore` (0.0–1.0), `landscapePosition`, and cost/impact/ROI estimates
 - Lives in `runtime-core`, package `io.casehub.engine.internal.improvement.area`
 
+### SPI change: tenancyId parameter
+
+The existing `CapabilityArea.assess(UUID caseId)` signature lacks the `tenancyId` parameter required by `EventLogRepository.findByCaseAndTypes()`. Since no external consumers implement this SPI yet (the entire point of this issue), we add it now:
+
+```java
+// api/spi/improvement — updated signature
+CapabilityAreaAssessment assess(UUID caseId, String tenancyId);
+```
+
+This threads through from `EvolutionTicker.tick(caseId, tenancyId, config)` → `HealthScoreTracker.refresh(caseId, tenancyId, policy)` → `area.assess(caseId, tenancyId)`. The `computeScore()` and `delta()` methods on `HealthScoreTracker` also gain `tenancyId`.
+
 ### Data access pattern
 
 ```
-CapabilityArea.assess(caseId)
-    └── queries EventLog for domain events
+CapabilityArea.assess(caseId, tenancyId)
+    └── queries EventLog via findByCaseAndTypes(caseId, types, tenancyId)
     └── queries signal registry for detection signals
     └── queries CDI-injected services (ActivityTracker, etc.)
     └── computes healthScore from available data
@@ -103,18 +114,18 @@ When no data is available (no events, no injected services), the default `assess
 
 ### The 10 bootstrap areas
 
-| # | Area ID | assess() data sources | Rule-based health metric |
-|---|---------|----------------------|--------------------------|
-| 1 | `stability` | EventLog: BUILD_*, TEST_* events | Ratio of successful to total build/test events in window |
-| 2 | `performance` | EventLog: case lifecycle timing events | Ratio of cases completing within SLA to total |
-| 3 | `execution` | EventLog: WORKER_DISPATCHED, WORKER_COMPLETED events | Worker success rate and dispatch efficiency |
-| 4 | `safety` | EventLog: TRUST_*, BUDGET_* events, circuit breaker state | Inverse of trust violations and budget overruns in window |
-| 5 | `integration` | EventLog: API/contract events (if present) | Ratio of successful integrations to total |
-| 6 | `coordination` | EventLog: STIGMERGY_*, SWARM_* events | Signal convergence rate and team formation success |
-| 7 | `perception` | Signal registry: signal deposit rate, staleness | Ratio of fresh to stale signals across namespaces |
-| 8 | `autonomy` | EventLog: IMPROVEMENT_* events, self-provisioning events | Ratio of autonomous actions to HIL-assisted actions |
-| 9 | `cognitive-reasoning` | EventLog: GOAL_FORMED, PLAN_* events | Goal achievement rate (goals formed vs goals completed) |
-| 10 | `cognitive-memory` | EventLog: CBR_* events (if present) | CBR retrieval hit rate and reuse frequency |
+| # | Area ID | assess() event types | Rule-based health metric |
+|---|---------|---------------------|--------------------------|
+| 1 | `stability` | `CASE_COMPLETED`, `CASE_FAULTED`, `CASE_CANCELLED` | Ratio of CASE_COMPLETED to total terminal case events |
+| 2 | `performance` | `CASE_STARTED` + `CASE_COMPLETED` (timestamp delta) | Ratio of cases completing within configurable duration threshold |
+| 3 | `execution` | `WORKER_EXECUTION_STARTED`, `WORKER_EXECUTION_COMPLETED`, `WORKER_EXECUTION_FAILED`, `WORKER_OUTCOME_DECLINED`, `WORKER_OUTCOME_FAILED` | Worker success rate: COMPLETED / (COMPLETED + FAILED + DECLINED + OUTCOME_FAILED) |
+| 4 | `safety` | `BUDGET_EXHAUSTED`, `CIRCUIT_BREAKER_TRIPPED`, `ACTION_GATE_REJECTED` | Inverse of safety violation events in window (0 violations = 1.0) |
+| 5 | `integration` | `ORCHESTRATION_COMPLETED`, `ORCHESTRATION_ESCALATED`, `WORKFLOW_STEP_COMPLETED`, `WORKFLOW_STEP_FAILED` | Ratio of successful orchestrations/workflows to total |
+| 6 | `coordination` | `STIGMERGY_*`, `SWARM_*`, `CONVERGENCE_DETECTED`, `COORDINATION_STORM_DETECTED` | Convergence rate minus storm events; team formation success rate |
+| 7 | `perception` | `OBSERVATION_DETECTED`, `PHEROMONE_DEPOSITED`, `SIGNAL_RECEIVED` | Signal activity rate: observation/signal events per time window (normalised) |
+| 8 | `autonomy` | `IMPROVEMENT_GOAL_FORMED`, `IMPROVEMENT_OUTCOME`, `SWARM_PROVISION_REQUESTED`, `SWARM_PROVISION_COMPLETED` | Ratio of autonomous actions (improvements, provisions) to total case activity |
+| 9 | `cognitive-reasoning` | `GOAL_FORMED`, `GOAL_REVISED`, `PLAN_ADAPTED`, `PLAN_DEEPENED`, `PLAN_CONCEDED` | Goal-to-completion ratio: completed goals / formed goals |
+| 10 | `cognitive-memory` | `IMPROVEMENT_OUTCOME` (for CBR reuse patterns) | Heuristic: returns 0.5 (neutral) until cognitive layer provides real assessment. CBR traces don't emit EventLog entries directly. |
 
 ### Health score computation
 
@@ -125,6 +136,11 @@ Each area computes its health score as a ratio in [0.0, 1.0]:
 @DefaultBean
 @ApplicationScoped
 public class StabilityCapabilityArea implements CapabilityArea {
+
+  private static final Collection<CaseHubEventType> TERMINAL_TYPES = List.of(
+      CaseHubEventType.CASE_COMPLETED,
+      CaseHubEventType.CASE_FAULTED,
+      CaseHubEventType.CASE_CANCELLED);
 
   private final EventLogRepository eventLog;
 
@@ -145,18 +161,15 @@ public class StabilityCapabilityArea implements CapabilityArea {
   }
 
   @Override
-  public CapabilityAreaAssessment assess(UUID caseId) {
-    var events = eventLog.findByCaseId(caseId); // scoped query
-    long buildEvents = events.stream()
-        .filter(e -> e.type().name().startsWith("BUILD_"))
-        .count();
-    if (buildEvents == 0) {
+  public CapabilityAreaAssessment assess(UUID caseId, String tenancyId) {
+    var events = eventLog.findByCaseAndTypes(caseId, TERMINAL_TYPES, tenancyId);
+    if (events.isEmpty()) {
       return neutralAssessment(); // L0: no data
     }
     long successes = events.stream()
-        .filter(e -> e.type() == CaseHubEventType.BUILD_SUCCEEDED)
+        .filter(e -> e.type() == CaseHubEventType.CASE_COMPLETED)
         .count();
-    double healthScore = (double) successes / buildEvents;
+    double healthScore = (double) successes / events.size();
 
     return new CapabilityAreaAssessment(
         "stability", healthScore,
