@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1130-ensemble-step-outcome
-state: active
+state: closing:promoted
 project-sha: 5459f836bc2f85dc57c20bd14bf8ceaf40f180ba
 date: 2026-09-21
 issue-repo: casehubio/engine
@@ -11,5 +11,6 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/engine#1130 — Issue #1130 ← active
