@@ -253,13 +253,13 @@ public class CustomStabilityOverride {
   @Inject CapabilityAreaRegistry registry;
   @Inject CustomStabilityArea customStability;
 
-  void onStartup(@Observes @Priority(APPLICATION + 10) StartupEvent event) {
+  void onStartup(@Observes @Priority(APPLICATION + 1000) StartupEvent event) {
     registry.register(customStability);
   }
 }
 ```
 
-`CapabilityAreaRegistry.register()` does `areas.put(area.id(), area)` — the custom area overwrites the default by ID. The `@Priority(APPLICATION + 10)` ensures the consumer's observer runs after the `CapabilityAreaBootstrap`.
+In CDI, **lower priority values fire first**. The bootstrap observer has no `@Priority` annotation, so it fires at the default priority of `APPLICATION + 500 = 2500`. The consumer's `@Priority(APPLICATION + 1000) = 3000` is higher than 2500, so it fires **after** the bootstrap. `CapabilityAreaRegistry.register()` does `areas.put(area.id(), area)` — the custom area overwrites the default by ID.
 
 ## 4. Readiness Validator
 
@@ -273,6 +273,7 @@ public class ReadinessValidator {
   private final CapabilityAreaRegistry areaRegistry;
   private final ComplianceChecklistProvider checklistProvider;
   private final EventLogRepository eventLogRepository;
+  private final SignalRegistry signalRegistry;
 
   public ReadinessReport validate(UUID caseId, String tenancyId,
       ComplianceLevel targetLevel, ImprovementConfig config) {
@@ -283,7 +284,8 @@ public class ReadinessValidator {
     //        landscapePosition != ABSENT; query eventLogRepository
     //      - CONFIGURATION: check ImprovementConfig fields
     //        (evolutionEnabled, consensusMinSources, rollbackPolicy)
-    //      - INFRASTRUCTURE: check areaRegistry.get(areaId), signal config
+    //      - INFRASTRUCTURE: check areaRegistry.get(areaId),
+    //        signalRegistry for improvement:quality:* signals
     //   3. Collect results into AreaCompliance
     // Compute project-level compliance as min(area levels where level > L0)
     // Compare against last persisted level; emit COMPLIANCE_LEVEL_CHANGED if changed
@@ -301,7 +303,7 @@ public record ReadinessReport(
     ComplianceLevel targetLevel,
     ComplianceLevel projectLevel,
     List<AreaCompliance> areas,
-    boolean passed,
+    boolean passed,  // true when projectLevel >= targetLevel
     Instant evaluatedAt) {
 
   public record AreaCompliance(
