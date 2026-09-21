@@ -55,7 +55,7 @@ public enum ComplianceLevel {
 
 ### Per-area compliance
 
-Each `CapabilityArea` can be at a different compliance level. A project can be L3 for stability (CI data flows, auto-fix works) while remaining L0 for cognitive-reasoning (no cognitive layer yet). The **project-level compliance** is `min(area levels)` — a conservative single indicator.
+Each `CapabilityArea` can be at a different compliance level. A project can be L3 for stability (CI data flows, auto-fix works) while remaining L0 for cognitive-reasoning (no cognitive layer yet). The **project-level compliance** is `min(area levels where level > L0)`, falling back to L0 when no areas are above L0. Areas at L0 are not yet participating — they don't constrain the project level. This avoids the cliff where an unconfigured area (cognitive-reasoning at L0 before Epics 2-3 ship) blocks the entire project from progressing beyond L0.
 
 ```java
 // api, io.casehub.api.model.stigmergy
@@ -83,10 +83,16 @@ public record ComplianceChecklist(
 ### Architecture
 
 Each `CapabilityArea` implementation:
-- Is `@ApplicationScoped` with `@DefaultBean` — consumers can override
+- Is plain `@ApplicationScoped` — no `@DefaultBean` (see below)
 - Directly queries its data sources (EventLog, signal registry, CDI-injected services) — no intermediate MetricSource SPI (D2)
 - Returns a `CapabilityAreaAssessment` with computed `healthScore` (0.0–1.0), `landscapePosition`, and cost/impact/ROI estimates
 - Lives in `runtime-core`, package `io.casehub.engine.internal.improvement.area`
+
+### Why not `@DefaultBean`
+
+`@DefaultBean` is the correct pattern for 1:1 SPI replacement (e.g. `InMemoryResearchCorpus` → custom `ResearchCorpus`) but wrong for multi-instance SPIs. In Quarkus Arc, `@DefaultBean` suppresses ALL default beans of the same type when ANY non-default bean exists. If a consumer provides one custom `CapabilityArea` without `@DefaultBean`, all 10 default areas are silently removed from CDI resolution — the `Instance<CapabilityArea>` in the bootstrap observer would discover only the custom one.
+
+Override instead happens via the `CapabilityAreaRegistry` runtime API. The `CapabilityAreaBootstrap` (§3) registers all CDI-discovered areas at startup. A consumer overrides a specific area by registering their custom implementation in a higher-priority startup observer — `registry.register(customArea)` overwrites by ID.
 
 ### SPI change: tenancyId parameter
 
@@ -97,7 +103,19 @@ The existing `CapabilityArea.assess(UUID caseId)` signature lacks the `tenancyId
 CapabilityAreaAssessment assess(UUID caseId, String tenancyId);
 ```
 
-This threads through from `EvolutionTicker.tick(caseId, tenancyId, config)` → `HealthScoreTracker.refresh(caseId, tenancyId, policy)` → `area.assess(caseId, tenancyId)`. The `computeScore()` and `delta()` methods on `HealthScoreTracker` also gain `tenancyId`.
+This threads through the complete evolution pipeline:
+
+```
+EvolutionTicker.tick(caseId, tenancyId, config)
+  ├── healthTracker.refresh(caseId, tenancyId, policy)
+  │     └── area.assess(caseId, tenancyId)
+  ├── circuitBreaker.evaluate(caseId, tenancyId, tracker, policy)
+  │     └── tracker.computeScore(caseId, tenancyId, policy)
+  │           └── area.assess(caseId, tenancyId)
+  └── regressionDetector.checkActiveMonitors(...)  ← uses latestSnapshot, OK
+```
+
+The `computeScore()`, `refresh()`, and `delta()` methods on `HealthScoreTracker` gain `tenancyId`. `ImprovementCircuitBreaker.evaluate()` also gains `tenancyId` to pass through to `tracker.computeScore()`.
 
 ### Data access pattern
 
@@ -111,6 +129,8 @@ CapabilityArea.assess(caseId, tenancyId)
 ```
 
 When no data is available (no events, no injected services), the default `assess()` returns a neutral assessment: `healthScore=0.5`, `landscapePosition=ABSENT`, `impactEstimate=0.0`, `costEstimate=0.0`, `roi=0.0`. This is the L0_INERT baseline — present but providing no signal.
+
+**ABSENT exclusion:** `HealthScoreTracker.computeScore()` and `refresh()` skip areas where `assessment.landscapePosition() == ABSENT` from the weighted average. Only areas with real data contribute to the composite health score. Without this exclusion, 7 neutral areas at 0.5 would drag a healthy composite (3 real areas scoring 0.9+) down to ~0.66 — barely above the circuit breaker's 0.6 threshold — despite every measured area being healthy.
 
 ### The 10 bootstrap areas
 
@@ -133,7 +153,6 @@ Each area computes its health score as a ratio in [0.0, 1.0]:
 
 ```java
 // Example: StabilityCapabilityArea
-@DefaultBean
 @ApplicationScoped
 public class StabilityCapabilityArea implements CapabilityArea {
 
@@ -157,7 +176,7 @@ public class StabilityCapabilityArea implements CapabilityArea {
 
   @Override
   public String description() {
-    return "CI, tests, build reliability, error rates";
+    return "Case completion rate — ratio of successfully completed cases to total terminal events";
   }
 
   @Override
@@ -182,7 +201,7 @@ public class StabilityCapabilityArea implements CapabilityArea {
 }
 ```
 
-Areas that lack real data sources (perception, cognitive-memory, cognitive-reasoning) provide heuristic defaults. When the EventLog has no relevant events, they return the neutral assessment. This is architecturally correct — the @DefaultBean pattern means blocks/neocortex replaces them with LLM-powered assessment when the cognitive layer ships.
+Areas that lack real data sources (perception, cognitive-memory, cognitive-reasoning) provide heuristic defaults. When the EventLog has no relevant events, they return the neutral assessment. This is architecturally correct — consumers (blocks/neocortex) replace them with LLM-powered assessment via the registry override mechanism (§3) when the cognitive layer ships.
 
 ### Landscape position derivation
 
@@ -223,6 +242,25 @@ public class CapabilityAreaBootstrap {
 
 This runs once at startup. Runtime taxonomy evolution (merge, split, deprecate) continues to use `CapabilityAreaRegistry` directly.
 
+### Selective override
+
+A consumer overrides a specific area by providing a custom `@ApplicationScoped CapabilityArea` bean with the same `id()` and registering it after the bootstrap:
+
+```java
+@ApplicationScoped
+public class CustomStabilityOverride {
+
+  @Inject CapabilityAreaRegistry registry;
+  @Inject CustomStabilityArea customStability;
+
+  void onStartup(@Observes @Priority(APPLICATION + 10) StartupEvent event) {
+    registry.register(customStability);
+  }
+}
+```
+
+`CapabilityAreaRegistry.register()` does `areas.put(area.id(), area)` — the custom area overwrites the default by ID. The `@Priority(APPLICATION + 10)` ensures the consumer's observer runs after the `CapabilityAreaBootstrap`.
+
 ## 4. Readiness Validator
 
 The `ReadinessValidator` checks all registered `CapabilityArea` implementations against the compliance checklist for a target level and produces a `ReadinessReport`.
@@ -234,13 +272,22 @@ public class ReadinessValidator {
 
   private final CapabilityAreaRegistry areaRegistry;
   private final ComplianceChecklistProvider checklistProvider;
+  private final EventLogRepository eventLogRepository;
 
-  public ReadinessReport validate(UUID caseId, ComplianceLevel targetLevel) {
+  public ReadinessReport validate(UUID caseId, String tenancyId,
+      ComplianceLevel targetLevel, ImprovementConfig config) {
     // For each registered area:
-    //   1. Run the area's ComplianceChecklist for the target level
-    //   2. Assess each CheckRequirement
+    //   1. Get the area's ComplianceChecklist for the target level
+    //   2. Evaluate each CheckRequirement by dispatching on CheckType:
+    //      - DATA_FLOW: call area.assess(caseId, tenancyId), check
+    //        landscapePosition != ABSENT; query eventLogRepository
+    //      - CONFIGURATION: check ImprovementConfig fields
+    //        (evolutionEnabled, consensusMinSources, rollbackPolicy)
+    //      - INFRASTRUCTURE: check areaRegistry.get(areaId), signal config
     //   3. Collect results into AreaCompliance
-    // Compute project-level compliance as min(area levels)
+    // Compute project-level compliance as min(area levels where level > L0)
+    // Compare against last persisted level; emit COMPLIANCE_LEVEL_CHANGED if changed
+    // Emit READINESS_EVALUATED with full report
     // Return ReadinessReport with per-area breakdown
   }
 }
@@ -273,7 +320,7 @@ public record ReadinessReport(
 
 ### ComplianceChecklistProvider
 
-Provides the `ComplianceChecklist` for each area at each level. Implemented as a `@DefaultBean @ApplicationScoped` bean so consumers can override the default checklists.
+Provides the `ComplianceChecklist` for each area at each level. Implemented as a `@DefaultBean @ApplicationScoped` bean — the 1:1 SPI replacement pattern is correct here because there is exactly one `ComplianceChecklistProvider`, not multiple instances.
 
 ```java
 // runtime-core, io.casehub.engine.internal.improvement
@@ -296,17 +343,17 @@ public class DefaultComplianceChecklistProvider implements ComplianceChecklistPr
 | Requirement | Type | Check |
 |-------------|------|-------|
 | `stability-area-registered` | INFRASTRUCTURE | CapabilityAreaRegistry.get("stability") present |
-| `stability-has-build-events` | DATA_FLOW | EventLog has BUILD_* events for the case |
-| `stability-non-neutral-score` | DATA_FLOW | assess().healthScore != 0.5 (not the neutral default) |
+| `stability-has-terminal-events` | DATA_FLOW | EventLog has CASE_COMPLETED/CASE_FAULTED/CASE_CANCELLED events for the case |
+| `stability-non-neutral-score` | DATA_FLOW | assess(caseId, tenancyId).landscapePosition != ABSENT |
 
 ### Example checklist: stability at L2
 
 | Requirement | Type | Check |
 |-------------|------|-------|
 | All L1 requirements | — | — |
-| `evolution-enabled` | CONFIGURATION | ImprovementConfig.evolutionEnabled == true |
+| `evolution-enabled` | CONFIGURATION | config.effectiveEvolutionEnabled() == true |
 | `stability-signals-configured` | INFRASTRUCTURE | SignalRegistry has `improvement:quality:*` signals |
-| `consensus-threshold-met` | CONFIGURATION | ImprovementConfig.consensusMinSources >= 1 |
+| `consensus-threshold-met` | CONFIGURATION | config.effectiveConsensusMinSources() >= 1 |
 
 ## 5. HealthPolicy Update
 
@@ -342,11 +389,11 @@ Weights are re-normalised to sum to 1.0. Stability and safety remain the highest
 
 ## 6. EventLog Persistence
 
-Compliance state transitions are recorded as EventLog entries, following the pattern established by `ImprovementCircuitBreaker`:
+Compliance state transitions are recorded as EventLog entries. The #1115 spec designed event-sourced restart recovery for the circuit breaker (`restoreFromEventLog`), but this was not yet implemented — circuit breaker state is currently in-memory only. The compliance level persistence below is the first implementation of this pattern, establishing the precedent.
 
 - New `CaseHubEventType` values: `COMPLIANCE_LEVEL_CHANGED`, `READINESS_EVALUATED`
-- `COMPLIANCE_LEVEL_CHANGED` — emitted when the project's compliance level changes (e.g. L0 → L1 after configuring health sensors)
-- `READINESS_EVALUATED` — emitted when `ReadinessValidator.validate()` runs, capturing the full `ReadinessReport` as event data
+- `COMPLIANCE_LEVEL_CHANGED` — emitted by `ReadinessValidator.validate()` when the computed project-level compliance differs from the last persisted level. The validator is the single owner of compliance level transitions — no other component emits this event.
+- `READINESS_EVALUATED` — emitted by `ReadinessValidator.validate()` on every evaluation, capturing the full `ReadinessReport` as event data
 
 On restart, the current compliance level for each case reconstructs from the most recent `COMPLIANCE_LEVEL_CHANGED` EventLog entry.
 
@@ -380,7 +427,7 @@ Following the #1115 placement pattern (D5):
 
 | Test class | What it covers |
 |------------|---------------|
-| `StabilityCapabilityAreaTest` | Health score from BUILD events, neutral on no data, landscape position thresholds |
+| `StabilityCapabilityAreaTest` | Health score from terminal case events, neutral on no data, landscape position thresholds |
 | `PerformanceCapabilityAreaTest` | Health score from case lifecycle timing, SLA adherence |
 | `ExecutionCapabilityAreaTest` | Worker success rate, dispatch efficiency |
 | `SafetyCapabilityAreaTest` | Trust violations, budget overruns, circuit breaker state |
@@ -400,6 +447,41 @@ Following the #1115 placement pattern (D5):
 |------------|---------------|
 | `ReadinessProgressionIntegrationTest` | Full L0 → L1 → L2 → L3 progression: start with no config, add areas, enable evolution, configure auto-integration |
 | `HealthScoreWithRealAreasTest` | HealthScoreTracker aggregation with all 10 registered areas, weight normalisation |
+
+## 9. Project Template — Getting to L1
+
+A minimal starter configuration to reach L1 (OBSERVE) for the core areas:
+
+### Step 1: Ensure a project case exists
+
+The evolution loop presupposes a CaseHub case instance (D1). The project must have a running case with EventLog entries flowing.
+
+### Step 2: Verify area registration
+
+On application startup, `CapabilityAreaBootstrap` auto-registers all 10 default areas. Verify with `ReadinessValidator`:
+
+```java
+var report = validator.validate(caseId, tenancyId, ComplianceLevel.L1_OBSERVE, config);
+// Check report.areas() — each should show stability-area-registered: satisfied
+```
+
+### Step 3: Generate terminal events
+
+L1 requires non-neutral assessment data. For stability, this means `CASE_COMPLETED`, `CASE_FAULTED`, or `CASE_CANCELLED` events in the EventLog. Run at least one case to completion. For execution, this means worker execution events. For performance, cases with both `CASE_STARTED` and `CASE_COMPLETED` timestamps.
+
+### Step 4: Validate L1 readiness
+
+```java
+var report = validator.validate(caseId, tenancyId, ComplianceLevel.L1_OBSERVE, config);
+// report.passed() == true when ≥1 area has non-neutral data
+// Areas without data remain at L0 — they don't block the project level
+```
+
+At L1, health scores are computed and tracked. The dashboard shows per-area health and landscape position. No improvements are proposed (evolution remains disabled).
+
+### Progression to L2
+
+Set `ImprovementConfig.evolutionEnabled = true`, configure signal sources (`improvement:quality:*`), and set `consensusMinSources >= 1`. Run the validator against `ComplianceLevel.L2_PROPOSE` to check remaining gaps.
 
 ## References
 
