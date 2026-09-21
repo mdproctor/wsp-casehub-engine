@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1130-ensemble-step-outcome
-state: scaffolded
+state: active
 project-sha: 5459f836bc2f85dc57c20bd14bf8ceaf40f180ba
 date: 2026-09-21
 issue-repo: casehubio/engine
