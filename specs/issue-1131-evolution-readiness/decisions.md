@@ -316,3 +316,41 @@
 **Sources:** issue #1132 ("observable evolution"), case context (existing storage for improvement working data), diff viewer infrastructure (content rendering)
 **Exploration:** quick
 **Status:** captured
+
+## D25: Stream progress tracking
+
+**Choice:** Each active improvement stream has a progress view (ImprovementStreamView) showing the current lifecycle stage, completed stages with timestamps, pending stages, and blocking status (manual semaphore or automatic conflict). Tracked via ImprovementStage enum covering the full lifecycle: INTROSPECT → RESEARCH_SCOPE → SEARCH → ANALYZE → HYPOTHESIS_APPROVAL → IMPLEMENTATION_PLAN → IMPLEMENT → SUBMIT_PR → PR_REVIEW → INTEGRATE → OUTCOME_RECORDING. Gate checkpoint stages are marked. The snapshot includes all active streams as List<ImprovementStreamView>.
+**Alternatives:**
+- Simple status only (active/complete/failed) — loses the "where is this right now" granularity the conductor needs.
+- Progress percentage — misleading for stages with variable duration (research can take minutes or hours).
+**Rationale:** The conductor needs to see at a glance where each improvement stream is in its lifecycle. "3 improvements active: one at research, one at implementation, one blocked by manual semaphore" is the conductor's situational awareness. The per-stage progress with timestamps enables duration analysis — which stages are slow, where bottlenecks form.
+**Trade-offs:** Improvement workers must update stage progress as they transition. Convention-based, not enforced by the type system.
+**Depends on:** D15 (snapshot includes active streams), D24 (artifact trail complements progress with content)
+**Sources:** issue #1132 ("observable evolution"), improvement case lifecycle stages, ImprovementStage enum
+**Exploration:** quick
+**Status:** captured
+
+## D26: Manual coordination — ImprovementCoordinator
+
+**Choice:** An ImprovementCoordinator bean provides manual semaphore control alongside the automatic ConflictDetector. The conductor can block an improvement until another completes (block/unblock mutations via the command centre). Manual blocks are checked in EvolutionTicker.tick() — a blocked improvement is skipped. The ImprovementStreamView shows blocking status (blockedBy UUID, conflictBlocked boolean) so the conductor sees the full picture.
+**Alternatives:**
+- Extend ConflictDetector to accept manual rules — conflates automatic file-level detection with manual architectural ordering.
+- Priority-based queue — improvements compete on priority. Loses explicit dependency expression ("A must finish before B starts").
+**Rationale:** The ConflictDetector handles the mechanical concern (file-level overlap). The conductor handles the architectural concern ("these touch the same subsystem's design assumptions — serialize them"). These are different judgment levels. The ImprovementCoordinator is simple: a map of improvementId → blockedBy. The conductor sets and clears blocks. The tick pipeline checks blocks alongside the existing gate pipeline.
+**Trade-offs:** In-memory only — manual blocks are lost on restart. Acceptable for MVP: manual blocks are operator-initiated and can be re-established. EventLog persistence can be added as a follow-up if needed.
+**Depends on:** D12 (API surface — block/unblock mutations), D15 (snapshot shows blocking status)
+**Sources:** ConflictDetector.java (automatic file-level conflict), issue #1132 ("manual controls"), EvolutionTicker.java (gate pipeline)
+**Exploration:** quick
+**Status:** captured
+
+## D27: Dashboard-friendly API shape
+
+**Choice:** The five-layer architecture (Observe, Summarize, Control, Steer, Review) maps directly to dashboard sections. View records are shaped for direct dashboard consumption — no client-side transformation needed. EvolutionStateSnapshot provides the main dashboard view. EvolutionSummary provides the analytics panels. HilQueueEntry list provides the inbox/steering section. ArtifactManifest provides the review drill-downs. ImprovementStreamView provides per-stream progress cards.
+**Alternatives:**
+- Generic data model — flexible but requires every consumer to compose their own views.
+- Dashboard-specific DTO layer — separate view records for dashboard vs API. Over-engineered when the API IS the dashboard's data source.
+**Rationale:** The command centre is the conductor's primary interface. The API shape should make a dashboard obvious — one query per section, view records that map to visual components. This is not a general-purpose API; it's a conductor's instrument panel.
+**Trade-offs:** API shape is opinionated toward a five-section dashboard layout. Alternative UIs (mobile, CLI) may need to reshape. Acceptable — the five layers are conceptual, not prescriptive of visual layout.
+**Sources:** issue #1132 ("command centre"), EvolutionStateSnapshot (§1), EvolutionSummary (§2), HilQueueEntry (§4), ArtifactManifest (§5)
+**Exploration:** quick
+**Status:** captured
