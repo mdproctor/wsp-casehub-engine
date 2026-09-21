@@ -247,3 +247,42 @@
 **Sources:** HealthScoreTracker.java (computeScore and refresh both implement this exclusion), AbstractCapabilityArea.java (neutralAssessment returns ABSENT), CapabilityAreaAssessment.java (LandscapePosition.ABSENT), #1131 spec §2 (ABSENT exclusion section)
 **Exploration:** quick (surfaced by review-R1-17 — implicit decision made explicit)
 **Status:** captured
+
+## D20: Configurable lifecycle gate policy
+
+**Choice:** A GatePolicy record on ImprovementConfig declares which improvement lifecycle stages require HIL approval vs auto-proceed. Default: all stages gated (full conductor mode). Operators progressively relax gates as trust builds. Each gated stage produces a HilQueueEntry with a contextual summary — the HIL approves/redirects/rejects via a command centre mutation. This extends the existing PR review gate in devtown upstream into research and design stages.
+**Alternatives:**
+- Fixed gates at key stages — hardcoded checkpoints at research scope, hypothesis selection, implementation plan, PR review. Simpler but no progressive autonomy — can't relax individual gates as the system proves itself.
+- Event-driven opt-in — the HIL subscribes to lifecycle events and injects decisions asynchronously. No blocking gates — the system proceeds unless the HIL intervenes. Maximum autonomy but the HIL must be actively watching to catch problems.
+**Rationale:** The improvement lifecycle has natural decision points: (1) what to research, (2) which hypotheses to pursue, (3) how to implement, (4) whether to integrate. The existing devtown PR review covers stage 4. The command centre adds gates at stages 1-3. Making gates configurable via GatePolicy means a project can start fully gated (conductor reviews every decision) and progressively relax as confidence grows — e.g., auto-approve research scoping (stage 1) after 10 successful cycles, but keep hypothesis approval (stage 2) gated because that's where strategic direction happens. GatePolicy stages: RESEARCH_SCOPE, HYPOTHESIS_APPROVAL, IMPLEMENTATION_PLAN, PR_REVIEW (existing). Each stage can be: GATED (HIL approval required), AUTO (auto-approve), or NOTIFY (auto-approve but emit notification).
+**Trade-offs:** Gated stages block the improvement pipeline until the HIL responds — a dormant HIL queue stalls improvements. Mitigated by configurable timeout with auto-proceed or auto-reject (per gate). The GatePolicy adds configuration surface area to ImprovementConfig.
+**Depends on:** D12 (API surface — mutations for gate decisions), D13 (streaming — gate pending events in the evolution stream)
+**Sources:** issue #1132 ("manual controls", "HIL intervention at every decision point"), HilQueueEntry.java (existing queue entry model), ActionGate pattern (existing ACTION_GATE_PENDING/APPROVED/REJECTED events)
+**Exploration:** quick
+**Status:** captured
+
+## D21: SPI-based layered summarization
+
+**Choice:** A SummarizationProvider SPI with a default rule-based implementation. Query parameters control altitude: area, category, time window, improvement ID. The command centre API exposes this as a query with scope parameters. The default implementation computes structured summaries from EventLog data — counts, ratios, trends, outcome distributions, category health trajectories. Blocks provides an LLM-powered implementation later (narrative summaries, theme extraction, architecture reasoning chains).
+**Alternatives:**
+- Pre-computed rollups — background job computes periodic summaries (hourly, daily, weekly). Fast reads but stale data and fixed granularity — can't ask ad-hoc questions like "summarize stability improvements over the last 3 sprints."
+- Query-only with client-side aggregation — command centre returns raw EventLog data with filters. Flexible but pushes summarization complexity to every consumer.
+**Rationale:** The conductor needs summaries at different altitudes: (1) project-wide health trends over a time window, (2) per-area improvement history and outcomes, (3) per-category research direction and hypothesis pipeline, (4) per-improvement reasoning chain (what was investigated, what was decided, why). These are all derivable from EventLog data (improvement lifecycle events are already persisted) but the derivation logic should be in the engine, not in every consumer. The SPI allows blocks to provide narrative-quality summaries when the cognitive layer ships, while the rule-based default provides structured data summaries immediately. Summary scope parameters: timeWindowMinutes, areaId (optional), category (optional), improvementCaseId (optional for single-improvement drill-down).
+**Trade-offs:** The rule-based default produces structured data (JSON with counts and ratios), not natural language narratives. The command centre UI or the HIL's LLM interface must interpret these. Acceptable — the data is complete, the narrative layer is a presentation concern that blocks adds.
+**Depends on:** D12 (API surface — summary query endpoint)
+**Sources:** issue #1132 ("observable evolution"), EventLogRepository (query infrastructure), ResearchCorpus SPI (existing pattern for pluggable implementations)
+**Exploration:** quick
+**Status:** captured
+
+## D22: Research steering — scope + hypothesis checkpoints
+
+**Choice:** Two HIL checkpoints in the research pipeline: (1) Before research executes — the HIL reviews and can modify the ResearchScope (keywords, channels, depth, target area). (2) After hypotheses form — the HIL approves/rejects/redirects individual hypotheses before they become improvement signals. The middle stages (search, analyze) run autonomously. This gives the conductor control over "what to investigate" and "what to act on" without micromanaging the mechanics of searching and analyzing.
+**Alternatives:**
+- Gate at every stage — HIL checkpoint between each of the 4 research stages. Maximum control but heavy — every research cycle requires 4 approvals. The search and analyze stages are mechanical (query APIs, extract findings) — gating them adds latency without adding value.
+- Direction-only, no approval — the HIL sets research priorities (which areas, which depth) but doesn't approve individual outputs. Less conductor, more strategic advisor. Loses the ability to redirect specific hypotheses.
+**Rationale:** The research pipeline's 4 stages have different decision quality: (1) Scoping is strategic — "where should we look?" is a judgment call. (2) Searching is mechanical — query APIs and collect results. (3) Analysis is mechanical — extract findings and identify themes. (4) Hypothesis formation is strategic — "what should we try?" is a judgment call. The conductor should gate the strategic stages and let the mechanical stages run. This mirrors the GatePolicy model (D20): RESEARCH_SCOPE and HYPOTHESIS_APPROVAL are the two research-specific gate stages. When gated, the ResearchPipelineOrchestrator pauses at each checkpoint and produces a HilQueueEntry with a summary of the scope/hypotheses for HIL review.
+**Trade-offs:** Two blocking checkpoints per research cycle. If the HIL queue is dormant, research stalls. Mitigated by GatePolicy timeout configuration (D20) and by the NOTIFY mode that auto-approves but alerts the HIL.
+**Depends on:** D20 (gate policy — research checkpoints are gate stages), D21 (summarization — checkpoint summaries use the SummarizationProvider)
+**Sources:** ResearchPipelineOrchestrator.java (existing pipeline), ResearchScoper.java, HypothesisFormer.java, HilQueueEntry.java, issue #1132 ("research visibility", "bootstrap from zero — research pipeline discovers what good looks like")
+**Exploration:** quick
+**Status:** captured
