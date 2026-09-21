@@ -15,3 +15,16 @@ issue-1131-title: feat: Evolution readiness methodology — L0-L3 compliance lev
 ## Queue
 - [x] casehubio/engine#1131 — Issue #1131
 - [ ] casehubio/engine#1132 — feat: Command centre conductor ← active
+  - [ ] Batch 1: Observe
+    - [ ] Task 1: TickTrace+ImprovementStage+CaseHubEventType
+    - [ ] Task 2: TickTraceBuffer+EvolutionTicker
+    - [ ] Task 3: CDI events+EvolutionStreamBroadcaster
+  - [ ] Batch 2: Control
+    - [ ] Task 4: Dynamic deny list
+    - [ ] Task 5: ConductorInboxManager
+  - [ ] Batch 3: Steer
+    - [ ] Task 6: GatePolicy+EscalationProvider
+    - [ ] Task 7: Research checkpoints+ImprovementCoordinator
+  - [ ] Batch 4: API
+    - [ ] Task 8: SummarizationProvider+ArtifactManifest
+    - [ ] Task 9: EvolutionStateSnapshot+DefaultEngineEvolutionApi
