@@ -14,16 +14,16 @@ issue-1131-title: feat: Evolution readiness methodology — L0-L3 compliance lev
 
 ## Queue
 - [ ] casehubio/engine#1131 — Issue #1131 ← active
-  - [ ] Batch 1: SPI+Threading
-    - [ ] Task 1: API model types and SPI changes
-    - [ ] Task 2: Thread tenancyId and ABSENT exclusion
-  - [ ] Batch 2: Core Areas
-    - [ ] Task 3: Stability+Performance areas
-    - [ ] Task 4: Execution+Safety areas
-  - [ ] Batch 3: Extended Areas
-    - [ ] Task 5: Integration+Coordination areas
-    - [ ] Task 6: Heuristic areas (4)
-  - [ ] Batch 4: Bootstrap+Validation
-    - [ ] Task 7: Bootstrap+ChecklistProvider
-    - [ ] Task 8: ReadinessValidator+integration tests
+  - [x] Batch 1: SPI+Threading
+    - [x] Task 1: API model types and SPI changes
+    - [x] Task 2: Thread tenancyId and ABSENT exclusion
+  - [x] Batch 2: Core Areas
+    - [x] Task 3: Stability+Performance areas
+    - [x] Task 4: Execution+Safety areas
+  - [x] Batch 3: Extended Areas
+    - [x] Task 5: Integration+Coordination areas
+    - [x] Task 6: Heuristic areas (4)
+  - [x] Batch 4: Bootstrap+Validation
+    - [x] Task 7: Bootstrap+ChecklistProvider
+    - [x] Task 8: ReadinessValidator+integration tests
 - [ ] casehubio/engine#1132 — feat: Command centre conductor
