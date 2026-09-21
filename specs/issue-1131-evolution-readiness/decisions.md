@@ -7,11 +7,11 @@
 - Per-case — each case instance has its own health score, sensors pull from case-scoped EventLog
 - Both (tiered) — project-level for infrastructure, per-case for operational health
 - Standalone metrics — health tracking without the case lifecycle (rejected: the evolution loop presupposes a case — EventLog, signal registry, and CBR integration all flow through the case lifecycle)
-**Rationale:** The issue explicitly describes project-level health (test pass rate, build time, coverage). The evolution loop improves the project, not individual case executions. Per-case health is a different concern (case quality tracking).
+**Rationale:** The issue explicitly describes project-level health (test pass rate, build time, coverage). The evolution loop improves the project, not individual case executions. Per-case health is a different concern (case quality tracking). **Scope boundary:** the 10 bootstrap areas measure *case lifecycle health* (case completion rate, worker success rate, orchestration efficiency, etc.) from EventLog events — not CI pipeline health (test pass rate, build time, coverage). CI health assessment requires custom CapabilityArea implementations that CDI-inject CI data services (e.g. a `CiStabilityCapabilityArea` that queries a CI status API). The `CapabilityAreaRegistry` override mechanism (§3) accommodates this — the bootstrap areas cover what the engine can measure natively.
 **Trade-offs:** Projects without a CaseHub case instance cannot use improvement health tracking. Acceptable — evolution readiness presupposes the evolution loop, which presupposes a case.
 **Sources:** issue #1131, CapabilityArea.java, HealthPolicy.java (weights map names project-level concerns)
 **Exploration:** quick
-**Status:** revised (R1-08: made case dependency explicit as a scope boundary)
+**Status:** revised (R1-08: made case dependency explicit; review-R1-12: clarified case lifecycle health vs CI health scope boundary)
 
 ## D2: Data ingestion model
 
@@ -46,11 +46,11 @@
 - Single global ComplianceLevel — creates a cliff where one lagging area blocks the entire project (rejected: cognitive-reasoning at L0 would block the entire project from L2 until Epics 2-3 ship)
 - YAML schema with profiles — more flexible custom levels but adds DSL complexity
 - Annotation-based — compile-time safety but rigid, can't vary per deployment
-**Rationale:** Each CapabilityArea can be at a different readiness level. A project can realistically be L3 for stability (autonomous improvement with CI data) while remaining L0 for cognitive-reasoning (no cognitive layer). Per-area compliance tracks the per-dimension journey to evolution capability. The global project level (min of participating area levels where level > L0) provides a conservative single indicator for gating behavior. The ReadinessValidator reports per-area breakdown, enabling the command centre UI (#1132) to show granular progression. ComplianceChecklist is per-area: each area at each level specifies required data flows, minimum assessment quality, and config requirements. The checklist references CapabilityArea implementations and ImprovementConfig settings (not MetricSources — see D2 revision).
-**Trade-offs:** More complex model than a single enum. The per-area checklist requires defining requirements for each area at each level. Fixed 4 levels remain — the progression is the methodology, not arbitrary configuration.
+**Rationale:** Each CapabilityArea can be at a different readiness level. A project can realistically be L3 for stability (autonomous improvement with CI data) while remaining L0 for cognitive-reasoning (no cognitive layer). Per-area compliance tracks the per-dimension journey to evolution capability. The global project level (min of participating area levels where level > L0) provides a conservative single indicator for the command centre dashboard — **observational only, not a programmatic gate**. No code path in the evolution pipeline checks ComplianceLevel to gate or modulate behavior. The existing gate pipeline (`evolutionEnabled` → health refresh → circuit breaker → consensus → category suppression → budget → conflict) is complete. ComplianceLevel informs the HIL about the project's readiness state but does not enforce it. See D17 for the explicit interaction semantics between ComplianceLevel and `evolutionEnabled`. The ReadinessValidator reports per-area breakdown, enabling the command centre UI (#1132) to show granular progression. ComplianceChecklist is per-area: each area at each level specifies required data flows, minimum assessment quality, and config requirements. The checklist references CapabilityArea implementations and ImprovementConfig settings (not MetricSources — see D2 revision).
+**Trade-offs:** More complex model than a single enum. The per-area checklist requires defining requirements for each area at each level. Fixed 4 levels remain — the progression is the methodology, not arbitrary configuration. ComplianceLevel being observational means a misconfigured project (L0 with `evolutionEnabled: true`) is not blocked — the system handles this gracefully via the circuit breaker (health score 0.0 trips immediately) but the misconfiguration is visible in the dashboard.
 **Sources:** issue #1131 ("methodology to become evolution-capable" — a per-area journey), #1115 spec §6 (10 areas with varying maturity), issue #1132 (command centre UI needs granular dashboard)
 **Exploration:** quick
-**Status:** revised (R1-05: changed from single global level to per-area compliance with global rollup; R1-10: ComplianceChecklist now defined as per-area record)
+**Status:** revised (R1-05: changed from single global level to per-area compliance with global rollup; R1-10: ComplianceChecklist now defined as per-area record; review-R1-04: clarified ComplianceLevel is observational, not a gate)
 
 ## D5: Module placement
 
@@ -67,15 +67,15 @@
 
 ## D6: Validator output model
 
-**Choice:** ReadinessReport record with targetLevel, projectLevel, List<AreaCompliance> (per-area level + checks), pass/fail verdict
+**Choice:** ReadinessReport record with targetLevel, projectLevel, List<AreaCompliance> (per-area level + checks), pass/fail verdict, evaluatedAt timestamp
 **Alternatives:**
 - Text report — human-readable but not programmatically consumable
 - Both record + formatted output — scope creep
-**Rationale:** Programmatic output is consumed by the command centre UI (#1132) and by tests. AreaCompliance includes area ID, area compliance level, and List<CheckResult> (check name, expected state, actual state, remediation hint). The report provides both the per-area breakdown (from D4 revision) and the global project level. toString() can be added later if needed. Temporal tracking (progression history) is handled by D9 — reports are persisted as EventLog entries.
+**Rationale:** Programmatic output is consumed by the command centre UI (#1132) and by tests. AreaCompliance includes area ID, area compliance level, and List<CheckResult> (check name, expected state, actual state, remediation hint). The report provides both the per-area breakdown (from D4 revision) and the global project level. The `evaluatedAt` timestamp (Instant) records when the assessment was performed — essential for snapshot composition (D15) where consumers need to distinguish a fresh assessment from a stale cached one. toString() can be added later if needed. Temporal tracking (progression history) is handled by D9 — reports are persisted as EventLog entries.
 **Trade-offs:** No human-readable output format initially. Command centre UI provides the rendering.
-**Sources:** issue #1132 (command centre), D4 (per-area compliance model), D9 (EventLog persistence)
+**Sources:** issue #1132 (command centre), D4 (per-area compliance model), D9 (EventLog persistence), #1131 spec §4 (ReadinessReport record includes evaluatedAt)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised (review-R1-13: added evaluatedAt timestamp — already present in spec §4 but missing from decision summary)
 
 ## D7: CapabilityArea registration
 
@@ -102,16 +102,17 @@
 
 ## D9: Persistence strategy for #1131 components
 
-**Choice:** EventLog-based persistence for compliance state and readiness reports, following the #1115 circuit breaker pattern
+**Choice:** EventLog-based persistence for compliance state, readiness reports, AND circuit breaker state — all following the same event-sourced reconstruction pattern
 **Alternatives:**
 - Ephemeral in-memory only — compliance state lost on restart (rejected: compliance progression history needed for command centre UI #1132)
 - Database-backed persistence — more complex than needed for the data volume
 - Case context storage — possible but EventLog is the established pattern for improvement lifecycle events
-**Rationale:** The #1115 spec designed event-sourced restart recovery for the circuit breaker (§4 "Restart recovery" section, `restoreFromEventLog` method in spec code) but this was not yet implemented — `ImprovementCircuitBreaker` state is currently in-memory only via `ConcurrentHashMap`, starting empty on every restart. The #1131 compliance level persistence is the first implementation of this pattern: `COMPLIANCE_LEVEL_CHANGED` events persist progression history, and on restart the current level reconstructs from the most recent entry. This establishes the precedent for completing the circuit breaker event-sourcing (tracked as a follow-up). `ReadinessReport` evaluations are also EventLog entries (command centre can query for historical reports).
-**Trade-offs:** EventLog volume increases. Acceptable — improvement lifecycle events are already EventLog-based and low-frequency (compliance changes are rare events, not per-tick).
-**Sources:** #1115 spec §4 (circuit breaker EventLog reconstruction — "Restart recovery" section, designed but not yet implemented)
+- Compliance persistence only, circuit breaker deferred — rejected: circuit breaker state is safety-critical and uses the same EventLog reconstruction pattern; deferring it creates a window where restart forgets the breaker was OPEN, allowing proposals during a health crisis
+**Rationale:** The #1115 spec designed event-sourced restart recovery for the circuit breaker (§4 "Restart recovery" section, `restoreFromEventLog` method in spec code) but this was not yet implemented — `ImprovementCircuitBreaker` state is currently in-memory only via `ConcurrentHashMap`, starting empty on every restart. Circuit breaker persistence is safety-critical: a restart that forgets the breaker was OPEN means the system resumes proposing improvements during a health crisis until the next tick re-evaluates (up to 60 minutes). This implementation covers both concerns with the same pattern: (1) `COMPLIANCE_LEVEL_CHANGED` events persist compliance progression history, with current level reconstructed from the most recent entry on restart; (2) `CIRCUIT_BREAKER_TRIPPED`/`CIRCUIT_BREAKER_RECOVERING`/`CIRCUIT_BREAKER_RESET` events (already defined in CaseHubEventType) persist circuit breaker state transitions, with current state and halfOpenCount reconstructed on restart. The circuit breaker event types already exist — only the EventLog write and startup reconstruction logic need to be added to `ImprovementCircuitBreaker`. `ReadinessReport` evaluations are also EventLog entries (command centre can query for historical reports).
+**Trade-offs:** EventLog volume increases. Acceptable — improvement lifecycle events are already EventLog-based and low-frequency (compliance changes are rare events, circuit breaker transitions are even rarer).
+**Sources:** #1115 spec §4 (circuit breaker EventLog reconstruction — "Restart recovery" section, designed but not yet implemented), CaseHubEventType.java (CIRCUIT_BREAKER_TRIPPED, CIRCUIT_BREAKER_RECOVERING, CIRCUIT_BREAKER_RESET already defined)
 **Exploration:** quick (surfaced by reviewer R1-11 — implicit decision made explicit)
-**Status:** captured
+**Status:** revised (review-R1-03: expanded scope to include circuit breaker persistence alongside compliance — safety-critical state should not be deferred)
 
 ---
 
@@ -135,11 +136,11 @@
 **Alternatives:**
 - Full EventLog per tick — every tick writes a detailed EventLog entry. Complete audit trail but high volume (one entry per tick interval + every event-driven tick).
 - Observable pattern — tick() emits CDI events for each gate decision. More decoupled but adds CDI event overhead per gate per tick.
-**Rationale:** The command centre needs to show what each gate decided, but most ticks are uneventful (evolution disabled, or circuit breaker closed and no consensus). A ring buffer gives the dashboard recent history without EventLog volume. Notable outcomes (blocked by circuit breaker, proposal generated) get EventLog persistence for audit. The TickTrace return type also makes tick() testable — assertions on the trace instead of side-effect inspection.
-**Trade-offs:** Ring buffer is in-memory — lost on restart. Acceptable: the EventLog captures notable outcomes (the ones worth persisting), and the ring buffer rebuilds naturally as ticks fire.
+**Rationale:** The command centre needs to show what each gate decided, but most ticks are uneventful (evolution disabled, or circuit breaker closed and no consensus). A ring buffer gives the dashboard recent history without EventLog volume. Notable outcomes (blocked by circuit breaker, proposal generated) get EventLog persistence for audit. The TickTrace return type also makes tick() testable — assertions on the trace instead of side-effect inspection. A periodic `TICK_HEARTBEAT` EventLog entry (every 24 ticks or every 24 hours, whichever comes first) provides restart-survivable evidence that the evolution loop is active. Without it, the command centre can show "last notable event: 3 days ago" with no way to distinguish "healthy and quiet" from "broken and silent."
+**Trade-offs:** Ring buffer is in-memory — lost on restart. Acceptable: the EventLog captures notable outcomes, the ring buffer rebuilds as ticks fire, and the periodic heartbeat provides a liveness signal that survives restart. The tick() return type change from `void` to `TickTrace` is a breaking change to the existing method signature — `CaseContextChangedEventHandler` (the current sole caller) must be updated to handle or ignore the return value. This is mechanically simple but must be coordinated.
 **Sources:** EvolutionTicker.java (current void tick()), CaseHubEventType (CIRCUIT_BREAKER_TRIPPED etc. already exist as EventLog types)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised (review-R1-08: added periodic TICK_HEARTBEAT for restart observability; review-R1-09: documented tick() return type as breaking change)
 
 ## D12: API surface organization
 
@@ -160,12 +161,13 @@
 **Alternatives:**
 - Extend CaseStreamBroadcaster — add evolution event handlers to the existing broadcaster. One stream per case, all events mixed. Simpler but every consumer gets everything and must filter.
 - No streaming — query-only API, command centre polls. Simpler to build but no real-time updates for gate decisions, circuit breaker trips, or regression detection.
-**Rationale:** ExecutionStateBroadcaster already established the pattern of a dedicated broadcaster for a specific concern. Evolution events are high-signal, low-frequency — circuit breaker trips, regression detection, compliance changes. They deserve their own stream. Consumers (command centre UI, monitoring tools) subscribe to evolution events without filtering case lifecycle noise.
-**Trade-offs:** Another BroadcastProcessor in memory. Acceptable — evolution events are low-frequency (ticks are at most every 60 minutes, most events are gate blocks or proposals).
+- Subscribe to EventLog writes instead of CDI events — avoids new event types but couples the broadcaster to the persistence layer rather than the domain layer.
+**Rationale:** ExecutionStateBroadcaster already established the pattern of a dedicated broadcaster for a specific concern. It subscribes to `PlanItemStateChangedEvent` and `CaseContextUpdatedEvent` — existing CDI events fired by the engine's execution layer. The evolution components currently write EventLog entries directly but do NOT fire CDI events. For the broadcaster to subscribe, new CDI event types must be introduced and fired alongside the existing EventLog writes. Required CDI event types: (1) `CircuitBreakerStateChangedEvent(UUID caseId, CircuitBreakerState oldState, CircuitBreakerState newState)` — fired by `ImprovementCircuitBreaker.evaluate()` on state transitions; (2) `ComplianceLevelChangedEvent(UUID caseId, ComplianceLevel oldLevel, ComplianceLevel newLevel)` — fired by `ReadinessValidator.validate()` when the level changes; (3) `RegressionDetectedEvent(UUID caseId, UUID improvementCaseId, double confidence, String category)` — fired by `RegressionDetector.onMetricsDegraded()`; (4) `TickEvaluatedEvent(UUID caseId, TickTrace trace)` — fired by `EvolutionTicker.tick()` when notable (gate blocked, proposal generated). These events live in `engine-common` alongside `PlanItemStateChangedEvent`. The broadcaster subscribes to all four via `@ObservesAsync` and composes them into the evolution event stream.
+**Trade-offs:** Another BroadcastProcessor in memory + 4 new CDI event types. Acceptable — evolution events are low-frequency (ticks are at most every 60 minutes, most events are gate blocks or proposals). The CDI events are thin wrappers over data that's already being computed.
 **Depends on:** D12 (API surface — the broadcaster is wired into the evolution domain)
-**Sources:** CaseStreamBroadcaster.java (BroadcastProcessor pattern), ExecutionStateBroadcaster.java (dedicated broadcaster precedent)
+**Sources:** CaseStreamBroadcaster.java (BroadcastProcessor pattern), ExecutionStateBroadcaster.java (dedicated broadcaster precedent), PlanItemStateChangedEvent.java (CDI event precedent)
 **Exploration:** quick
-**Status:** captured
+**Status:** revised (review-R1-10: specified the 4 required CDI event types and where they are fired)
 
 ## D14: Bootstrap from zero mechanism
 
@@ -186,22 +188,62 @@
 **Alternatives:**
 - Separate queries — individual getHealth(), getCircuitBreakerState(), getCategoryStates(), etc. Requires N round-trips to build the dashboard. Better for partial refreshes but worse for initial load.
 - Snapshot + targeted queries — initial snapshot for full view, targeted queries for drill-down. Two API patterns.
-**Rationale:** The command centre's primary use case is "show me the current state of evolution." A single query provides everything needed to render the dashboard. All data sources are in-memory beans (HealthScoreTracker, ImprovementCircuitBreaker, ImprovementCategoryTracker) — composition is cheap. Additional drill-down queries (tick trace details, research corpus contents, area history) complement the snapshot for deeper investigation.
-**Trade-offs:** Snapshot payload may be large if many areas/categories. Acceptable — 10 areas, category states are sparse (only categories with outcome history), tick traces bounded by ring buffer size.
-**Depends on:** D11 (tick traces in snapshot), D12 (API surface)
+**Rationale:** The command centre's primary use case is "show me the current state of evolution." A single query provides everything needed to render the dashboard. Most data sources are in-memory beans — `HealthScoreTracker.latestSnapshot()` (cached), `ImprovementCircuitBreaker.state()` (ConcurrentHashMap lookup), `ImprovementCategoryTracker` (ConcurrentHashMap lookup), tick trace ring buffer (in-memory). The compliance level component uses the **latest cached compliance level** — the result of the most recent `ReadinessValidator.validate()` invocation — NOT a re-validation. `ReadinessValidator.validate()` calls `area.assess(caseId, tenancyId)` for each registered area, and each area queries EventLog (a database call). With 10 areas, re-validation would trigger 10+ database queries per snapshot. Instead, the snapshot reads the compliance level from the most recent `COMPLIANCE_LEVEL_CHANGED` EventLog entry or from a cached in-memory value maintained by the validator. Validation is triggered explicitly (via command centre mutation or periodic scheduled evaluation), not on every snapshot query. Additional drill-down queries (tick trace details, research corpus contents, area history) complement the snapshot for deeper investigation.
+**Trade-offs:** Snapshot payload may be large if many areas/categories. Acceptable — 10 areas, category states are sparse (only categories with outcome history), tick traces bounded by ring buffer size. The cached compliance level may be stale if validation hasn't been triggered recently — the `evaluatedAt` timestamp (D6) lets consumers assess staleness.
+**Depends on:** D6 (evaluatedAt for staleness), D11 (tick traces in snapshot), D12 (API surface)
 **Sources:** HealthScoreTracker.java (latestSnapshot()), ImprovementCircuitBreaker.java (state()), ImprovementCategoryTracker.java (states map), ReadinessValidator.java (validate())
 **Exploration:** quick
-**Status:** captured
+**Status:** revised (review-R1-07: clarified that snapshot uses cached compliance level, not re-validation; composition is cheap for all components except compliance which is cached)
 
 ## D16: Structural deny list model
 
-**Choice:** Two-layer deny list: static safety base (ImprovementBudgetEnforcer.STRUCTURAL_DENIED_PATTERNS, read-only, hardcoded) + dynamic operator additions (runtime mutable via command centre mutations). The command centre query shows both layers. The HIL can add patterns (block a category or component from improvement) but cannot remove the built-in safety patterns. Effective deny list = static union dynamic.
+**Choice:** Two-layer deny list: static safety base (ImprovementBudgetEnforcer.STRUCTURAL_DENIED_PATTERNS, read-only, hardcoded) + dynamic operator additions (runtime mutable via command centre mutations, EventLog-persisted). The command centre query shows both layers. The HIL can add patterns (block a category or component from improvement) but cannot remove the built-in safety patterns. Effective deny list = static union dynamic.
 **Alternatives:**
 - Fully mutable — entire deny list runtime-configurable. Maximum flexibility but a single API call could remove circuit breaker self-protection.
 - Read-only only — deny list visible but not mutable. Changes require code deployment.
-**Rationale:** The #1115 spec's foundational safety invariant: "The improvement system must not be able to modify its own safety constraints." Making the static list mutable via API would violate this invariant — an improvement case that gains API access could remove its own deny pattern. The additive layer gives operators control over what the system can improve without weakening the built-in safety base. The two layers are visible together in the snapshot so operators understand both.
-**Trade-offs:** Operators cannot remove built-in deny patterns even when they want to (e.g., to allow improving a safety component). This is intentional — modifying safety components requires code change and review, not an API call.
-**Depends on:** D12 (API surface)
+- Dynamic deny patterns without persistence — lost on restart (rejected: an operator who blocks a category via the command centre loses that protection on every restart — a safety regression)
+**Rationale:** The #1115 spec's foundational safety invariant: "The improvement system must not be able to modify its own safety constraints." Making the static list mutable via API would violate this invariant — an improvement case that gains API access could remove its own deny pattern. The additive layer gives operators control over what the system can improve without weakening the built-in safety base. The two layers are visible together in the snapshot so operators understand both. **Persistence:** Dynamic deny pattern mutations are persisted as EventLog entries — `DENY_PATTERN_ADDED(pattern, addedBy, timestamp)` and `DENY_PATTERN_REMOVED(pattern, removedBy, timestamp)`. On restart, the current dynamic deny set reconstructs from the full EventLog history for these event types: replay all ADDED/REMOVED events in order. This follows the same event-sourced reconstruction pattern as D9 (compliance level and circuit breaker state). New `CaseHubEventType` values required: `DENY_PATTERN_ADDED`, `DENY_PATTERN_REMOVED`.
+**Trade-offs:** Operators cannot remove built-in deny patterns even when they want to (e.g., to allow improving a safety component). This is intentional — modifying safety components requires code change and review, not an API call. EventLog volume is negligible — deny pattern changes are rare operator actions.
+**Depends on:** D9 (EventLog persistence pattern), D12 (API surface)
 **Sources:** ImprovementBudgetEnforcer.java (STRUCTURAL_DENIED_PATTERNS), #1115 spec §3 (structural deny list update), #1115 spec safety invariant
 **Exploration:** quick
+**Status:** revised (review-R1-06: added EventLog persistence for dynamic deny patterns — operator-added deny patterns must survive restart)
+
+## D17: ComplianceLevel vs evolutionEnabled — separate controls
+
+**Choice:** ComplianceLevel and `evolutionEnabled` are intentionally separate controls with no programmatic coupling. ComplianceLevel is a readiness *assessment* (where IS the project). `evolutionEnabled` is a *control knob* (what SHOULD happen). Neither derives from the other.
+**Alternatives:**
+- Derive `evolutionEnabled` from ComplianceLevel — ComplianceLevel >= L2 implies `evolutionEnabled: true` (rejected: conflates assessment with control; a project at L3 may need evolution temporarily disabled during a release freeze without changing its readiness level)
+- ComplianceLevel gates the ticker — add ComplianceLevel as gate 0 in EvolutionTicker (rejected: adds a redundant gate with unclear semantics; the existing 10-gate pipeline already covers all safety concerns)
+- Unify into a single control — single enum replaces both (rejected: loses the ability to express "ready but paused" vs "not ready")
+**Rationale:** The two controls serve different lifecycle purposes. A project progresses through compliance levels as it gains capability (registers areas, configures signal sources, sets up rollback policy). `evolutionEnabled` is an operational switch — flip it off during a release freeze, flip it back on after. Making them independent means: (1) ComplianceLevel reflects the project's *readiness*, not its *activity*; (2) `evolutionEnabled` controls *activity* without affecting the readiness assessment; (3) misconfiguration states are handled gracefully — L0 with `evolutionEnabled: true` means the ticker runs but no areas are registered, health score is 0.0, circuit breaker trips immediately, no proposals generated. L2 with `evolutionEnabled: false` means the compliance level correctly describes what the project *could* do, even though evolution is currently paused. The ReadinessReport surfaces both states — compliance level AND `evolutionEnabled` — so the command centre dashboard shows when they're misaligned (e.g., "Project at L2 but evolution disabled"). The HIL decides when to reconcile them.
+**Trade-offs:** No automatic enforcement that `evolutionEnabled` matches ComplianceLevel. A misconfigured project can have `evolutionEnabled: true` at L0. This is handled safely (circuit breaker trips, no proposals generated) but may confuse operators. The dashboard surfaces the mismatch.
+**Sources:** ImprovementConfig.java (effectiveEvolutionEnabled()), EvolutionTicker.java (gate 1 checks evolutionEnabled), D4 (ComplianceLevel is observational)
+**Exploration:** quick (surfaced by review-R1-05 — implicit decision made explicit)
+**Status:** captured
+
+## D18: tenancyId threading through the evolution pipeline
+
+**Choice:** Add `tenancyId` parameter to `CapabilityArea.assess(UUID caseId, String tenancyId)` and thread it through the complete evolution pipeline: `EvolutionTicker.tick()` → `HealthScoreTracker.refresh()/computeScore()` → `CapabilityArea.assess()` → `EventLogRepository.findByCaseAndTypes(caseId, types, tenancyId)`. Also through `ImprovementCircuitBreaker.evaluate()` → `tracker.computeScore()`.
+**Alternatives:**
+- Resolve tenancyId inside each CapabilityArea via CDI context — fragile; relies on tenant context propagation which may not be active during ticker evaluation
+- tenancyId in a ThreadLocal — same fragility; timer-triggered ticks run outside request scope
+- Keep assess(UUID caseId) without tenancyId — EventLogRepository.findByCaseAndTypes() requires tenancyId for tenant-scoped queries; would need a version without tenant filtering, breaking the multi-tenancy model
+**Rationale:** `EventLogRepository.findByCaseAndTypes()` requires `tenancyId` for tenant-scoped queries. The SPI has no external consumers yet — the entire point of #1131 is providing the first concrete implementations. Adding the parameter now is a clean SPI change with no migration burden. The tenancyId originates from the `CaseContextChangedEvent` (event-driven path) or from `ImprovementConfig` storage (timer path) and flows through the complete call chain without needing ThreadLocal or CDI context.
+**Trade-offs:** Breaking SPI change — `CapabilityArea.assess(UUID caseId)` becomes `assess(UUID caseId, String tenancyId)`. This ripples through 6+ method signatures across `HealthScoreTracker`, `ImprovementCircuitBreaker`, and `EvolutionTicker`. Acceptable — no production consumers implement this SPI yet, and the breakage is the point (forces every area implementation to be tenant-aware).
+**Sources:** CapabilityArea.java (current assess signature), EventLogRepository (findByCaseAndTypes requires tenancyId), #1131 spec §2 (SPI change section), EvolutionTicker.java (already has tenancyId in tick()), HealthScoreTracker.java (already accepts tenancyId in computeScore and refresh)
+**Exploration:** quick (surfaced by review-R1-16 — implicit decision made explicit)
+**Status:** captured
+
+## D19: ABSENT area exclusion from health scoring
+
+**Choice:** `HealthScoreTracker.computeScore()` and `refresh()` skip areas where `assessment.landscapePosition() == ABSENT` from the weighted average. Only areas with real data (landscapePosition != ABSENT) contribute to the composite health score.
+**Alternatives:**
+- Include all areas with default weight — 7 neutral areas at 0.5 drag the composite down to ~0.66, barely above the circuit breaker's 0.6 threshold, despite every measured area being healthy. This creates a false degradation signal.
+- Exclude areas with zero weight instead of ABSENT — requires HealthPolicy.effectiveWeights() to encode activation state in weights, conflating weight (relative importance) with activation (data availability)
+- Exclude areas not registered in CapabilityAreaRegistry — the registry contains ALL 10 bootstrap areas after startup; registration ≠ data availability. An area can be registered but return ABSENT because no relevant events exist yet.
+**Rationale:** The ABSENT landscape position means "no data available to assess." Including these in the weighted average would penalise projects that haven't configured all 10 areas — the weighted average would pull toward 0.5 (the neutral default) instead of reflecting the actual health of configured areas. The circuit breaker threshold (default 0.6) would trip for a project with 3 healthy areas (scoring 0.9+) and 7 unconfigured areas (scoring 0.5 = ABSENT), giving a composite of ~0.66 — barely above threshold. Excluding ABSENT areas means the composite reflects only what's actually measured. This is the correct behavior for progressive onboarding (D4) — a project at L1 with 3 areas configured should see health based on those 3, not penalised by the 7 not-yet-configured.
+**Trade-offs:** A project with NO areas returning non-ABSENT data has a health score of 0.0 (totalWeight is 0, returns 0.0). This is correct — if no area has data, health cannot be computed, and the circuit breaker should trip. The `computeScore()` and `refresh()` implementations already handle this: `totalWeight > 0 ? weightedSum / totalWeight : 0.0`.
+**Sources:** HealthScoreTracker.java (computeScore and refresh both implement this exclusion), AbstractCapabilityArea.java (neutralAssessment returns ABSENT), CapabilityAreaAssessment.java (LandscapePosition.ABSENT), #1131 spec §2 (ABSENT exclusion section)
+**Exploration:** quick (surfaced by review-R1-17 — implicit decision made explicit)
 **Status:** captured
