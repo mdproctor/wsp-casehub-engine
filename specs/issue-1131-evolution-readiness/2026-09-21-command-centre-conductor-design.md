@@ -835,7 +835,7 @@ The `ImprovementCoordinator` complements `ConflictDetector`:
 | File-level conflicts | `ConflictDetector` (automatic) | `proposeImprovements()` checks `targetPaths` overlap |
 | Architectural ordering | `ImprovementCoordinator` (manual) | Conductor blocks/unblocks via command centre mutation |
 
-Manual blocks are checked in `EvolutionTicker.tick()` alongside the existing gate pipeline — a blocked improvement is skipped until unblocked by the conductor.
+Manual blocks operate at two levels: (1) At **proposal time** — `EvolutionTicker.tick()` checks whether a proposed improvement's category/target is blocked, preventing new improvement cases from being spawned. (2) At **execution time** — the improvement case's worker dispatch checks whether the improvement case UUID is blocked, pausing execution of an already-spawned improvement until unblocked. The ticker handles "don't start this," the case lifecycle handles "pause this until the other one finishes."
 
 ## 5. Review — Artifact Trail (D24)
 
@@ -850,7 +850,7 @@ public record ArtifactManifest(
 public record ArtifactEntry(
     String path,
     ArtifactType type,
-    GateStage stage,
+    ImprovementStage stage,
     Instant createdAt,
     @Nullable String summary) {
 
