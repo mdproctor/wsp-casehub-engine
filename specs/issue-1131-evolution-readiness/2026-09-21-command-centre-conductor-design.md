@@ -50,8 +50,8 @@ Conductor (HIL)
 | `DefaultEngineEvolutionApi` | `rest` | Single `@McpDomain("engine/evolution")` — all queries and mutations |
 | `EvolutionStreamBroadcaster` | `rest` | Dedicated `BroadcastProcessor<EvolutionEvent>` for SSE |
 | `TickTrace` + `TickTraceBuffer` | `runtime-core` | Gate pipeline instrumentation |
-| `GatePolicy` | `api` | Configurable lifecycle gate modes per stage |
-| `EscalationPolicy` | `api` | Composable 3-layer escalation configuration |
+| `GatePolicy` | `api` | Configurable lifecycle gate modes per stage (Map-based, extensible) |
+| `EscalationPolicy` | `api` | Category rules + confidence threshold for escalation |
 | `SummarizationProvider` SPI | `api` | Pluggable summarization (rule-based → LLM) |
 | `EscalationProvider` SPI | `api` | Pluggable confidence scoring (heuristic → LLM) |
 | `ArtifactManifest` | `api` | Per-improvement artifact index |
@@ -70,7 +70,7 @@ EvolutionTicker.tick()
     ├── gate blocked → CDI event → EvolutionStreamBroadcaster
     ├── proposal generated → CDI event → EvolutionStreamBroadcaster
     │
-    ├── GatePolicy check → GATED? → HilQueueEntry → inbox
+    ├── GatePolicy check → GATED? → ConductorInboxEntry → inbox
     │                     → AUTO? → proceed
     │                     → NOTIFY? → proceed + inbox notification
     │
@@ -140,16 +140,23 @@ public record StageProgress(
 
 public enum ImprovementStage {
   INTROSPECT,
-  RESEARCH_SCOPE,       // gate checkpoint
+  RESEARCH_SCOPE,
   SEARCH,
   ANALYZE,
-  HYPOTHESIS_APPROVAL,  // gate checkpoint
-  IMPLEMENTATION_PLAN,  // gate checkpoint
+  HYPOTHESIS_APPROVAL,
+  IMPLEMENTATION_PLAN,
   IMPLEMENT,
   SUBMIT_PR,
-  PR_REVIEW,            // gate checkpoint
+  PR_REVIEW,
   INTEGRATE,
-  OUTCOME_RECORDING
+  OUTCOME_RECORDING;
+
+  private static final Set<ImprovementStage> GATE_CHECKPOINTS = Set.of(
+      RESEARCH_SCOPE, HYPOTHESIS_APPROVAL, IMPLEMENTATION_PLAN, PR_REVIEW);
+
+  public boolean isGateCheckpoint() {
+    return GATE_CHECKPOINTS.contains(this);
+  }
 }
 ```
 
@@ -165,7 +172,7 @@ public enum ImprovementStage {
 | areaComplianceLevels | Cached alongside project level | In-memory cache read |
 | recentTicks | `TickTraceBuffer.recent()` | Ring buffer read |
 | activeImprovementCount | `ImprovementBudgetEnforcer.activeImprovementRequests().size()` | ConcurrentHashMap size |
-| pendingInboxCount | `HilQueueManager.pendingCount()` | Queue size |
+| pendingInboxCount | `ConductorInboxManager.pendingCount()` | Queue size |
 
 Compliance level is NOT re-validated on every snapshot query (D15) — `ReadinessValidator.validate()` calls `area.assess()` for each area, triggering database queries. The snapshot uses the cached result. Staleness is visible via `complianceEvaluatedAt`.
 
@@ -196,20 +203,34 @@ public record TickTrace(
       permits TickOutcome.NoProposal, TickOutcome.ProposalGenerated,
               TickOutcome.Heartbeat {
     record NoProposal(String reason) implements TickOutcome {}
-    record ProposalGenerated(int goalCount) implements TickOutcome {}
+    record ProposalGenerated(
+        int goalCount,
+        SignalFilteringSummary filtering) implements TickOutcome {}
     record Heartbeat() implements TickOutcome {}
   }
+
+  public record SignalFilteringSummary(
+      int consensusSignals,
+      int afterNamespaceFilter,
+      int afterCategoryFilter,
+      int afterSuppressionFilter,
+      int afterAntiOscillationFilter,
+      int afterBudgetFilter,
+      int afterConflictFilter,
+      int proposed) {}
 }
 ```
 
-**Gate names (canonical order):**
+**Tick-level gate names (canonical order):**
 
 ```
 evolution_enabled → health_refresh → regression_monitor →
-circuit_breaker_evaluate → circuit_breaker_check →
-consensus_scan → category_suppression → anti_oscillation →
-budget_check → conflict_check → goal_propose
+circuit_breaker_evaluate → circuit_breaker_check
 ```
+
+These 5 gates are tick-level pass/fail decisions in `EvolutionTicker.tick()`. Each produces a single `GateResult` with PASSED or BLOCKED.
+
+After all tick-level gates pass, `proposeImprovements()` iterates over consensus signals and independently filters each through: namespace matching, enabled category check, category suppression, anti-oscillation (recent rollback), budget check, conflict check. These are **per-signal filters**, not tick-level gates — signal A may pass budget but be blocked by conflict, while signal B passes both. The `SignalFilteringSummary` in `ProposalGenerated` reports aggregate filter survival counts instead of modelling per-signal outcomes as gates.
 
 ### TickTraceBuffer
 
@@ -228,19 +249,23 @@ public class TickTraceBuffer implements Resettable {
   public void record(TickTrace trace) {
     var deque = buffers.computeIfAbsent(trace.caseId(),
         k -> new ArrayDeque<>(DEFAULT_CAPACITY));
-    if (deque.size() >= DEFAULT_CAPACITY) {
-      deque.pollFirst();
+    synchronized (deque) {
+      if (deque.size() >= DEFAULT_CAPACITY) {
+        deque.pollFirst();
+      }
+      deque.addLast(trace);
     }
-    deque.addLast(trace);
   }
 
   public List<TickTrace> recent(UUID caseId, int limit) {
     var deque = buffers.get(caseId);
     if (deque == null) return List.of();
-    return deque.stream()
-        .sorted(Comparator.comparing(TickTrace::timestamp).reversed())
-        .limit(limit)
-        .toList();
+    synchronized (deque) {
+      return deque.stream()
+          .sorted(Comparator.comparing(TickTrace::timestamp).reversed())
+          .limit(limit)
+          .toList();
+    }
   }
 }
 ```
@@ -302,7 +327,9 @@ public class EvolutionStreamBroadcaster {
   private void emit(UUID caseId, String type, Map<String, String> data) {
     try {
       processor.onNext(new EvolutionEvent(caseId, type, data, Instant.now()));
-    } catch (BackPressureFailure ignored) {}
+    } catch (BackPressureFailure e) {
+      log.debug("Evolution event dropped due to backpressure: type={}, caseId={}", type, caseId);
+    }
   }
 }
 ```
@@ -453,10 +480,12 @@ DENY_PATTERN_ADDED,
 DENY_PATTERN_REMOVED,
 TICK_EVALUATED,
 TICK_HEARTBEAT,
-GATE_PENDING,       // lifecycle gate awaiting HIL decision
-GATE_RESOLVED,      // HIL resolved a lifecycle gate
+GATE_PENDING,       // lifecycle gate awaiting conductor decision
+GATE_RESOLVED,      // conductor resolved a lifecycle gate
 WATCH_PATTERN_ADDED,
-WATCH_PATTERN_REMOVED
+WATCH_PATTERN_REMOVED,
+IMPROVEMENT_BLOCKED,
+IMPROVEMENT_UNBLOCKED
 ```
 
 ### Two-layer deny list (D16)
@@ -510,15 +539,12 @@ public boolean isDenied(UUID caseId, ImprovementRequest request) {
 
 ### GatePolicy (D20)
 
-Configurable per-stage gate modes on `ImprovementConfig`:
+Configurable per-stage gate modes on `ImprovementConfig`. Gate stages are defined by `ImprovementStage.isGateCheckpoint()` — no separate enum.
 
 ```java
 // api, io.casehub.api.model.stigmergy
 public record GatePolicy(
-    @Nullable GateMode researchScope,
-    @Nullable GateMode hypothesisApproval,
-    @Nullable GateMode implementationPlan,
-    @Nullable GateMode prReview,
+    Map<ImprovementStage, GateMode> modes,
     @Nullable Integer gateTimeoutMinutes) {
 
   public enum GateMode {
@@ -527,20 +553,23 @@ public record GatePolicy(
     NOTIFY    // auto-approve + always surface in inbox
   }
 
-  public GateMode effectiveResearchScope() {
-    return researchScope != null ? researchScope : GateMode.AUTO;
+  public GatePolicy {
+    if (modes != null) {
+      for (var stage : modes.keySet()) {
+        if (!stage.isGateCheckpoint()) {
+          throw new IllegalArgumentException(
+              stage + " is not a gate checkpoint");
+        }
+      }
+    }
   }
 
-  public GateMode effectiveHypothesisApproval() {
-    return hypothesisApproval != null ? hypothesisApproval : GateMode.AUTO;
-  }
-
-  public GateMode effectiveImplementationPlan() {
-    return implementationPlan != null ? implementationPlan : GateMode.AUTO;
-  }
-
-  public GateMode effectivePrReview() {
-    return prReview != null ? prReview : GateMode.GATED;
+  public GateMode effectiveMode(ImprovementStage stage) {
+    if (modes != null && modes.containsKey(stage)) {
+      return modes.get(stage);
+    }
+    return stage == ImprovementStage.PR_REVIEW
+        ? GateMode.GATED : GateMode.AUTO;
   }
 
   public int effectiveGateTimeoutMinutes() {
@@ -549,17 +578,18 @@ public record GatePolicy(
 }
 ```
 
-Default: all stages AUTO except PR review (GATED — preserves existing devtown behaviour). The conductor tightens gates as desired via `setGatePolicy()`.
+Default: all stages AUTO except PR review (GATED — preserves existing devtown behaviour). The conductor tightens gates as desired via `setGatePolicy()`. Adding a new gate checkpoint requires only adding an `ImprovementStage` enum value and including it in `GATE_CHECKPOINTS` — the `Map`-based design needs no record changes.
+
+GatePolicy is stored on `ImprovementConfig` (case context YAML). `setGatePolicy()` updates the case context. Survives restart via case context persistence — no EventLog entry needed.
 
 ### EscalationPolicy (D23)
 
-Three composable layers — any layer triggering promotes the item to the HIL inbox:
+Three composable layers — any layer triggering promotes the item to the conductor inbox:
 
 ```java
 // api, io.casehub.api.model.stigmergy
 public record EscalationPolicy(
     @Nullable CategoryEscalationRules categoryRules,
-    @Nullable List<WatchPattern> watchPatterns,
     @Nullable Double confidenceThreshold) {
 
   public double effectiveConfidenceThreshold() {
@@ -580,6 +610,10 @@ public record WatchPattern(
     Instant createdAt) {}
 ```
 
+**Persistence model:** `EscalationPolicy` (category rules + confidence threshold) is stored on `ImprovementConfig` — configuration, case context YAML. `WatchPattern` instances are dynamic runtime state, persisted via EventLog (`WATCH_PATTERN_ADDED` / `WATCH_PATTERN_REMOVED`). On restart, active watch patterns reconstruct from EventLog replay — same pattern as dynamic deny patterns (D16). Watch patterns are NOT stored on `EscalationPolicy` or `ImprovementConfig`. The `ConductorInboxManager` manages both watch patterns and inbox entries.
+
+**`neverEscalate` semantics:** `neverEscalate` suppresses the **category rule layer only**. It does NOT suppress watch pattern matching or confidence scoring — those are independent concerns. If `lint-fix` is in `neverEscalate` but matches a watch pattern, the watch pattern still fires. If a category appears in both `alwaysEscalate` and `neverEscalate`, `neverEscalate` wins (explicit suppression overrides implicit escalation).
+
 ### EscalationProvider SPI
 
 ```java
@@ -588,9 +622,10 @@ public interface EscalationProvider {
 
   EscalationResult evaluate(
       UUID caseId, String tenancyId,
-      GateStage stage,
+      ImprovementStage stage,
       EscalationContext context,
-      EscalationPolicy policy);
+      EscalationPolicy policy,
+      List<WatchPattern> activeWatchPatterns);
 }
 
 public record EscalationContext(
@@ -628,26 +663,28 @@ public class DefaultEscalationProvider implements EscalationProvider {
 
   public EscalationResult evaluate(
       UUID caseId, String tenancyId,
-      GateStage stage,
+      ImprovementStage stage,
       EscalationContext context,
-      EscalationPolicy policy) {
+      EscalationPolicy policy,
+      List<WatchPattern> activeWatchPatterns) {
     var triggers = new ArrayList<EscalationTrigger>();
 
     // Layer 1: Category rules
     if (policy.categoryRules() != null && context.category() != null) {
-      if (policy.categoryRules().alwaysEscalate().contains(context.category())) {
+      if (policy.categoryRules().neverEscalate().contains(context.category())) {
+        // neverEscalate suppresses category rule layer — skip to Layer 2
+      } else if (policy.categoryRules().alwaysEscalate()
+          .contains(context.category())) {
         triggers.add(new EscalationTrigger(CATEGORY_RULE,
             "Category '" + context.category() + "' always escalates"));
       }
     }
 
-    // Layer 2: Watch patterns
-    if (policy.watchPatterns() != null) {
-      for (var pattern : policy.watchPatterns()) {
-        if (matches(pattern, context)) {
-          triggers.add(new EscalationTrigger(WATCH_PATTERN,
-              "Matches watch pattern '" + pattern.id() + "'"));
-        }
+    // Layer 2: Watch patterns (independent of neverEscalate)
+    for (var pattern : activeWatchPatterns) {
+      if (matches(pattern, context)) {
+        triggers.add(new EscalationTrigger(WATCH_PATTERN,
+            "Matches watch pattern '" + pattern.id() + "'"));
       }
     }
 
@@ -673,53 +710,86 @@ public class DefaultEscalationProvider implements EscalationProvider {
 }
 ```
 
-### HilQueueManager
+### ConductorInboxManager
 
-Manages the HIL inbox — pending gate decisions and escalated items:
+Manages the conductor's inbox — pending gate decisions, escalated items, and watch patterns. Reconstructs state from EventLog on startup.
+
+The existing `HilQueueEntry` (in `api/model/stigmergy`) serves the **research corpus** — tracking sources needing human retrieval. The conductor inbox is a separate concept with a separate type (`ConductorInboxEntry`) and separate lifecycle.
 
 ```java
 // runtime-core, io.casehub.engine.internal.improvement
 @ApplicationScoped
-public class HilQueueManager implements Resettable {
+public class ConductorInboxManager implements Resettable {
 
-  private final ConcurrentHashMap<UUID, List<HilQueueEntry>> queues =
+  private final ConcurrentHashMap<UUID, List<ConductorInboxEntry>> queues =
       new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<UUID, List<WatchPattern>> watchPatterns =
+      new ConcurrentHashMap<>();
+  private final EventLogRepository eventLogRepository;
+  private final Event<GatePendingEvent> gatePendingEvent;
 
-  public void enqueue(UUID caseId, HilQueueEntry entry) {
-    queues.computeIfAbsent(caseId, k -> new CopyOnWriteArrayList<>())
-        .add(entry);
-    // Fire CDI event → EvolutionStreamBroadcaster
-    // Write EventLog entry (GATE_PENDING)
+  // Startup reconstruction from EventLog
+  void onStartup(@Observes StartupEvent event) {
+    // Replay GATE_PENDING events not matched by GATE_RESOLVED
+    // → reconstruct pending inbox entries
+    // Replay WATCH_PATTERN_ADDED / WATCH_PATTERN_REMOVED
+    // → reconstruct active watch patterns
   }
 
-  public List<HilQueueEntry> pending(UUID caseId) {
+  public String enqueue(UUID caseId, ConductorInboxEntry entry) {
+    queues.computeIfAbsent(caseId, k -> new CopyOnWriteArrayList<>())
+        .add(entry);
+    // Write EventLog entry (GATE_PENDING)
+    // Fire CDI event → EvolutionStreamBroadcaster
+    return entry.id();
+  }
+
+  public List<ConductorInboxEntry> pending(UUID caseId) {
     return queues.getOrDefault(caseId, List.of()).stream()
-        .filter(e -> e.status() == HilQueueEntry.Status.PENDING)
+        .filter(e -> e.status() == ConductorInboxEntry.Status.PENDING)
         .toList();
   }
 
   public int pendingCount(UUID caseId) {
     return (int) queues.getOrDefault(caseId, List.of()).stream()
-        .filter(e -> e.status() == HilQueueEntry.Status.PENDING)
+        .filter(e -> e.status() == ConductorInboxEntry.Status.PENDING)
         .count();
   }
 
   public void resolve(UUID caseId, String entryId,
-      HilDecision decision, @Nullable String feedback) {
-    // Update entry status
+      ConductorDecision decision) {
+    // Update entry status → APPROVED/REJECTED/REDIRECTED
     // Write EventLog entry (GATE_RESOLVED)
-    // Resume blocked pipeline if GATED mode
+    // Fire CDI event → case lifecycle resumes from checkpoint
+  }
+
+  public List<WatchPattern> activeWatchPatterns(UUID caseId) {
+    return watchPatterns.getOrDefault(caseId, List.of());
+  }
+
+  public void addWatchPattern(UUID caseId, WatchPattern pattern) {
+    watchPatterns.computeIfAbsent(caseId, k -> new CopyOnWriteArrayList<>())
+        .add(pattern);
+    // Write EventLog entry (WATCH_PATTERN_ADDED)
+  }
+
+  public void removeWatchPattern(UUID caseId, String patternId) {
+    var patterns = watchPatterns.get(caseId);
+    if (patterns != null) patterns.removeIf(p -> p.id().equals(patternId));
+    // Write EventLog entry (WATCH_PATTERN_REMOVED)
   }
 }
 ```
 
-### Enhanced HilQueueEntry
+### ConductorInboxEntry
+
+A NEW type for the conductor's gate pipeline — distinct from the research corpus `HilQueueEntry`:
 
 ```java
 // api, io.casehub.api.model.stigmergy
-public record HilQueueEntry(
+public record ConductorInboxEntry(
     String id,
-    GateStage stage,
+    ImprovementStage stage,
     Status status,
     // Context
     @Nullable String category,
@@ -734,32 +804,41 @@ public record HilQueueEntry(
     @Nullable Instant resolvedAt,
     @Nullable Integer timeoutMinutes,
     // Resolution
-    @Nullable HilDecision decision,
-    @Nullable String feedback) {
+    @Nullable ConductorDecision decision) {
 
   public enum Status { PENDING, APPROVED, REJECTED, REDIRECTED, TIMED_OUT }
-
-  public enum GateStage {
-    RESEARCH_SCOPE,
-    HYPOTHESIS_APPROVAL,
-    IMPLEMENTATION_PLAN,
-    PR_REVIEW
-  }
 }
 
-public record HilDecision(
-    HilQueueEntry.Status outcome,
-    @Nullable String redirectTarget,  // for REDIRECTED — new scope/hypothesis
-    @Nullable String reason) {}
+public record ConductorDecision(
+    ConductorInboxEntry.Status outcome,
+    @Nullable String redirectTarget,
+    @Nullable String reason,
+    @Nullable String feedback) {}
 ```
 
-### Research steering (D22)
+### Research steering (D22) — checkpoint model
 
-Two checkpoints in `ResearchPipelineOrchestrator`:
+The research pipeline does NOT block threads. When a gate is reached, the pipeline **checkpoints** its intermediate state and **returns** immediately. The improvement case lifecycle persists the checkpoint and transitions to GATED state. When the conductor resolves the gate, a CDI event triggers pipeline resumption from the checkpoint.
+
+```java
+// api, io.casehub.api.model.stigmergy
+public sealed interface ResearchPipelineResult
+    permits ResearchPipelineResult.Completed,
+            ResearchPipelineResult.AwaitingGate {
+
+  record Completed(
+      List<ImprovementHypothesis> hypotheses) implements ResearchPipelineResult {}
+
+  record AwaitingGate(
+      ImprovementStage stage,
+      String inboxEntryId,
+      Object checkpoint) implements ResearchPipelineResult {}
+}
+```
 
 ```java
 // Enhanced ResearchPipelineOrchestrator
-public List<ImprovementHypothesis> execute(
+public ResearchPipelineResult execute(
     UUID caseId, String tenancyId,
     ResearchDepth depth, CapabilityAreaAssessment area,
     Map<String, String> driveContext, GatePolicy gatePolicy,
@@ -767,30 +846,82 @@ public List<ImprovementHypothesis> execute(
 
   var scope = scoper.scope(depth, area, driveContext);
 
-  // Checkpoint 1: Research scope
-  if (shouldGate(gatePolicy.effectiveResearchScope(),
-      caseId, tenancyId, GateStage.RESEARCH_SCOPE, scope, escalationPolicy)) {
-    scope = awaitHilDecision(caseId, GateStage.RESEARCH_SCOPE, scope);
-    // HIL may have modified the scope (keywords, depth, channels)
+  // Checkpoint 1: Research scope gate
+  if (shouldGate(gatePolicy.effectiveMode(ImprovementStage.RESEARCH_SCOPE),
+      caseId, tenancyId, ImprovementStage.RESEARCH_SCOPE,
+      scope, escalationPolicy)) {
+    var entryId = enqueueForApproval(
+        caseId, ImprovementStage.RESEARCH_SCOPE, scope);
+    return new ResearchPipelineResult.AwaitingGate(
+        ImprovementStage.RESEARCH_SCOPE, entryId, scope);
   }
+
+  return executeFromScope(caseId, tenancyId, depth, area,
+      driveContext, scope, gatePolicy, escalationPolicy);
+}
+
+public ResearchPipelineResult resume(
+    UUID caseId, String tenancyId,
+    ImprovementStage fromStage, ConductorDecision decision,
+    ResearchDepth depth, CapabilityAreaAssessment area,
+    Map<String, String> driveContext, GatePolicy gatePolicy,
+    EscalationPolicy escalationPolicy, Object checkpoint) {
+
+  return switch (fromStage) {
+    case RESEARCH_SCOPE -> {
+      var scope = applyDecision(decision, (ResearchScope) checkpoint);
+      yield executeFromScope(caseId, tenancyId, depth, area,
+          driveContext, scope, gatePolicy, escalationPolicy);
+    }
+    case HYPOTHESIS_APPROVAL -> {
+      var hypotheses = applyDecision(
+          decision, (List<ImprovementHypothesis>) checkpoint);
+      yield new ResearchPipelineResult.Completed(hypotheses);
+    }
+    default -> throw new IllegalArgumentException(
+        "Cannot resume from " + fromStage);
+  };
+}
+
+private ResearchPipelineResult executeFromScope(
+    UUID caseId, String tenancyId,
+    ResearchDepth depth, CapabilityAreaAssessment area,
+    Map<String, String> driveContext, ResearchScope scope,
+    GatePolicy gatePolicy, EscalationPolicy escalationPolicy) {
 
   var candidates = searcher.search(scope, depth);
   var analysis = analyzer.analyze(candidates, scope, depth);
   corpus.store(candidates, analysis);
   var hypotheses = hypothesisFormer.form(analysis, area);
 
-  // Checkpoint 2: Hypothesis approval
-  if (shouldGate(gatePolicy.effectiveHypothesisApproval(),
-      caseId, tenancyId, GateStage.HYPOTHESIS_APPROVAL, hypotheses,
-      escalationPolicy)) {
-    hypotheses = awaitHilDecision(caseId,
-        GateStage.HYPOTHESIS_APPROVAL, hypotheses);
-    // HIL may have approved/rejected/redirected individual hypotheses
+  // Checkpoint 2: Hypothesis approval gate
+  if (shouldGate(gatePolicy.effectiveMode(
+      ImprovementStage.HYPOTHESIS_APPROVAL),
+      caseId, tenancyId, ImprovementStage.HYPOTHESIS_APPROVAL,
+      hypotheses, escalationPolicy)) {
+    var entryId = enqueueForApproval(
+        caseId, ImprovementStage.HYPOTHESIS_APPROVAL, hypotheses);
+    return new ResearchPipelineResult.AwaitingGate(
+        ImprovementStage.HYPOTHESIS_APPROVAL, entryId, hypotheses);
   }
 
-  return hypotheses;
+  return new ResearchPipelineResult.Completed(hypotheses);
 }
 ```
+
+**Gate resolution flow:**
+1. Pipeline returns `AwaitingGate` → case lifecycle persists checkpoint to case context
+2. Case transitions to GATED state (`StageProgress.StageStatus.GATED`)
+3. `ConductorInboxManager` holds the pending entry with `GATE_PENDING` EventLog
+4. Conductor resolves gate → `ConductorInboxManager.resolve()` writes `GATE_RESOLVED` EventLog → fires CDI event
+5. Case lifecycle receives event → calls `pipeline.resume()` with checkpoint and decision
+6. Pipeline continues from checkpoint with the conductor's modifications applied
+
+**Timeout:** `ConductorInboxManager` checks pending entries on each tick. Entries past `gateTimeoutMinutes` are auto-rejected (`TIMED_OUT` status) with a `GATE_RESOLVED` EventLog entry. The case lifecycle handles the timeout like a REJECTED decision — the improvement case transitions to a terminal state.
+
+**Restart recovery:** On restart, `ConductorInboxManager.onStartup()` reconstructs pending entries from `GATE_PENDING` events not matched by `GATE_RESOLVED`. Improvement cases in GATED state have their checkpoint persisted in case context. When a gate subsequently resolves, the case lifecycle resumes the pipeline normally.
+
+**Concurrency:** Each improvement case has its own checkpoint and inbox entry — fully independent per-case.
 
 ### Manual coordination — semaphore (D26)
 
@@ -803,15 +934,24 @@ public class ImprovementCoordinator implements Resettable {
 
   private final ConcurrentHashMap<UUID, Map<UUID, UUID>> blocks =
       new ConcurrentHashMap<>();  // caseId → improvementId → blockedBy
+  private final EventLogRepository eventLogRepository;
+
+  // Startup reconstruction from EventLog
+  void onStartup(@Observes StartupEvent event) {
+    // Replay IMPROVEMENT_BLOCKED / IMPROVEMENT_UNBLOCKED events
+    // → reconstruct active blocks
+  }
 
   public void block(UUID caseId, UUID improvementId, UUID blockedBy) {
     blocks.computeIfAbsent(caseId, k -> new ConcurrentHashMap<>())
         .put(improvementId, blockedBy);
+    // Write EventLog entry (IMPROVEMENT_BLOCKED)
   }
 
   public void unblock(UUID caseId, UUID improvementId) {
     var caseBlocks = blocks.get(caseId);
     if (caseBlocks != null) caseBlocks.remove(improvementId);
+    // Write EventLog entry (IMPROVEMENT_UNBLOCKED)
   }
 
   public boolean isBlocked(UUID caseId, UUID improvementId) {
@@ -879,7 +1019,7 @@ var manifest = readOrCreateManifest(caseId, tenancyId);
 manifest.entries().add(new ArtifactEntry(
     outputPath,
     ArtifactType.ANALYSIS,
-    GateStage.RESEARCH_SCOPE,
+    ImprovementStage.RESEARCH_SCOPE,
     Instant.now(),
     "Introspection result for dependency-update target"));
 writeManifest(caseId, tenancyId, manifest);
@@ -959,26 +1099,22 @@ public class DefaultEngineEvolutionApi {
 
   // --- STEER ---
 
-  @PlatformQuery("Get the HIL inbox — pending decisions and escalations")
-  public List<HilQueueEntry> getInbox(
+  @PlatformQuery("Get the conductor inbox — pending decisions and escalations")
+  public List<ConductorInboxEntry> getInbox(
       @PathParam UUID caseId, String tenancyId) { ... }
 
   @PlatformMutation("Resolve a pending gate decision")
   public void resolveGate(
       @PathParam UUID caseId, String tenancyId,
       String entryId, String decision,
+      @Nullable String redirectTarget,
+      @Nullable String reason,
       @Nullable String feedback) { ... }
 
-  @PlatformMutation("Modify research scope for a pending scope gate")
-  public void modifyResearchScope(
-      @PathParam UUID caseId, String tenancyId,
-      String entryId, String keywords,
-      @Nullable String depth, @Nullable String channels) { ... }
-
-  @PlatformMutation("Set gate mode for a lifecycle stage")
+  @PlatformMutation("Set gate policy for lifecycle stages")
   public void setGatePolicy(
       @PathParam UUID caseId, String tenancyId,
-      String stage, String mode) { ... }
+      Map<String, String> stageModes) { ... }
 
   @PlatformMutation("Add a watch pattern for smart escalation")
   public void addWatchPattern(
@@ -1084,12 +1220,12 @@ public record ImprovementConfig(
 
   public GatePolicy effectiveGatePolicy() {
     return gatePolicy != null ? gatePolicy
-        : new GatePolicy(null, null, null, null, null);
+        : new GatePolicy(Map.of(), null);
   }
 
   public EscalationPolicy effectiveEscalationPolicy() {
     return escalationPolicy != null ? escalationPolicy
-        : new EscalationPolicy(null, null, null);
+        : new EscalationPolicy(null, null);
   }
 }
 ```
@@ -1101,7 +1237,8 @@ public record ImprovementConfig(
 | `GatePolicy` | `io.casehub.api.model.stigmergy.GatePolicy` |
 | `EscalationPolicy` | `io.casehub.api.model.stigmergy.EscalationPolicy` |
 | `CategoryEscalationRules` | `io.casehub.api.model.stigmergy.CategoryEscalationRules` |
-| `WatchPattern` | `io.casehub.api.model.stigmergy.WatchPattern` |
+
+`WatchPattern` is NOT in YAML codegen — it is EventLog-persisted runtime state, not case context configuration.
 
 ## 9. Module Placement
 
@@ -1118,17 +1255,18 @@ public record ImprovementConfig(
 | `EvolutionSummary` | `api` | `io.casehub.api.view` |
 | `DenyPatternView` | `api` | `io.casehub.api.view` |
 | `EvolutionEvent` | `api` | `io.casehub.api.view` |
-| `HilDecision` | `api` | `io.casehub.api.model.stigmergy` |
+| `ConductorInboxEntry` | `api` | `io.casehub.api.model.stigmergy` |
+| `ConductorDecision` | `api` | `io.casehub.api.model.stigmergy` |
+| `ResearchPipelineResult` | `api` | `io.casehub.api.model.stigmergy` |
 | `EscalationResult` | `api` | `io.casehub.api.model.stigmergy` |
 | `EscalationContext` | `api` | `io.casehub.api.model.stigmergy` |
 | `EscalationTrigger` | `api` | `io.casehub.api.model.stigmergy` |
 | `SummaryScope` | `api` | `io.casehub.api.model.stigmergy` |
 | `SummarizationProvider` SPI | `api` | `io.casehub.api.spi.improvement` |
 | `EscalationProvider` SPI | `api` | `io.casehub.api.spi.improvement` |
-| `GateStage` | `api` | `io.casehub.api.model.stigmergy` (nested in `HilQueueEntry`) |
 | CDI events (4 types) | `engine-common` | `io.casehub.engine.common.spi.event` |
 | `TickTraceBuffer` | `runtime-core` | `io.casehub.engine.internal.improvement` |
-| `HilQueueManager` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `ConductorInboxManager` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `DefaultSummarizationProvider` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `DefaultEscalationProvider` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `ImprovementCoordinator` | `runtime-core` | `io.casehub.engine.internal.improvement` |
@@ -1145,7 +1283,7 @@ public record ImprovementConfig(
 | Test class | What it covers |
 |------------|---------------|
 | `TickTraceBufferTest` | Ring buffer: capacity, ordering, eviction, per-case isolation |
-| `HilQueueManagerTest` | Enqueue, pending list, resolve, timeout, per-case isolation |
+| `ConductorInboxManagerTest` | Enqueue, pending list, resolve, timeout, per-case isolation, EventLog restart reconstruction, watch pattern lifecycle |
 | `DefaultSummarizationProviderTest` | Summary computation from EventLog data, scope filtering, trend calculation |
 | `DefaultEscalationProviderTest` | All 3 layers: category rules, watch pattern matching, confidence scoring, composition (any-trigger union) |
 | `GatePolicyTest` | Gate mode defaults, per-stage configuration, timeout handling |
@@ -1165,6 +1303,9 @@ public record ImprovementConfig(
 | `ResearchSteeringIntegrationTest` | Research scope gate → HIL modifies scope → modified scope used → hypothesis gate → HIL approves subset |
 | `ArtifactTrailIntegrationTest` | Improvement lifecycle produces artifacts → manifest records entries → API returns chronological trail |
 | `DenyPatternPersistenceTest` | Dynamic patterns survive restart via EventLog replay |
+| `ConductorInboxPersistenceTest` | Pending gate decisions survive restart via EventLog replay |
+| `ImprovementCoordinatorPersistenceTest` | Manual blocks survive restart via EventLog replay |
+| `ResearchPipelineCheckpointTest` | Pipeline returns AwaitingGate at checkpoint → resume after gate resolution → pipeline continues from checkpoint |
 
 ### Critical test scenarios
 
@@ -1181,7 +1322,7 @@ public record ImprovementConfig(
 
 ## References
 
-- `EvolutionTicker.java` (line 46 — current void tick() to be changed)
+- `EvolutionTicker.java` (line 46 — current void tick() to return TickTrace; no production caller exists yet — only test callers)
 - `ImprovementCircuitBreaker.java` (line 75 — manualReset())
 - `ImprovementCategoryTracker.java` (line 93 — pauseCategory(), line 109 — unpauseCategory())
 - `ImprovementBudgetEnforcer.java` — STRUCTURAL_DENIED_PATTERNS
@@ -1193,10 +1334,10 @@ public record ImprovementConfig(
 - `DefaultEngineEventLogApi.java` — @PlatformQuery pattern
 - `CaseHubEventType.java` — existing event types
 - `ResearchPipelineOrchestrator.java` — research pipeline
-- `HilQueueEntry.java` — existing queue entry (enhanced)
+- `HilQueueEntry.java` — existing research corpus queue entry (NOT modified; new ConductorInboxEntry is a separate type)
 - `PlanItemStateChangedEvent.java` — CDI event precedent in engine-common
 - `2026-09-20-continuous-evolution-loop-design.md` (#1115) — evolution loop infrastructure
 - `2026-09-21-evolution-readiness-methodology-design.md` (#1131) — readiness methodology
-- Decisions D10–D24 in `decisions.md`
+- Decisions D10–D27 in `decisions.md`
 - Memory: `command-centre-conductor` — developer as conductor via observable UI
 - Memory: `evolution-from-zero` — bootstrap from zero with HIL briefing
