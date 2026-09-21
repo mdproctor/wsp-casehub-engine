@@ -21,7 +21,7 @@
 - Configuration-declared — YAML config declares health data inline, static until next config push
 - External push API — REST/webhook endpoint receives metrics from CI/CD
 **Rationale:** The #1115 spec (§4) explicitly states "No parallel metrics infrastructure" and removes MetricsSnapshot. Each CapabilityArea implementation already knows what data it needs. A MetricSource SPI creates an abstraction layer between data sources and consumers with no architectural benefit — it indirects the access without adding value. External metrics (CI pass rate, test coverage, build time) are provided by capability area implementations that CDI-inject whatever services they need — not by a separate metrics pipeline.
-**Trade-offs:** Each CapabilityArea implementation is responsible for its own data access — more coupled per-area but removes the unnecessary MetricSource indirection. The @DefaultBean pattern allows consumers to provide richer implementations.
+**Trade-offs:** Each CapabilityArea implementation is responsible for its own data access — more coupled per-area but removes the unnecessary MetricSource indirection. The registry-based override pattern (§3) allows consumers to provide richer implementations.
 **Sources:** #1115 spec §4 (explicit rejection of MetricsSnapshot), issue #1131 (describes data flow through EventLog entries, CI outcomes, test results — not through a new SPI), CapabilityArea.java, HealthScoreTracker.java
 **Exploration:** quick
 **Status:** revised (R1-02: aligned with #1115 spec's explicit rejection of parallel metrics infrastructure)
@@ -34,19 +34,19 @@
 - 8 areas from HealthPolicy weights — silently drops perception and cognitive-memory (rejected: weights should follow the authoritative taxonomy, not the other way around)
 - Just stability + performance — minimum viable
 **Rationale:** The #1115 methodology spec (§10) defines 10 bootstrap areas: Stability, Performance, Execution, Coordination, Perception, Autonomy, Cognitive reasoning, Cognitive memory, Safety, Integration. HealthPolicy.effectiveWeights() must be updated to include perception and cognitive-memory (currently 8 of 10). Providing heuristic defaults for abstract areas means the health score is meaningful from day one.
-**Trade-offs:** Heuristic defaults for abstract areas (perception, cognitive-memory, cognitive-reasoning) may encode wrong assumptions. Mitigated by @DefaultBean — consumers override when they have real data. Perception and Cognitive memory will have minimal assessment capability until the cognitive layer (Epics 2-3) provides real data.
+**Trade-offs:** Heuristic defaults for abstract areas (perception, cognitive-memory, cognitive-reasoning) may encode wrong assumptions. Mitigated by registry-based override (§3) — consumers replace default areas when they have real data. Perception and Cognitive memory will have minimal assessment capability until the cognitive layer (Epics 2-3) provides real data.
 **Sources:** #1115 spec §6 (10 bootstrap areas), methodology spec §10 (full taxonomy table), HealthPolicy.java (needs perception and cognitive-memory weights added)
 **Exploration:** quick
 **Status:** revised (R1-04: corrected from 8 to 10 areas to match #1115 taxonomy; HealthPolicy.effectiveWeights() update required)
 
 ## D4: Compliance level model
 
-**Choice:** Per-area ComplianceLevel enum (L0_INERT, L1_OBSERVE, L2_PROPOSE, L3_AUTONOMOUS) + per-area ComplianceChecklist + global project level computed as min(area levels)
+**Choice:** Per-area ComplianceLevel enum (L0_INERT, L1_OBSERVE, L2_PROPOSE, L3_AUTONOMOUS) + per-area ComplianceChecklist + global project level computed as min(area levels where level > L0), falling back to L0
 **Alternatives:**
 - Single global ComplianceLevel — creates a cliff where one lagging area blocks the entire project (rejected: cognitive-reasoning at L0 would block the entire project from L2 until Epics 2-3 ship)
 - YAML schema with profiles — more flexible custom levels but adds DSL complexity
 - Annotation-based — compile-time safety but rigid, can't vary per deployment
-**Rationale:** Each CapabilityArea can be at a different readiness level. A project can realistically be L3 for stability (autonomous improvement with CI data) while remaining L0 for cognitive-reasoning (no cognitive layer). Per-area compliance tracks the per-dimension journey to evolution capability. The global project level (min of all area levels) provides a conservative single indicator for gating behavior. The ReadinessValidator reports per-area breakdown, enabling the command centre UI (#1132) to show granular progression. ComplianceChecklist is per-area: each area at each level specifies required data flows, minimum assessment quality, and config requirements. The checklist references CapabilityArea implementations and ImprovementConfig settings (not MetricSources — see D2 revision).
+**Rationale:** Each CapabilityArea can be at a different readiness level. A project can realistically be L3 for stability (autonomous improvement with CI data) while remaining L0 for cognitive-reasoning (no cognitive layer). Per-area compliance tracks the per-dimension journey to evolution capability. The global project level (min of participating area levels where level > L0) provides a conservative single indicator for gating behavior. The ReadinessValidator reports per-area breakdown, enabling the command centre UI (#1132) to show granular progression. ComplianceChecklist is per-area: each area at each level specifies required data flows, minimum assessment quality, and config requirements. The checklist references CapabilityArea implementations and ImprovementConfig settings (not MetricSources — see D2 revision).
 **Trade-offs:** More complex model than a single enum. The per-area checklist requires defining requirements for each area at each level. Fixed 4 levels remain — the progression is the methodology, not arbitrary configuration.
 **Sources:** issue #1131 ("methodology to become evolution-capable" — a per-area journey), #1115 spec §6 (10 areas with varying maturity), issue #1132 (command centre UI needs granular dashboard)
 **Exploration:** quick
@@ -107,8 +107,8 @@
 - Ephemeral in-memory only — compliance state lost on restart (rejected: compliance progression history needed for command centre UI #1132)
 - Database-backed persistence — more complex than needed for the data volume
 - Case context storage — possible but EventLog is the established pattern for improvement lifecycle events
-**Rationale:** The #1115 spec established a clear persistence pattern: safety-critical state (circuit breaker) reconstructs from EventLog on restart; non-critical state (health score history) rebuilds naturally via refresh(). For #1131: ComplianceLevel changes are EventLog entries (persist progression history). ReadinessReport evaluations are EventLog entries (command centre can query for historical reports). Per-area compliance state reconstructs from most recent EventLog entries on restart. This is the same pattern used by ImprovementCircuitBreaker and ImprovementCategoryTracker.
+**Rationale:** The #1115 spec designed event-sourced restart recovery for the circuit breaker (§4 "Restart recovery" section, `restoreFromEventLog` method in spec code) but this was not yet implemented — `ImprovementCircuitBreaker` state is currently in-memory only via `ConcurrentHashMap`, starting empty on every restart. The #1131 compliance level persistence is the first implementation of this pattern: `COMPLIANCE_LEVEL_CHANGED` events persist progression history, and on restart the current level reconstructs from the most recent entry. This establishes the precedent for completing the circuit breaker event-sourcing (tracked as a follow-up). `ReadinessReport` evaluations are also EventLog entries (command centre can query for historical reports).
 **Trade-offs:** EventLog volume increases. Acceptable — improvement lifecycle events are already EventLog-based and low-frequency (compliance changes are rare events, not per-tick).
-**Sources:** #1115 spec §4 (circuit breaker EventLog reconstruction — "Restart recovery" section), ImprovementCircuitBreaker.java (restoreFromEventLog pattern)
+**Sources:** #1115 spec §4 (circuit breaker EventLog reconstruction — "Restart recovery" section, designed but not yet implemented)
 **Exploration:** quick (surfaced by reviewer R1-11 — implicit decision made explicit)
 **Status:** captured
