@@ -1,84 +1,72 @@
-<<<<<<< HEAD
-# Handoff — Engine Main
+# Handoff — Hive Mind Epic (Evolution Readiness + Command Centre)
 
-**Date:** 2026-09-16
-**Branch:** main (no active feature branch)
-
-## What Happened
-
-Created hive mind epic (#1104) — 15 issues across engine, blocks, eidos, qhorus for self-organizing agent coordination. Research-backed (8 papers). Slot 197 scaffolded with .plan and HANDOFF, ready to start.
-
-Landed 3 build-fix commits on main: #1100 (engine-support-core compilation — TrustGateService→TrustScoreSource, TenantContextExecutor removed, AgentCapability 13-param), #1101 (379 runtime test compilation errors across 24 files), #1102 (@Cbr crossType/caseType build-time validation).
-
-Merged PR #1116 (neocortex upstream drift fixes). Closed PR #1093 as superseded.
-
-## What's Next
-
-| Priority | Item | Notes |
-|----------|------|-------|
-| 1 | Fix CI | "Build and Publish" workflow red — pre-existing. `ActionGateIntegrationTest` has 85 CDI deployment errors from upstream SNAPSHOT drift. Needs dedicated session. |
-| 2 | Slot 197 | Hive mind epic. Already underway in a separate session. |
-
-## Cross-Repo
-
-Hive mind epic spans: engine (11 issues), blocks (2 — blocks#284, blocks#285), eidos (1 — eidos#178), qhorus (1 — qhorus#442). Neocortex and ledger verified ready as-is.
-=======
-# Handoff — Hive Mind Epic
-
-**Branch:** `issue-1104-hive-mind`
+**Branch:** `issue-1131-evolution-readiness`
 **Epic:** casehubio/engine#1104
 **Slot:** 197
-**Date:** 2026-09-20
-
-## What This Is
-
-Self-organizing agent coordination patterns for CaseHub — from rule-based stigmergy through LLM-enhanced swarm intelligence to fully autonomous self-evolution.
+**Date:** 2026-09-22
 
 ## What Happened This Session
 
-Implemented all 15 tasks for #1115 (Continuous Evolution Loop) across 8 batches. Full TDD — 296 tests pass, 0 failures.
+Brainstormed, designed, reviewed, planned, and began implementing #1132 (Command Centre Conductor). Batch 1 of 4 complete — Observe layer fully implemented, 122 tests green.
 
-### #1115 — Continuous Evolution Loop (IMPLEMENTED)
+### #1132 — Command Centre Conductor (IN PROGRESS — Batch 1/4 complete)
 
-**17 commits this session.** All tasks in the plan checked off (`ALL_DONE=True`).
+**Design phase (complete):** Brainstormed the conductor model with 5 layers (Observe, Summarize, Control, Steer, Review). 27 decisions captured (D10-D27) across two review rounds (standard depth). Key design expansion: the user clarified the command centre is a full conductor interface, not just a dashboard — includes smart inbox with 3-layer composable escalation, research steering with scope/hypothesis checkpoints, artifact trail, configurable lifecycle gates, manual coordination, and SPI-based layered summarization.
 
-| Batch | What was built |
-|-------|---------------|
-| B1: Config Records | `RollbackPolicy`, `HealthPolicy`, `ResearchMethodology` records + `ImprovementConfig` expansion (11 fields, backward-compatible 5-arg constructor) |
-| B2: Research API | 7 research records (`ResearchScope`, `ResearchCandidate`, `ResearchAnalysis`, `ResearchFinding`, `ImprovementHypothesis`, `TechnologyBlip`, `HilQueueEntry`) + 5 SPIs (`ResearchScoper`, `ResearchSearcher`, `ResearchAnalyzer`, `HypothesisFormer`, `ResearchCorpus`) + `CapabilityArea` SPI + `ResearchDepth` enum + 7 new `CaseHubEventType` values |
-| B3: Category/Budget | `ImprovementCategoryTracker` (outcome-driven suppression), `RollbackHistory` (anti-oscillation), `ImprovementBudgetEnforcer` enhanced (stores `ImprovementRequest`, `activeImprovementRequests()`, expanded deny list) |
-| B4: Health/Conflict | `ConflictDetector` (sealed `ConflictCheck` with `Clear`/`Conflicting`, trivial exemption), `CapabilityAreaRegistry`, `HealthScoreTracker` (weighted aggregation, snapshot history, delta computation) |
-| B5: Safety Infra | `ImprovementCircuitBreaker` (CLOSED/OPEN/HALF_OPEN state machine), `ConfidenceScorer` (composable health-snapshot signals), `RegressionDetector` (monitors merged improvements, confidence-tiered response) |
-| B6: Evolution Pipeline | `EvolutionTicker` (unified gate pipeline: opt-in → health → regression → circuit breaker → propose → goal formation), wiring into `ImprovementGoalFormationStrategy` (3 new gates: category suppression, anti-oscillation, conflict detection) and `ImprovementOutcomeEventCapture` (2 new layers: category tracker, regression detector) |
-| B7: Research/Rollback | `ResearchPipelineOrchestrator` + 4 default SPI implementations (`DefaultResearchScoper/Searcher/Analyzer`, `DefaultHypothesisFormer`), `InMemoryResearchCorpus`, `ImprovementRevertWorker`, `self-improvement-rollback.yaml` case template |
-| B8: Integration Test | `ContinuousEvolutionIntegrationTest` — 7 scenarios covering opt-in guard, circuit breaker blocks, category suppression, anti-oscillation, conflict avoidance, outcome feedback loop closure, regression detection |
+**Spec:** Written, self-reviewed, standard spec review (3 rounds, 19 issues, 17 verified). Design fixes applied during review: Map-based GatePolicy (extensible), non-blocking checkpoint/resume pattern for research pipeline, `ConductorInboxEntry` as distinct type from research corpus `HilQueueEntry`, typed `GateResolutionPayload` sealed interface.
 
-### NOT done this session (wiring deferred to T12)
+**Plan:** 4 batches, 9 tasks.
 
-- `CaseContextChangedEventHandler` routing change (spec §1: replace direct `proposeImprovements()` with `EvolutionTicker.tick()`) — requires reading the handler carefully and updating `RuntimeBeans` CDI wiring. The spec has exact before/after code.
-- `RuntimeBeans` CDI producer updates for all new dependencies.
+**Implementation (Batch 1 — Observe layer, 3 commits):**
 
-These were in the plan (T12 steps 5-6) but the existing backward-compatible constructors on `ImprovementGoalFormationStrategy` and `ImprovementOutcomeEventCapture` mean the code compiles and tests pass without the CDI wiring changes. The wiring is needed for runtime (Quarkus) but not for the unit/integration tests which use direct instantiation.
+| What was built | Key components |
+|---------------|----------------|
+| Model types | `TickTrace` (per-gate results + `SignalFilteringSummary`), `ImprovementStage` (11 stages, `isGateCheckpoint()`) |
+| CaseHubEventType | 12 new values for conductor operations |
+| TickTraceBuffer | Thread-safe ring buffer (100 capacity per case) |
+| EvolutionTicker change | `void tick()` → `TickTrace tick()` — full gate instrumentation |
+| CircuitBreakerState extraction | Moved from nested enum in `ImprovementCircuitBreaker` to standalone `api/model/stigmergy` enum (design fix — correct dependency direction for CDI events and EvolutionStateSnapshot) |
+| CDI events | 4 new records in engine-common: `CircuitBreakerStateChangedEvent`, `ComplianceLevelChangedEvent`, `RegressionDetectedEvent`, `TickEvaluatedEvent` |
+| EvolutionStreamBroadcaster | Dedicated `BroadcastProcessor<EvolutionEvent>` in rest module, subscribes to all 4 CDI events via `@ObservesAsync` |
 
-### Prior work (#1105–#1114, previous sessions)
+### Design decisions (key ones from this session)
 
-All implemented. See git log for details.
+- 5-layer conductor model: Observe, Summarize, Control, Steer, Review (D10-D12)
+- Configurable lifecycle gate policy with AUTO default + smart escalation (D20, D23)
+- Composable 3-layer escalation: category rules + watch patterns + confidence scoring (D23)
+- SPI-based summarization — rule-based default, LLM via blocks later (D21)
+- Research scope steering + hypothesis approval checkpoints (D22)
+- Non-blocking checkpoint/resume for research pipeline gates (spec review refinement)
+- Two-layer deny list: static safety base (immutable) + dynamic operator additions (D16)
+- ComplianceLevel and `evolutionEnabled` are intentionally separate controls (D17)
+- Artifact trail per improvement stream via `ArtifactManifest` (D24)
+- Manual coordination via `ImprovementCoordinator` alongside automatic `ConflictDetector` (D26)
 
 ### Known issues (pre-existing, unchanged)
 
-- API module checkstyle violations (pre-existing). Build passes with `-Dcheckstyle.skip=true`.
-- 5 compilation errors in engine-support-core (pre-existing).
+- 89 pre-existing compilation errors in `CbrRetrievalService.java` (neocortex CBR imports)
 - Build command: `/opt/homebrew/bin/mvn install -pl api,schema,codegen,common-core,engine-support-core,runtime-core -am -Dcheckstyle.skip=true -Dspotless.check.skip=true -DskipTests`
 
 ## Queue
 
-All 11 issues complete (`ALL_DONE=True`). Branch ready for `work end`.
+| # | Issue | Status |
+|---|-------|--------|
+| 1 | #1131 — Evolution readiness methodology | Done |
+| 2 | #1132 — Command centre conductor | Active (Batch 1/4) |
+
+## What's Next
+
+| Priority | Item | Scale | Complexity | Notes |
+|----------|------|-------|------------|-------|
+| 1 | #1132 Batch 2: Control | S | Low | Dynamic deny list + ConductorInboxManager. Tasks 4-5 in plan. |
+| 2 | #1132 Batch 3: Steer | M | Med | GatePolicy + EscalationProvider + research checkpoints + ImprovementCoordinator. Tasks 6-7. |
+| 3 | #1132 Batch 4: API | M | Med | SummarizationProvider + ArtifactManifest + EvolutionStateSnapshot + DefaultEngineEvolutionApi. Tasks 8-9. |
 
 ## Repos in Slot
 
 | Repo | Path | Branch | Role |
 |------|------|--------|------|
-| engine | `slots/197/engine` | `issue-1104-hive-mind` | Primary |
+| engine | `slots/197/engine` | `issue-1131-evolution-readiness` | Primary |
 | blocks | `slots/197/blocks` | `main` | Cognitive stack source |
 | eidos | `slots/197/eidos` | `main` | Synced |
 | qhorus | `slots/197/qhorus` | `main` | Synced |
@@ -87,18 +75,10 @@ All 11 issues complete (`ALL_DONE=True`). Branch ready for `work end`.
 
 | Artifact | Path |
 |----------|------|
-| All specs (#1105–#1115) | `wsp/specs/issue-1104-hive-mind/*.md` |
-| All plans | `wsp/plans/*.md` |
-| Decisions (D1–D115) | `wsp/specs/issue-1104-hive-mind/decisions.md` |
+| Design spec (#1131) | `wsp/specs/issue-1131-evolution-readiness/2026-09-21-evolution-readiness-methodology-design.md` |
+| Design spec (#1132) | `wsp/specs/issue-1131-evolution-readiness/2026-09-21-command-centre-conductor-design.md` |
+| Decisions | `wsp/specs/issue-1131-evolution-readiness/decisions.md` (D1-D27) |
+| Plan (#1131) | `wsp/plans/2026-09-21-evolution-readiness-methodology.md` |
+| Plan (#1132) | `wsp/plans/2026-09-21-command-centre-conductor.md` |
+| Blog | `proj/docs/blog/2026-09-21-mdp01-the-hive-that-knows-its-health.md` |
 | Queue | `wsp/.plan` |
-
-## Next Session — How to Proceed
-
-1. **`work end`** — all issues complete, branch ready to close
-2. Before closing: consider whether to wire `CaseContextChangedEventHandler` → `EvolutionTicker` and update `RuntimeBeans` (the CDI wiring gap noted above). This is a runtime requirement, not a test requirement.
-
-### Deferred spec review items (fix during wiring)
-
-- R3-01: `RegressionDetector.evaluate()` trigger wiring — addressed: `checkActiveMonitors()` called from `EvolutionTicker.tick()`
-- R3-02: `RollbackHistory.record()` missing `target` parameter — addressed: `record(caseId, improvementCaseId, category, target)` has the target parameter
->>>>>>> issue-1104-hive-mind
