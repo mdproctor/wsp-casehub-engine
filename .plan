@@ -26,5 +26,5 @@ issue-1131-title: feat: Evolution readiness methodology — L0-L3 compliance lev
     - [x] Task 6: GatePolicy+EscalationProvider
     - [x] Task 7: Research checkpoints+ImprovementCoordinator
   - [ ] Batch 4: API
-    - [ ] Task 8: SummarizationProvider+ArtifactManifest
+    - [x] Task 8: SummarizationProvider+ArtifactManifest
     - [ ] Task 9: EvolutionStateSnapshot+DefaultEngineEvolutionApi
