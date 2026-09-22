@@ -20,7 +20,7 @@ issue-1131-title: feat: Evolution readiness methodology — L0-L3 compliance lev
     - [x] Task 2: TickTraceBuffer+EvolutionTicker
     - [x] Task 3: CDI events+EvolutionStreamBroadcaster
   - [ ] Batch 2: Control
-    - [ ] Task 4: Dynamic deny list
+    - [x] Task 4: Dynamic deny list
     - [ ] Task 5: ConductorInboxManager
   - [ ] Batch 3: Steer
     - [ ] Task 6: GatePolicy+EscalationProvider
