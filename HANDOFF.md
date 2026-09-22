@@ -1,72 +1,96 @@
-# Handoff — Hive Mind Epic (Evolution Readiness + Command Centre)
+# Handoff — Evolution Conductor Production Readiness
 
-**Branch:** `issue-1131-evolution-readiness`
-**Epic:** casehubio/engine#1104
+**Branch:** `main` (previous branch `issue-1131-evolution-readiness` closed and landed)
+**Epic:** casehubio/engine#1149 (Production Readiness, Generic Extraction, UI)
 **Slot:** 197
 **Date:** 2026-09-22
 
 ## What Happened This Session
 
-Brainstormed, designed, reviewed, planned, and began implementing #1132 (Command Centre Conductor). Batch 1 of 4 complete — Observe layer fully implemented, 122 tests green.
+Completed #1132 Batches 2-4 (6 commits, 176 tests green), ran a thorough completeness audit, filed follow-up issues, and closed the branch.
 
-### #1132 — Command Centre Conductor (IN PROGRESS — Batch 1/4 complete)
+### #1132 — Command Centre Conductor (COMPLETE — all 4 batches landed)
 
-**Design phase (complete):** Brainstormed the conductor model with 5 layers (Observe, Summarize, Control, Steer, Review). 27 decisions captured (D10-D27) across two review rounds (standard depth). Key design expansion: the user clarified the command centre is a full conductor interface, not just a dashboard — includes smart inbox with 3-layer composable escalation, research steering with scope/hypothesis checkpoints, artifact trail, configurable lifecycle gates, manual coordination, and SPI-based layered summarization.
+| Batch | What was built | Tests |
+|-------|---------------|-------|
+| Batch 2: Control | Dynamic deny list on ImprovementBudgetEnforcer (two-layer: static + dynamic), DenyPatternView, ConductorInboxManager with gate lifecycle, ConductorInboxEntry/ConductorDecision/GateResolutionPayload model types, EscalationTrigger, WatchPattern | 25 new |
+| Batch 3: Steer | GatePolicy (Map-based per-stage modes), EscalationPolicy/CategoryEscalationRules, EscalationContext/EscalationResult, EscalationProvider SPI, DefaultEscalationProvider (3-layer: category rules + watch patterns + confidence), ImprovementConfig extended, GateCheckpoint/ResearchPipelineResult sealed interfaces, ResearchPipelineOrchestrator checkpoint at RESEARCH_SCOPE, ImprovementCoordinator | 22 new |
+| Batch 4: API | SummaryScope, ArtifactEntry/ArtifactManifest, EvolutionSummary, SummarizationProvider SPI, DefaultSummarizationProvider (skeleton), EvolutionStateSnapshot, DefaultEngineEvolutionApi (9 methods) | 11 new |
 
-**Spec:** Written, self-reviewed, standard spec review (3 rounds, 19 issues, 17 verified). Design fixes applied during review: Map-based GatePolicy (extensible), non-blocking checkpoint/resume pattern for research pipeline, `ConductorInboxEntry` as distinct type from research corpus `HilQueueEntry`, typed `GateResolutionPayload` sealed interface.
+### Completeness Audit
 
-**Plan:** 4 batches, 9 tasks.
+Thorough audit identified:
+- **4 CDI event wiring gaps** — events never fired (broadcaster is dead observer)
+- **10 missing API methods** on DefaultEngineEvolutionApi
+- **No persistence** — all state stores are bare ConcurrentHashMap, lost on restart
+- **Pipeline resume** not implemented (hypothesis gate + resume method)
+- **Summarization** is a skeleton
 
-**Implementation (Batch 1 — Observe layer, 3 commits):**
+### Architecture Decision: Persistence
 
-| What was built | Key components |
-|---------------|----------------|
-| Model types | `TickTrace` (per-gate results + `SignalFilteringSummary`), `ImprovementStage` (11 stages, `isGateCheckpoint()`) |
-| CaseHubEventType | 12 new values for conductor operations |
-| TickTraceBuffer | Thread-safe ring buffer (100 capacity per case) |
-| EvolutionTicker change | `void tick()` → `TickTrace tick()` — full gate instrumentation |
-| CircuitBreakerState extraction | Moved from nested enum in `ImprovementCircuitBreaker` to standalone `api/model/stigmergy` enum (design fix — correct dependency direction for CDI events and EvolutionStateSnapshot) |
-| CDI events | 4 new records in engine-common: `CircuitBreakerStateChangedEvent`, `ComplianceLevelChangedEvent`, `RegressionDetectedEvent`, `TickEvaluatedEvent` |
-| EvolutionStreamBroadcaster | Dedicated `BroadcastProcessor<EvolutionEvent>` in rest module, subscribes to all 4 CDI events via `@ObservesAsync` |
+Rejected "add case context writes" as a shim. The right architecture:
+- Domain beans become stateless logic — inject repository SPIs
+- State behind SPI boundary (same pattern as CaseInstanceRepository)
+- In-memory impls for tests, case-context-backed for production
+- EventLog is audit trail only (write-only, never the read path)
 
-### Design decisions (key ones from this session)
+### Domain-Agnostic Extraction Analysis
 
-- 5-layer conductor model: Observe, Summarize, Control, Steer, Review (D10-D12)
-- Configurable lifecycle gate policy with AUTO default + smart escalation (D20, D23)
-- Composable 3-layer escalation: category rules + watch patterns + confidence scoring (D23)
-- SPI-based summarization — rule-based default, LLM via blocks later (D21)
-- Research scope steering + hypothesis approval checkpoints (D22)
-- Non-blocking checkpoint/resume for research pipeline gates (spec review refinement)
-- Two-layer deny list: static safety base (immutable) + dynamic operator additions (D16)
-- ComplianceLevel and `evolutionEnabled` are intentionally separate controls (D17)
-- Artifact trail per improvement stream via `ArtifactManifest` (D24)
-- Manual coordination via `ImprovementCoordinator` alongside automatic `ConflictDetector` (D26)
+Audited all 13 components for domain-specificity. Result: **12 of 13 already generic**. Only 3 items need extraction:
+- `ImprovementRequest.targetRepo/targetPaths` → generalise target model
+- `ConflictDetector` → extract to ConflictStrategy SPI
+- `STRUCTURAL_DENIED_PATTERNS` → extract to DenyPatternProvider SPI
 
-### Known issues (pre-existing, unchanged)
+fsitrading (trading strategy evolution) is the first non-engine consumer. Full use case documented in #1148.
 
-- 89 pre-existing compilation errors in `CbrRetrievalService.java` (neocortex CBR imports)
-- Build command: `/opt/homebrew/bin/mvn install -pl api,schema,codegen,common-core,engine-support-core,runtime-core -am -Dcheckstyle.skip=true -Dspotless.check.skip=true -DskipTests`
+### Issues Filed
+
+| # | Title | Scale | Complexity |
+|---|-------|-------|------------|
+| #1149 | Epic: Production readiness, generic extraction, UI | XL | High |
+| #1140 | Conductor state persistence — repository SPIs | L | High |
+| #1141 | CDI event wiring | S | Low |
+| #1142 | API surface completion — 10 missing methods | M | Med |
+| #1143 | Pipeline checkpoint completion | S | Med |
+| #1144 | Summarization — EventLog-backed | M | Med |
+| #1145 | YAML codegen entries | XS | Low |
+| #1146 | MCP annotation adapter | S | Low |
+| #1148 | Generic extraction + domain specialisation + blog | L | High |
 
 ## Queue
 
 | # | Issue | Status |
 |---|-------|--------|
-| 1 | #1131 — Evolution readiness methodology | Done |
-| 2 | #1132 — Command centre conductor | Active (Batch 1/4) |
+| 1 | #1140 — Conductor state persistence | Next (active in .plan) |
+| 2 | #1141 — CDI event wiring | Queued |
+| 3 | #1145 — YAML codegen | Queued |
+| 4 | #1142 — API surface completion | Queued (depends on #1140) |
+| 5 | #1143 — Pipeline checkpoint | Queued (depends on #1140) |
+| 6 | #1144 — Summarization | Queued |
+| 7 | #1146 — MCP adapter | Queued (depends on #1142) |
+| 8 | #1148 — Generic extraction | Queued (depends on #1140) |
 
 ## What's Next
 
 | Priority | Item | Scale | Complexity | Notes |
 |----------|------|-------|------------|-------|
-| 1 | #1132 Batch 2: Control | S | Low | Dynamic deny list + ConductorInboxManager. Tasks 4-5 in plan. |
-| 2 | #1132 Batch 3: Steer | M | Med | GatePolicy + EscalationProvider + research checkpoints + ImprovementCoordinator. Tasks 6-7. |
-| 3 | #1132 Batch 4: API | M | Med | SummarizationProvider + ArtifactManifest + EvolutionStateSnapshot + DefaultEngineEvolutionApi. Tasks 8-9. |
+| 1 | #1140 Persistence SPIs | L | High | Foundational — extract ConductorInboxRepository, DenyPatternStore, ImprovementBlockStore. Refactor domain beans to inject SPIs. Tenancy-aware signatures. |
+| 2 | #1141 CDI event wiring | S | Low | Independent — inject Event<T> into 4 source beans, add fireAsync() calls |
+| 3 | #1145 YAML codegen | XS | Low | Independent — add GatePolicy, EscalationPolicy, CategoryEscalationRules to yaml-record-mappings.yaml |
+
+## UI Planning (Phase 4, not yet filed as issues)
+
+blocks-ui components needed:
+- Reuse: approval-gate, notification-inbox, kpi-metric-row, compliance-summary, event-trail, audit-trail-viewer, trust-score-panel, work-item-detail/row
+- New: deny-pattern-editor, watch-pattern-editor, gate-policy-editor
+- Workbench: evolution-workbench composing all above
+- Sample page for domain extension
 
 ## Repos in Slot
 
 | Repo | Path | Branch | Role |
 |------|------|--------|------|
-| engine | `slots/197/engine` | `issue-1131-evolution-readiness` | Primary |
+| engine | `slots/197/engine` | `main` | Primary |
 | blocks | `slots/197/blocks` | `main` | Cognitive stack source |
 | eidos | `slots/197/eidos` | `main` | Synced |
 | qhorus | `slots/197/qhorus` | `main` | Synced |
@@ -81,4 +105,4 @@ Brainstormed, designed, reviewed, planned, and began implementing #1132 (Command
 | Plan (#1131) | `wsp/plans/2026-09-21-evolution-readiness-methodology.md` |
 | Plan (#1132) | `wsp/plans/2026-09-21-command-centre-conductor.md` |
 | Blog | `proj/docs/blog/2026-09-21-mdp01-the-hive-that-knows-its-health.md` |
-| Queue | `wsp/.plan` |
+| Queue | `wsp/.plan` (8 issues for #1149) |
