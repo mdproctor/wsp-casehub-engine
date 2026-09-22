@@ -1,19 +1,15 @@
-# Work Plan — casehub-engine
+# Work Plan — issue-1140-conductor-state-persist
 
 ## State
-branch: main
-state: idle
+branch: issue-1140-conductor-state-persist
+state: scaffolded
+project-sha: c8c9ef14fc0b44935c78085f6a25ecc56ef8ebd3
+date: 2026-09-22
 issue-repo: casehubio/engine
 covers: casehubio/engine#1140
-Current: casehubio/engine#1140 — feat: Conductor state persistence — repository SPIs and in-memory implementations
-date: 2026-09-22
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
 
 ## Queue
-- [ ] casehubio/engine#1140 — feat: Conductor state persistence — repository SPIs and in-memory implementations ← active
-- [ ] casehubio/engine#1141 — feat: CDI event wiring — fire evolution events from source beans
-- [ ] casehubio/engine#1145 — chore: YAML codegen entries for conductor types
-- [ ] casehubio/engine#1142 — feat: API surface completion — missing DefaultEngineEvolutionApi methods
-- [ ] casehubio/engine#1143 — feat: Research pipeline checkpoint completion — hypothesis gate and resume
-- [ ] casehubio/engine#1144 — feat: DefaultSummarizationProvider — EventLog-backed aggregation
-- [ ] casehubio/engine#1146 — feat: MCP annotation adapter — @McpDomain wrapper for evolution API
-- [ ] casehubio/engine#1148 — feat: generalise evolution conductor — domain-agnostic improvement loop
+- [ ] casehubio/engine#1140 — Issue #1140 ← active
