@@ -23,7 +23,7 @@ issue-1131-title: feat: Evolution readiness methodology — L0-L3 compliance lev
     - [x] Task 4: Dynamic deny list
     - [x] Task 5: ConductorInboxManager
   - [ ] Batch 3: Steer
-    - [ ] Task 6: GatePolicy+EscalationProvider
+    - [x] Task 6: GatePolicy+EscalationProvider
     - [ ] Task 7: Research checkpoints+ImprovementCoordinator
   - [ ] Batch 4: API
     - [ ] Task 8: SummarizationProvider+ArtifactManifest
