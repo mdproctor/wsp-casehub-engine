@@ -1,0 +1,19 @@
+# Work Plan — casehub-engine
+
+## Queue
+- [ ] casehubio/engine#1140 — feat: Conductor state persistence — repository SPIs and in-memory implementations ← active
+- [ ] casehubio/engine#1141 — feat: CDI event wiring — fire evolution events from source beans
+- [ ] casehubio/engine#1145 — chore: YAML codegen entries for conductor types
+- [ ] casehubio/engine#1142 — feat: API surface completion — missing DefaultEngineEvolutionApi methods
+- [ ] casehubio/engine#1143 — feat: Research pipeline checkpoint completion — hypothesis gate and resume
+- [ ] casehubio/engine#1144 — feat: DefaultSummarizationProvider — EventLog-backed aggregation
+- [ ] casehubio/engine#1146 — feat: MCP annotation adapter — @McpDomain wrapper for evolution API
+- [ ] casehubio/engine#1148 — feat: generalise evolution conductor — domain-agnostic improvement loop
+
+## State
+branch: casehub-engine
+state: active
+issue-repo: casehubio/engine
+covers: casehubio/engine#1140
+Current: casehubio/engine#1140 — feat: Conductor state persistence — repository SPIs and in-memory implementations
+date: 2026-09-22
