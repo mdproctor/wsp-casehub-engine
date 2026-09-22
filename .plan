@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1140-conductor-state-persist
-state: scaffolded
+state: active
 project-sha: c8c9ef14fc0b44935c78085f6a25ecc56ef8ebd3
 date: 2026-09-22
 issue-repo: casehubio/engine
@@ -13,3 +13,12 @@ flyway-next-v: none
 
 ## Queue
 - [ ] casehubio/engine#1140 — Issue #1140 ← active
+  - [ ] Batch 1: Foundation
+    - [ ] Task 1: ConductorInboxEntry caseId field
+    - [ ] Task 2: SPI interfaces
+  - [ ] Batch 2: Implementations
+    - [ ] Task 3: In-memory impls and contract tests
+  - [ ] Batch 3: Wiring
+    - [ ] Task 4: Refactor ImprovementCoordinator
+    - [ ] Task 5: Refactor ImprovementBudgetEnforcer
+    - [ ] Task 6: Refactor ConductorInboxManager
