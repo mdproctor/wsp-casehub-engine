@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1131-evolution-readiness
-state: active
+state: closing:review
 project-sha: 5459f836bc2f85dc57c20bd14bf8ceaf40f180ba
 date: 2026-09-21
 issue-repo: casehubio/engine
@@ -12,6 +12,7 @@ design-section-hashes:
 flyway-next-v: unknown
 issue-1131-title: feat: Evolution readiness methodology — L0-L3 compliance levels
 
+evidence-era: true
 ## Queue
 - [x] casehubio/engine#1131 — Issue #1131
 - [x] casehubio/engine#1132 — feat: Command centre conductor
