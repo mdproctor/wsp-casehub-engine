@@ -1,0 +1,15 @@
+# Work Plan — issue-1167-plan-item-completion-npe
+
+## State
+branch: issue-1167-plan-item-completion-npe
+state: scaffolded
+project-sha: 747bf4396c57e1e05208b306a5fd7d137c6ed65c
+date: 2026-09-23
+issue-repo: casehubio/engine
+covers: 1167
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1167 — Issue #1167 ← active
