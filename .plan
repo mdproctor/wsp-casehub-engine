@@ -1,0 +1,28 @@
+# Work Plan — issue-1150-persistence-coherence
+
+## State
+branch: issue-1150-persistence-coherence
+state: active
+issue-repo: casehubio/engine
+covers: casehubio/engine#1150
+Current: casehubio/engine#1166 — CaseContextRecoveryStrategy SPI
+date: 2026-09-23
+
+## Queue
+- [x] casehubio/engine#1150 — epic: persistence layer coherence — correctness, SPI consistency, and test coverage
+- [ ] casehubio/engine#1166 — feat: CaseContextRecoveryStrategy SPI — database snapshot default, event-log replay experimental ← active
+- [ ] casehubio/engine#1151 — fix: replay SCOPED_WORKER_OUTPUT events on cache miss
+- [ ] casehubio/engine#1152 — fix: persist context values in CONTEXT_SIGNAL_APPLIED event for replay
+- [ ] casehubio/engine#1153 — fix: swap PlanItemStore.updateStatus abstract/default for tenancy safety
+- [ ] casehubio/engine#1154 — fix: episodic layer replay — restore baseline and goal tracking
+- [ ] casehubio/engine#1155 — docs: update CrossTenant* Javadoc — system services, not recovery only
+- [ ] casehubio/engine#1156 — refactor: extract cross-tenant methods from PlanItemStore to CrossTenantPlanItemStore
+- [ ] casehubio/engine#1157 — docs: document Repository vs Store SPI naming convention
+- [ ] casehubio/engine#1158 — refactor: standardize null vs Optional across persistence SPIs
+- [ ] casehubio/engine#1159 — refactor: move ExecutionSnapshotStore to common.spi.recovery package
+- [ ] casehubio/engine#1160 — docs: add contract Javadoc to PlanVersionStore, ExecutionSnapshotStore, CaseQueueEntryStore
+- [ ] casehubio/engine#1161 — feat: add JPA and Spring JPA implementations for CaseQueueEntryStore
+- [ ] casehubio/engine#1162 — fix: resolve duplicate JpaPlanItemStore in persistence-hibernate and work-adapter
+- [ ] casehubio/engine#1163 — test: add contract tests for SubCaseGroupRepository, CrossTenant*, PlanVersionStore, ExecutionSnapshotStore
+- [ ] casehubio/engine#1164 — test: JPA implementations should extend abstract contract tests
+- [ ] casehubio/engine#1165 — test: add integration test for full DLQ replay path
