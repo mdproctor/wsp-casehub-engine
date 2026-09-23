@@ -699,27 +699,42 @@ Update `score()` parameters from `HealthScoreTracker.HealthSnapshot` to `HealthS
 
 Remove: `STRUCTURAL_DENIED_PATTERNS` set, `isDenied()` method, `dynamicDenyPatterns()` method, `staticDenyPatterns()` method, deny-pattern/path/repo checks from `check()` method. Keep: concurrent limit, daily limit, cooldown, max change size. Rename `maxPRSize` references to `maxChangeSize` in `check()`.
 
-- [ ] **Step 8: Delete ConflictDetector and ConflictDetectorTest**
+- [ ] **Step 8: Remove targetRepo and targetPaths from ImprovementRequest**
+
+Use `ide_edit_member` on `ImprovementRequest` to remove `targetRepo` and `targetPaths` fields. The record becomes:
+```java
+public record ImprovementRequest(
+    String improvementType,
+    String category,
+    String target,
+    int estimatedSize,
+    Map<String, String> metadata,
+    @Nullable String domainId) {}
+```
+
+Update all producers (test fixtures, `SignalConsensusProposalSource`, `ImprovementSignalContext`) to encode `targetRepo`/`targetPaths` into the `metadata` map using `CodeEvolutionMetadata.encode()`. Use `ide_find_references` on the deleted fields to find all construction sites. All consumers already use `CodeEvolutionMetadata.extractPaths()`/`extractRepo()` (from Tasks 4-5).
+
+- [ ] **Step 9: Delete ConflictDetector and ConflictDetectorTest**
 
 Use `ide_refactor_safe_delete` on both files. If references remain in `ImprovementGoalFormationStrategy` (should have been removed in Task 5), update them first.
 
-- [ ] **Step 9: Update remaining test files**
+- [ ] **Step 10: Update remaining test files**
 
 - `RegressionDetectorTest.java` — inject `RegressionEvaluatorRegistry` and `ImprovementCategoryRegistry`
 - `ImprovementBudgetEnforcerTest.java` — remove deny-pattern tests, update `maxPRSize` → `maxChangeSize`
 - `ConfidenceScorerTest.java` — `HealthScoreTracker.HealthSnapshot` → `HealthScoreSnapshot`
 
-- [ ] **Step 10: Run full test suite**
+- [ ] **Step 11: Run full test suite**
 
 Run: `TESTCONTAINERS_RYUK_DISABLED=true mvn clean test -pl api,runtime-core -q`
 Expected: All tests PASS
 
-- [ ] **Step 11: Run full project test suite**
+- [ ] **Step 12: Run full project test suite**
 
 Run: `TESTCONTAINERS_RYUK_DISABLED=true mvn clean test -q`
 Expected: All tests PASS (verifying no cross-module breakage)
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
 git add -A
