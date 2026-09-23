@@ -2,18 +2,15 @@
 
 ## Last Session
 
-Completed two Phase 1 foundation issues from epic #1149 (Production Readiness). #1141 wired CDI events into four conductor beans — `ImprovementCircuitBreaker`, `ReadinessValidator`, `RegressionDetector`, `EvolutionTicker` — with notable-only filtering on tick events. #1145 added YAML codegen entries for `GatePolicy`, `EscalationPolicy`, `CategoryEscalationRules` and fixed a codegen import bug where `collectTypeImports` only resolved the last generic type parameter.
+Completed #1142 (API surface completion) — added all 10 missing methods to `DefaultEngineEvolutionApi` with TDD (17 tests, 472 total green). Created two new SPIs (`GatePolicyStore`, `ArtifactManifestStore`) with in-memory impls, `ResearchCorpusView` type, and accessor methods on `ImprovementCategoryTracker.states()`, `ImprovementBudgetEnforcer.dailyCount()`, `ReadinessValidator.cachedLevel()`. Also advanced queue past #1141 (closed last session) and synced epic #1139 checkboxes (5 of 7 checked: #1140, #1141, #1142, #1145, plus #1143 now active).
 
-Also closed #1140 (already landed on main from previous session) and updated epic #1149 checkboxes (3 of 8 checked).
+Note: IntelliJ hung mid-session and reformatted ~25 unrelated files via file watcher. Those changes are unstaged — restore with `git checkout -- runtime-core/` if they persist.
 
 ## Immediate Next Step
 
-#1142 — API surface completion: 10 missing methods on `DefaultEngineEvolutionApi`. M/Med. Depends on #1140 (done).
+#1143 — Research pipeline checkpoint completion: hypothesis gate and resume (S/Med). Depends on #1140 (done).
 
 ## References
 
-- Spec: `docs/specs/issue-1140-conductor-state-persist/2026-09-22-conductor-state-persistence-design.md`
 - Spec: `docs/specs/issue-1131-evolution-readiness/2026-09-21-command-centre-conductor-design.md`
-- Journal: `wsp/JOURNAL.md`
-- Blog: `wsp/blog/2026-09-23-mdp02-the-map-key-nobody-imported.md`
-- Queue: slot `.plan` (5 remaining: #1142, #1143, #1144, #1146, #1148)
+- Queue: slot `.plan` (4 remaining: #1143, #1144, #1146, #1148)
