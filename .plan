@@ -10,11 +10,17 @@ covers: 1141
 design-repo: project
 design-section-hashes: 
 flyway-next-v: none
+active-issue: casehubio/engine#1148
 
 ## Queue
 - [x] casehubio/engine#1141 — Issue #1141
 - [x] casehubio/engine#1142 — API surface completion
 - [x] casehubio/engine#1143 — Research pipeline checkpoint
 - [x] casehubio/engine#1144 — DefaultSummarizationProvider
-- [ ] casehubio/engine#1146 — MCP annotation adapter ← active
+- [x] casehubio/engine#1146 — MCP annotation adapter
 - [ ] casehubio/engine#1148 — Generalise evolution conductor
+
+## Deferred
+- [ ] Migrate HealthSnapshot to HealthScoreSnapshot (#1168) (S / Low) [casehubio/engine] — Bridged internally by HealthScoreDeltaRegressionEvaluator — mechanical type migration, no architectural blocker
+- [ ] Wire RegressionDetector to RegressionEvaluatorRegistry (#1169) (S / Low) [casehubio/engine] — Registry and evaluator infrastructure exists and is tested — detector wiring depends on #1168
+- [ ] Remove targetRepo/targetPaths from ImprovementRequest (#1170) (M / Low) [casehubio/engine] — Backward-compatible constructor exists — ~27 call sites need mechanical update
