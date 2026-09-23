@@ -2,10 +2,10 @@
 
 ## State
 branch: issue-1150-persistence-coherence
-state: active
+state: transitioning
 issue-repo: casehubio/engine
 covers: casehubio/engine#1150
-Current: casehubio/engine#1166 — CaseContextRecoveryStrategy SPI
+Current: casehubio/engine#1165 — test: add integration test for full DLQ replay path
 date: 2026-09-23
 
 ## Queue
@@ -13,16 +13,16 @@ date: 2026-09-23
 - [x] casehubio/engine#1166 — feat: CaseContextRecoveryStrategy SPI — database snapshot default, event-log replay experimental
 - [x] casehubio/engine#1151 — fix: replay SCOPED_WORKER_OUTPUT events on cache miss
 - [x] casehubio/engine#1152 — fix: persist context values in CONTEXT_SIGNAL_APPLIED event for replay
-- [ ] casehubio/engine#1153 — fix: swap PlanItemStore.updateStatus abstract/default for tenancy safety ← active
-- [ ] casehubio/engine#1154 — fix: episodic layer replay — restore baseline and goal tracking
-- [ ] casehubio/engine#1155 — docs: update CrossTenant* Javadoc — system services, not recovery only
-- [ ] casehubio/engine#1156 — refactor: extract cross-tenant methods from PlanItemStore to CrossTenantPlanItemStore
-- [ ] casehubio/engine#1157 — docs: document Repository vs Store SPI naming convention
-- [ ] casehubio/engine#1158 — refactor: standardize null vs Optional across persistence SPIs
-- [ ] casehubio/engine#1159 — refactor: move ExecutionSnapshotStore to common.spi.recovery package
-- [ ] casehubio/engine#1160 — docs: add contract Javadoc to PlanVersionStore, ExecutionSnapshotStore, CaseQueueEntryStore
-- [ ] casehubio/engine#1161 — feat: add JPA and Spring JPA implementations for CaseQueueEntryStore
-- [ ] casehubio/engine#1162 — fix: resolve duplicate JpaPlanItemStore in persistence-hibernate and work-adapter
-- [ ] casehubio/engine#1163 — test: add contract tests for SubCaseGroupRepository, CrossTenant*, PlanVersionStore, ExecutionSnapshotStore
-- [ ] casehubio/engine#1164 — test: JPA implementations should extend abstract contract tests
-- [ ] casehubio/engine#1165 — test: add integration test for full DLQ replay path
+- [x] casehubio/engine#1153 — fix: swap PlanItemStore.updateStatus abstract/default for tenancy safety
+- [x] casehubio/engine#1154 — fix: episodic layer replay — restore baseline and goal tracking
+- [x] casehubio/engine#1155 — docs: update CrossTenant* Javadoc — system services, not recovery only
+- [x] casehubio/engine#1156 — refactor: extract cross-tenant methods from PlanItemStore to CrossTenantPlanItemStore
+- [x] casehubio/engine#1157 — docs: document Repository vs Store SPI naming convention
+- [x] casehubio/engine#1158 — refactor: standardize null vs Optional across persistence SPIs
+- [x] casehubio/engine#1159 — refactor: move ExecutionSnapshotStore to common.spi.recovery package
+- [x] casehubio/engine#1160 — docs: add contract Javadoc to PlanVersionStore, ExecutionSnapshotStore, CaseQueueEntryStore
+- [x] casehubio/engine#1161 — feat: add JPA and Spring JPA implementations for CaseQueueEntryStore
+- [x] casehubio/engine#1162 — fix: resolve duplicate JpaPlanItemStore in persistence-hibernate and work-adapter
+- [x] casehubio/engine#1163 — test: add contract tests for SubCaseGroupRepository, CrossTenant*, PlanVersionStore, ExecutionSnapshotStore
+- [x] casehubio/engine#1164 — test: JPA implementations should extend abstract contract tests
+- [ ] casehubio/engine#1165 — test: add integration test for full DLQ replay path ← active
