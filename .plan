@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1140-conductor-state-persist
-state: active
+state: closing:promoted
 project-sha: c8c9ef14fc0b44935c78085f6a25ecc56ef8ebd3
 date: 2026-09-22
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: none
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/engine#1140 — Issue #1140 ← active
   - [x] Batch 1: Foundation
