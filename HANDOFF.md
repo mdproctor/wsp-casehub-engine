@@ -1,42 +1,39 @@
-# Session Handover — 2026-09-23
+# Session Handover — 2026-09-23 (session 2)
 
 ## What happened
 
-Completed 8 issues from the persistence coherence epic (#1150), advancing the queue from position 4/17 to 12/17. All changes are on `issue-1150-persistence-coherence` branch, committed but not pushed.
+Completed 1 issue from the persistence coherence epic (#1150), advancing the queue from position 12/17. Active issue is now #1161 (just completed, ready to advance to #1162). All changes are on `issue-1150-persistence-coherence` branch, committed but not pushed.
 
 ### Issues completed
 
 | # | Title | Scale | Files |
 |---|-------|-------|-------|
-| #1153 | PlanItemStore.updateStatus abstract/default swap for tenancy safety | XS | 17 |
-| #1154 | Episodic layer replay — restore baseline and goal tracking | S | 3 |
-| #1155 | CrossTenant* Javadoc — system services, not recovery only | XS | 2 |
-| #1156 | Extract cross-tenant methods from PlanItemStore to CrossTenantPlanItemStore | S | 15 |
-| #1157 | Document Repository vs Store SPI naming convention | XS | 1 |
-| #1158 | Standardize null vs Optional across persistence SPIs | M | 31 |
-| #1159 | Move ExecutionSnapshotStore to common.spi.recovery package | XS | 44 |
-| #1160 | Contract Javadoc for PlanVersionStore, ExecutionSnapshotStore, CaseQueueEntryStore | XS | 3 |
+| #1161 | feat: add JPA and Spring JPA implementations for CaseQueueEntryStore | M | 11 |
 
 ### Key changes
 
-- **PlanItemStore SPI split:** Tenant-scoped methods on `PlanItemStore`, cross-tenant on new `CrossTenantPlanItemStore`. `findDelegated(UUID, String)` is now abstract (was default delegating to cross-tenant). `updateStatus` requires tenancyId (2-arg removed).
-- **Optional standardization:** `CaseInstanceRepository.findByUuid`, `CrossTenantCaseInstanceRepository.findByUuid`, `CaseMetaModelRepository.findByKey`, `CrossTenantEventLogRepository.findById` all return `Optional` now. ~30 callers updated.
-- **Package moves:** `ExecutionSnapshotStore` → `common.spi.recovery`. InMemory impls → `common.internal.store`.
-- **Episodic replay:** `initBaseline()` before replay, `GOAL_REACHED` in replay filter, `recordGoalReached` wired into `GoalReachedEventHandler`.
+- **CaseQueueEntryEntity** in `persistence-jpa-common` — JPA entity with UUID `@Id`, status stored as `String` to avoid adding heavy `engine-support-core` dependency to the shared entity module. Unique constraint on `(case_id, view_id)`, indexes on `case_id`, `view_id+tenancy_id`, `tenancy_id`.
+- **JpaCaseQueueEntryStore** in `persistence-hibernate` — `@Alternative @Priority(2) @ApplicationScoped`, overrides the InMemory producer in `QueueBeans`. Uses pessimistic locking for `claimIfPending`. `toEntity`/`toModel` handle `QueueEntryStatus` ↔ String conversion.
+- **SpringJpaCaseQueueEntryStore** in `persistence-spring-jpa` — package-private, `@Transactional` class-level, registered as bean in `PersistenceAutoConfiguration`.
+- **Bean disambiguation:** Quarkus uses `@Alternative @Priority(2)` on the JPA impl. Spring uses `@ConditionalOnMissingBean(CaseQueueEntryStore.class)` on the InMemory bean in `EngineSupportAutoConfiguration`.
+- **CaseQueueEntryStoreContractTest** — 16 abstract tests covering all SPI operations plus full-field round-trip. `InMemoryCaseQueueEntryStoreTest` refactored to extend it.
+- **POM changes:** Added `engine-support-core` as dependency to `persistence-hibernate` and `persistence-spring-jpa` (needed for `CaseQueueEntryStore` SPI, `CaseQueueEntry` model, `QueueEntryStatus` enum).
+- **Indentation normalization** — `CaseQueueEntryStore`, `ExecutionSnapshotStore`, `PlanVersionStore` interfaces normalized from 4-space to 2-space by IntelliJ reformatting.
 
 ## Decisions
 
-- InMemory impls for ExecutionSnapshotStore/PlanVersionStore stayed in `common-core` (in `common.internal.store`) rather than moving to `engine-support-core` — Maven cycle prevents `common-core` test-scope dep on `engine-support-core`.
-- `BlackboardRegistry` resolves `CrossTenantPlanItemStore` via `instanceof` check on the `PlanItemStore` constructor param — avoids breaking 20+ test constructors.
+- **Status as String in entity:** `CaseQueueEntryEntity.status` is `String`, not `@Enumerated(QueueEntryStatus.class)`. Avoids adding `engine-support-core` (which transitively brings `runtime-core`, `planning-core`, `ledger-api`) to `persistence-jpa-common`. Store implementations handle the String ↔ enum conversion.
+- **UUID as @Id:** CaseQueueEntry uses UUID as its domain identity. Entity uses UUID directly as `@Id` (following `ExecutionSnapshotEntity` pattern) rather than a synthetic `Long` with a separate UUID field.
 
 ## Known issues
 
-- **Pre-existing Spring drift detection failures** in `runtime-spring`, `planning-spring`, `engine-support-spring`, `ledger-spring` — `verify-drift` goal fails due to 23+ Quarkus types with no Spring equivalent. Not caused by this branch.
-- **Pre-existing `PersistenceAutoConfiguration` fix** from #1166 was included in the #1153 commit (constructor needed `CaseContextRecoveryStrategy` ObjectProvider).
+- **Pre-existing Spring drift detection failures** in `runtime-spring` — `verify-drift` goal fails due to 23+ Quarkus types with no Spring equivalent. Not caused by this branch.
+- **Pre-existing schema validation failure** in `JpaExecutionSnapshotStoreTest` — `context_snapshot` column missing from Flyway migration (added by #1166 CaseContextRecoveryStrategy work). The test uses `validate` schema mode against the Flyway-managed schema.
 
 ## Queue
 
-Position 12/17. Active: #1161 — feat: add JPA and Spring JPA implementations for CaseQueueEntryStore.
+Position 12/17. Active: #1161 (completed, needs `work next` to advance).
+Next: #1162 — fix: resolve duplicate JpaPlanItemStore in persistence-hibernate and work-adapter.
 
 ## References
 
