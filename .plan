@@ -15,6 +15,6 @@ flyway-next-v: none
 - [x] casehubio/engine#1141 — Issue #1141
 - [x] casehubio/engine#1142 — API surface completion
 - [x] casehubio/engine#1143 — Research pipeline checkpoint
-- [ ] casehubio/engine#1144 — DefaultSummarizationProvider ← active
-- [ ] casehubio/engine#1146 — MCP annotation adapter
+- [x] casehubio/engine#1144 — DefaultSummarizationProvider
+- [ ] casehubio/engine#1146 — MCP annotation adapter ← active
 - [ ] casehubio/engine#1148 — Generalise evolution conductor
