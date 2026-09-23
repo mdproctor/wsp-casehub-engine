@@ -2,26 +2,46 @@
 
 ## What happened
 
-Implemented `CaseContextRecoveryStrategy` SPI (#1166) — the keystone issue for the persistence coherence epic. Two implementations: `SnapshotRecoveryStrategy` (default, O(1) DB snapshot) and `EventLogReplayRecoveryStrategy` (experimental, extracted from `rebuildStateContext()`). Strategy is wired into `DefaultWorkerExecutionRecoveryService` for recovery and into all `updateStateAndAppendEvent` repository implementations for `onContextChanged`. Config-driven selection via `@DefaultBean` + `@IfBuildProperty`.
+Completed 8 issues from the persistence coherence epic (#1150), advancing the queue from position 4/17 to 12/17. All changes are on `issue-1150-persistence-coherence` branch, committed but not pushed.
 
-Fixed two event-log replay gaps: #1151 (SCOPED_WORKER_OUTPUT not in replay filter) and #1152 (CONTEXT_SIGNAL_APPLIED stored key names only, not values — fixed both write and replay paths).
+### Issues completed
+
+| # | Title | Scale | Files |
+|---|-------|-------|-------|
+| #1153 | PlanItemStore.updateStatus abstract/default swap for tenancy safety | XS | 17 |
+| #1154 | Episodic layer replay — restore baseline and goal tracking | S | 3 |
+| #1155 | CrossTenant* Javadoc — system services, not recovery only | XS | 2 |
+| #1156 | Extract cross-tenant methods from PlanItemStore to CrossTenantPlanItemStore | S | 15 |
+| #1157 | Document Repository vs Store SPI naming convention | XS | 1 |
+| #1158 | Standardize null vs Optional across persistence SPIs | M | 31 |
+| #1159 | Move ExecutionSnapshotStore to common.spi.recovery package | XS | 44 |
+| #1160 | Contract Javadoc for PlanVersionStore, ExecutionSnapshotStore, CaseQueueEntryStore | XS | 3 |
+
+### Key changes
+
+- **PlanItemStore SPI split:** Tenant-scoped methods on `PlanItemStore`, cross-tenant on new `CrossTenantPlanItemStore`. `findDelegated(UUID, String)` is now abstract (was default delegating to cross-tenant). `updateStatus` requires tenancyId (2-arg removed).
+- **Optional standardization:** `CaseInstanceRepository.findByUuid`, `CrossTenantCaseInstanceRepository.findByUuid`, `CaseMetaModelRepository.findByKey`, `CrossTenantEventLogRepository.findById` all return `Optional` now. ~30 callers updated.
+- **Package moves:** `ExecutionSnapshotStore` → `common.spi.recovery`. InMemory impls → `common.internal.store`.
+- **Episodic replay:** `initBaseline()` before replay, `GOAL_REACHED` in replay filter, `recordGoalReached` wired into `GoalReachedEventHandler`.
 
 ## Decisions
 
-- `onContextChanged` kept as a two-method SPI — architecturally part of the blackboard propagation cycle, not just snapshot persistence. Future delta-based replay (Drools command pattern) hooks into this.
-- `recover(CaseInstance)` signature instead of `recover(UUID, String)` — avoids redundant DB lookup since the recovery service already loads the instance.
-- Snapshot stored as JSONB column on `CaseInstanceEntity` — no separate table or SPI needed.
+- InMemory impls for ExecutionSnapshotStore/PlanVersionStore stayed in `common-core` (in `common.internal.store`) rather than moving to `engine-support-core` — Maven cycle prevents `common-core` test-scope dep on `engine-support-core`.
+- `BlackboardRegistry` resolves `CrossTenantPlanItemStore` via `instanceof` check on the `PlanItemStore` constructor param — avoids breaking 20+ test constructors.
+
+## Known issues
+
+- **Pre-existing Spring drift detection failures** in `runtime-spring`, `planning-spring`, `engine-support-spring`, `ledger-spring` — `verify-drift` goal fails due to 23+ Quarkus types with no Spring equivalent. Not caused by this branch.
+- **Pre-existing `PersistenceAutoConfiguration` fix** from #1166 was included in the #1153 commit (constructor needed `CaseContextRecoveryStrategy` ObjectProvider).
 
 ## Queue
 
-Position 4/17. Active: #1153 — PlanItemStore.updateStatus tenancy inversion.
+Position 12/17. Active: #1161 — feat: add JPA and Spring JPA implementations for CaseQueueEntryStore.
 
 ## References
 
 | Artifact | Path |
 |----------|------|
 | Design spec | `wksp/specs/issue-1150-persistence-coherence/2026-09-23-case-context-recovery-strategy-design.md` |
-| Implementation plan | `wksp/plans/2026-09-23-case-context-recovery-strategy.md` |
 | Decisions | `wksp/specs/issue-1150-persistence-coherence/decisions.md` |
 | Journal | `wksp/JOURNAL.md` |
-| Blog | `wksp/blog/2026-09-23-mdp01-snapshot-over-replay.md` |
