@@ -6,9 +6,7 @@ Implemented #1148 (generalise evolution conductor) — 6 commits across the full
 
 ## Immediate Next Step
 
-Three deferred items from #1148 need completing (issues filed, in .plan deferred section). Start with #1168 (HealthSnapshot→HealthScoreSnapshot migration, S/Low), then #1169 (RegressionDetector wiring, S/Low — depends on #1168), then #1170 (ImprovementRequest field removal, M/Low). After those, #1148 can be closed and `work end` run.
-
-Alternatively, if the full project build (`mvn clean test`) revealed cross-module failures, fix those first.
+Use `work continue`. Queue has 3 remaining items (#1168, #1169, #1170) — all follow-ups from #1148 implementation, now in the .plan queue. Full project build passed clean. Start with `work next` to advance past #1148 to #1168, then execute sequentially (#1168 → #1169 → #1170). After all three, #1148 can be closed and `work end` run.
 
 ## Deferred Items (GitHub Issues)
 
@@ -32,5 +30,5 @@ Alternatively, if the full project build (`mvn clean test`) revealed cross-modul
 - Spec: `specs/issue-1148-generalise-evolution-conductor/2026-09-23-generalise-evolution-conductor-design.md`
 - Decisions: `specs/issue-1148-generalise-evolution-conductor/decisions.md`
 - Plan: `plans/2026-09-23-generalise-evolution-conductor.md`
-- Queue: slot `.plan` (position 5/6, #1148 active, 3 deferred items)
+- Queue: slot `.plan` (position 6/9, #1148 active → advance to #1168)
 - Epic: casehubio/engine#1139 (6/7 child issues closed)

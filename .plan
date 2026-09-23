@@ -19,6 +19,9 @@ active-issue: casehubio/engine#1148
 - [x] casehubio/engine#1144 — DefaultSummarizationProvider
 - [x] casehubio/engine#1146 — MCP annotation adapter
 - [ ] casehubio/engine#1148 — Generalise evolution conductor
+- [ ] casehubio/engine#1168 — Migrate HealthSnapshot to HealthScoreSnapshot
+- [ ] casehubio/engine#1169 — Wire RegressionDetector to RegressionEvaluatorRegistry
+- [ ] casehubio/engine#1170 — Remove targetRepo and targetPaths from ImprovementRequest
 
 ## Deferred
 - [ ] Migrate HealthSnapshot to HealthScoreSnapshot (#1168) (S / Low) [casehubio/engine] — Bridged internally by HealthScoreDeltaRegressionEvaluator — mechanical type migration, no architectural blocker
