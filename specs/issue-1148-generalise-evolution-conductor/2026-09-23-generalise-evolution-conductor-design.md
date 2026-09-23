@@ -1,7 +1,7 @@
 # Generalise Evolution Conductor — Design Spec
 
 **Issue:** casehubio/engine#1148
-**Epic:** casehubio/engine#1149
+**Epic:** casehubio/engine#1139
 **Parent spec:** `2026-09-21-command-centre-conductor-design.md` (#1132)
 **Decisions:** D1–D8 in `decisions.md`
 **Date:** 2026-09-23
