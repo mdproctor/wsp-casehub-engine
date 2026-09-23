@@ -23,7 +23,7 @@ The orchestration backbone (ticker, circuit breaker, budget enforcer, conflict d
 
 ## Design Overview
 
-Three new SPIs replace hardcoded domain assumptions. The orchestration backbone stays concrete, delegating to pluggable components:
+Five new SPIs replace hardcoded domain assumptions — three for orchestration concerns (categories, proposals, regression evaluation) and two for filtering-pipeline concerns (conflict detection, deny patterns). The orchestration backbone stays concrete, delegating to pluggable components:
 
 ```
                           ┌─────────────────────────┐
@@ -327,12 +327,12 @@ public class FilePathConflictStrategy implements ConflictStrategy {
       ImprovementRequest request,
       Map<UUID, ImprovementRequest> activeImprovements,
       int trivialThreshold) {
-    List<String> requestPaths = extractPaths(request);
+    List<String> requestPaths = CodeEvolutionMetadata.extractPaths(request);
     boolean isTrivial =
         request.estimatedSize() <= trivialThreshold && requestPaths.size() == 1;
 
     for (var entry : activeImprovements.entrySet()) {
-      List<String> activePaths = extractPaths(entry.getValue());
+      List<String> activePaths = CodeEvolutionMetadata.extractPaths(entry.getValue());
       for (String rp : requestPaths) {
         for (String ap : activePaths) {
           if (rp.equals(ap)) {
@@ -345,11 +345,6 @@ public class FilePathConflictStrategy implements ConflictStrategy {
       }
     }
     return new ConflictResult.Clear();
-  }
-
-  private List<String> extractPaths(ImprovementRequest request) {
-    String paths = request.metadata().getOrDefault("target-paths", "");
-    return paths.isEmpty() ? List.of() : List.of(paths.split(","));
   }
 
   private boolean sameDirectory(String a, String b) {
@@ -375,25 +370,35 @@ public interface DenyPatternProvider {
 
   String domainId();
 
-  boolean isDenied(UUID caseId, String tenancyId, ImprovementRequest request);
+  boolean isDenied(UUID caseId, String tenancyId, ImprovementRequest request,
+      ImprovementConfig config);
 }
 ```
 
-**Code-evolution default (runtime-core):** Moves the existing `STRUCTURAL_DENIED_PATTERNS` set from `ImprovementBudgetEnforcer`. Also checks dynamic deny patterns via `DenyPatternStore` and config-driven denied paths and allowed repos from `ImprovementBudget`.
+The `ImprovementConfig` parameter provides access to `config.effectiveBudget()` for config-driven deny checks (`effectiveDeniedPaths()`, `effectiveAllowedRepos()`). The coordinator already has `config` as a parameter of `proposeImprovements()` and passes it through. Non-code domains can ignore it — budget deny fields default to empty lists when null.
+
+**Code-evolution default (runtime-core):** Moves the existing `STRUCTURAL_DENIED_PATTERNS` set from `ImprovementBudgetEnforcer`. Also checks dynamic deny patterns via `DenyPatternStore` and config-driven denied paths (`budget.effectiveDeniedPaths()`) and allowed repos (`budget.effectiveAllowedRepos()`) from `ImprovementBudget`.
 
 ```java
 // runtime-core, io.casehub.engine.internal.improvement
 @ApplicationScoped
 public class CodeEvolutionDenyPatternProvider implements DenyPatternProvider {
 
+  // Classes in the improvement loop's control path that must never be self-modified.
   private static final Set<String> STRUCTURAL_DENIED_PATTERNS =
       Set.of(
           "ImprovementBudget", "ImprovementBudgetEnforcer", "ImprovementConfig",
           "SafetyConfig", "improvement-case-template", "EvolutionTicker",
           "ImprovementCircuitBreaker", "RegressionDetector", "ConfidenceScorer",
           "HealthScoreTracker", "HealthPolicy", "RollbackPolicy",
-          "ConflictDetector", "ImprovementCategoryTracker",
-          "RollbackHistory", "self-improvement-rollback");
+          "ImprovementCategoryTracker", "RollbackHistory", "self-improvement-rollback",
+          "FilePathConflictStrategy", "CodeEvolutionDenyPatternProvider",
+          "ConflictStrategyRegistry", "DenyPatternProviderRegistry",
+          "ImprovementCategoryRegistry", "ImprovementProposalSourceRegistry",
+          "RegressionEvaluatorRegistry",
+          "CodeEvolutionCategoryProvider", "CodeEvolutionStages",
+          "CodeEvolutionMetadata", "EvolutionBootstrap",
+          "SignalConsensusProposalSource", "HealthScoreDeltaRegressionEvaluator");
 
   private final DenyPatternStore denyPatternStore;
 
@@ -401,8 +406,11 @@ public class CodeEvolutionDenyPatternProvider implements DenyPatternProvider {
   public String domainId() { return "code-evolution"; }
 
   @Override
-  public boolean isDenied(UUID caseId, String tenancyId, ImprovementRequest request) {
-    List<String> paths = extractPaths(request);
+  public boolean isDenied(UUID caseId, String tenancyId, ImprovementRequest request,
+      ImprovementConfig config) {
+    List<String> paths = CodeEvolutionMetadata.extractPaths(request);
+    String repo = CodeEvolutionMetadata.extractRepo(request);
+
     for (String path : paths) {
       for (String pattern : STRUCTURAL_DENIED_PATTERNS) {
         if (path.contains(pattern)) return true;
@@ -411,13 +419,61 @@ public class CodeEvolutionDenyPatternProvider implements DenyPatternProvider {
         if (path.contains(pattern)) return true;
       }
     }
+
+    var budget = config.effectiveBudget();
+    for (String path : paths) {
+      for (String deniedPattern : budget.effectiveDeniedPaths()) {
+        if (matchesGlob(path, deniedPattern)) return true;
+      }
+    }
+
+    if (!budget.effectiveAllowedRepos().isEmpty()
+        && repo != null && !budget.effectiveAllowedRepos().contains(repo)) {
+      return true;
+    }
+
     return false;
   }
 
-  private List<String> extractPaths(ImprovementRequest request) {
-    String paths = request.metadata().getOrDefault("target-paths", "");
+  private static boolean matchesGlob(String path, String glob) {
+    String regex =
+        glob.replace(".", "\\.")
+            .replace("**", "@@DOUBLESTAR@@")
+            .replace("*", "[^/]*")
+            .replace("@@DOUBLESTAR@@", ".*");
+    return path.matches(regex);
+  }
+}
+```
+
+### CodeEvolutionMetadata
+
+Utility class consolidating metadata key constants and encode/decode methods for code-evolution-specific `ImprovementRequest` metadata. Consumers (`FilePathConflictStrategy`, `CodeEvolutionDenyPatternProvider`) use `extractPaths()`/`extractRepo()`. Producers (blocks that register signals via `ImprovementSignalContext`) use `encode()` when constructing the `metadata` map for `ImprovementRequest`.
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+public final class CodeEvolutionMetadata {
+
+  public static final String TARGET_PATHS = "target-paths";
+  public static final String TARGET_REPO = "target-repo";
+
+  public static List<String> extractPaths(ImprovementRequest request) {
+    String paths = request.metadata().getOrDefault(TARGET_PATHS, "");
     return paths.isEmpty() ? List.of() : List.of(paths.split(","));
   }
+
+  public static String extractRepo(ImprovementRequest request) {
+    return request.metadata().getOrDefault(TARGET_REPO, null);
+  }
+
+  public static Map<String, String> encode(String repo, List<String> paths) {
+    var map = new java.util.HashMap<String, String>();
+    if (repo != null) map.put(TARGET_REPO, repo);
+    if (paths != null && !paths.isEmpty()) map.put(TARGET_PATHS, String.join(",", paths));
+    return Map.copyOf(map);
+  }
+
+  private CodeEvolutionMetadata() {}
 }
 ```
 
@@ -657,7 +713,7 @@ public GoalFormationProposal proposeImprovements(UUID caseId, String tenancyId, 
   // 4. Domain-aware deny pattern check
   for (var proposal : filtered) {
     var provider = denyPatternProviderRegistry.forDomain(proposal.domainId());
-    if (provider.isPresent() && provider.get().isDenied(caseId, tenancyId, proposal)) {
+    if (provider.isPresent() && provider.get().isDenied(caseId, tenancyId, proposal, config)) {
       continue; // denied by domain safety rules
     }
   }
@@ -830,6 +886,7 @@ public record ProposalFilteringSummary(
 | `RegressionDetector` | `checkActiveMonitors()`, `onMetricsDegraded()` parameter types | `HealthScoreTracker.HealthSnapshot` → `HealthScoreSnapshot` |
 | `ConflictDetector` | entire class | Deleted — logic moves to `FilePathConflictStrategy` |
 | `ImprovementBudgetEnforcer` | `STRUCTURAL_DENIED_PATTERNS`, path/repo/deny checks | Moved to `CodeEvolutionDenyPatternProvider` |
+| `CodeEvolutionMetadata` | (new utility class) | Consolidates metadata key constants and encode/decode for code-evolution `ImprovementRequest.metadata()` |
 | `ImprovementBudget` | `maxPRSize`, `effectiveMaxPRSize()` | → `maxChangeSize`, `effectiveMaxChangeSize()` |
 | `TickTrace.SignalFilteringSummary` | Signal-consensus-specific fields | → `ProposalFilteringSummary` with per-source counts (see §3.5) |
 
@@ -923,7 +980,8 @@ public List<String> effectiveEnabledCategories() {
 | `SignalConsensusProposalSourceTest` | Signal-consensus proposal generation (extracted from ImprovementGoalFormationStrategyTest), namespace filtering |
 | `HealthScoreDeltaRegressionEvaluatorTest` | Delta threshold detection, no-regression case, boundary values |
 | `FilePathConflictStrategyTest` | File-path-based conflict detection (extracted from ConflictDetectorTest), trivial threshold, same-directory detection, metadata path extraction |
-| `CodeEvolutionDenyPatternProviderTest` | Structural deny patterns, dynamic deny patterns, path extraction from metadata |
+| `CodeEvolutionDenyPatternProviderTest` | Structural deny patterns (including new infrastructure classes), dynamic deny patterns, config-driven denied paths (glob matching), config-driven allowed repos, path extraction via `CodeEvolutionMetadata` |
+| `CodeEvolutionMetadataTest` | Key constants match expected values, `extractPaths()` parsing (empty, single, multiple, no metadata key), `extractRepo()`, `encode()` round-trip, comma-in-path edge case |
 | `EvolutionBootstrapTest` | Multi-provider discovery, all 5 registries populated |
 
 ### Modified existing tests
@@ -987,6 +1045,7 @@ public List<String> effectiveEnabledCategories() {
 | `HealthScoreDeltaRegressionEvaluator` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `FilePathConflictStrategy` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `CodeEvolutionDenyPatternProvider` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `CodeEvolutionMetadata` (utility) | `runtime-core` | `io.casehub.engine.internal.improvement` |
 
 ## 8. Migration Sequence
 
@@ -997,7 +1056,7 @@ The changes have dependencies that determine ordering:
 3. **ImprovementStage migration:** Delete enum, update all references to `String`, update `GatePolicy`, update YAML codegen
 4. **ImprovementBudget rename:** `maxPRSize` → `maxChangeSize`
 5. **Registries:** `ImprovementCategoryRegistry`, `ImprovementProposalSourceRegistry`, `RegressionEvaluatorRegistry`, `ConflictStrategyRegistry`, `DenyPatternProviderRegistry`
-6. **Default implementations:** `CodeEvolutionCategoryProvider`, `CodeEvolutionStages` (runtime-core), `SignalConsensusProposalSource`, `HealthScoreDeltaRegressionEvaluator`, `FilePathConflictStrategy`, `CodeEvolutionDenyPatternProvider`
+6. **Default implementations:** `CodeEvolutionMetadata` (utility, used by other defaults), `CodeEvolutionCategoryProvider`, `CodeEvolutionStages` (runtime-core), `SignalConsensusProposalSource`, `HealthScoreDeltaRegressionEvaluator`, `FilePathConflictStrategy`, `CodeEvolutionDenyPatternProvider`
 7. **Bootstrap:** `EvolutionBootstrap` (discovers all 5 SPI types)
 8. **Backbone refactoring:** `ImprovementGoalFormationStrategy` (coordinator with domain-aware filtering), `RegressionDetector` (domain-filtered evaluation), `HealthScoreTracker` (HealthSnapshot → HealthScoreSnapshot), `ConfidenceScorer` (type migration), `ImprovementBudgetEnforcer` (remove domain-specific logic), `TickTrace` (SignalFilteringSummary → ProposalFilteringSummary)
 9. **ImprovementConfig:** Remove `effectiveEnabledCategories()` hardcoded default
@@ -1019,6 +1078,7 @@ The changes have dependencies that determine ordering:
 - `ImprovementRequest.java:21-28` — target model to generalise
 - `ConfidenceScorer.java:22-58` — type migration for HealthSnapshot
 - `TickTrace.java:55-63` — SignalFilteringSummary to generalise
+- `CodeEvolutionMetadata` — utility for metadata key constants and encode/decode (new)
 - `EvolutionTicker.java:36-131` — orchestration backbone (unchanged)
 - PP-20260921-b7c277 — never use @DefaultBean on multi-instance SPIs
 - PP-20260915-aa504e — API surface parity (YAML, DSL, annotations) — applies to GatePolicy codegen change; new SPI/model types are not CaseDefinition fields and do not require YAML codegen entries
