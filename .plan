@@ -11,6 +11,16 @@ date: 2026-09-23
 ## Queue
 - [x] casehubio/engine#1150 — epic: persistence layer coherence — correctness, SPI consistency, and test coverage
 - [ ] casehubio/engine#1166 — feat: CaseContextRecoveryStrategy SPI — database snapshot default, event-log replay experimental ← active
+  - [ ] Batch 1: Foundation
+    - [ ] Task 1: SPI + domain model + entity mapping
+    - [ ] Task 2: SnapshotRecoveryStrategy
+  - [ ] Batch 2: Event-Log Replay
+    - [ ] Task 3: EventLogReplayRecoveryStrategy
+  - [ ] Batch 3: Integration
+    - [ ] Task 4: Wire strategy into recovery service
+    - [ ] Task 5: Wire onContextChanged into repos
+  - [ ] Batch 4: Config
+    - [ ] Task 6: CDI producer + integration test
 - [ ] casehubio/engine#1151 — fix: replay SCOPED_WORKER_OUTPUT events on cache miss
 - [ ] casehubio/engine#1152 — fix: persist context values in CONTEXT_SIGNAL_APPLIED event for replay
 - [ ] casehubio/engine#1153 — fix: swap PlanItemStore.updateStatus abstract/default for tenancy safety
