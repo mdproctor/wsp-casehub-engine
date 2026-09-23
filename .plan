@@ -1,0 +1,31 @@
+# Work Plan — issue-1150-persistence-coherence
+
+## State
+branch: issue-1150-persistence-coherence
+state: scaffolded
+project-sha: fc7d4d758de2e9ecf293dcf3a2573d476ca2a417
+date: 2026-09-23
+issue-repo: casehubio/engine
+covers: 1150,1166,1151,1152,1153,1154,1155,1156,1157,1158,1159,1160,1161,1162,1163,1164,1165
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/engine#1150 — Issue #1150 ← active
+- [ ] casehubio/engine#1166 — CaseContextRecoveryStrategy SPI
+- [ ] casehubio/engine#1153 — PlanItemStore.updateStatus tenancy inversion
+- [ ] casehubio/engine#1155 — Update CrossTenant Javadoc
+- [ ] casehubio/engine#1156 — Extract cross-tenant methods from PlanItemStore
+- [ ] casehubio/engine#1157 — Document Repository vs Store naming convention
+- [ ] casehubio/engine#1158 — Standardize null vs Optional across SPIs
+- [ ] casehubio/engine#1159 — Move ExecutionSnapshotStore to common.spi.recovery
+- [ ] casehubio/engine#1160 — Add contract Javadoc to 3 SPIs
+- [ ] casehubio/engine#1161 — Add JPA and Spring JPA for CaseQueueEntryStore
+- [ ] casehubio/engine#1162 — Resolve duplicate JpaPlanItemStore
+- [ ] casehubio/engine#1163 — Add contract tests for 5 SPIs
+- [ ] casehubio/engine#1164 — JPA impls extend contract test hierarchy
+- [ ] casehubio/engine#1165 — Add integration test for full DLQ replay path
+- [ ] casehubio/engine#1151 — Replay SCOPED_WORKER_OUTPUT on cache miss
+- [ ] casehubio/engine#1152 — Persist context values in CONTEXT_SIGNAL_APPLIED
+- [ ] casehubio/engine#1154 — Episodic layer replay baseline and goals
