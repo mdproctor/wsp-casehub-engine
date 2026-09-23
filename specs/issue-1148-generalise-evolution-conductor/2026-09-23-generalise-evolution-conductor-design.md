@@ -201,7 +201,7 @@ public interface RegressionEvaluator {
   String domainId();
 
   RegressionVerdict evaluate(
-      UUID caseId, String tenancyId,
+      UUID caseId,
       HealthScoreSnapshot baseline,
       HealthScoreSnapshot current,
       String category);
@@ -229,10 +229,14 @@ public record HealthScoreSnapshot(
 
 **Code-evolution default evaluator (runtime-core):**
 
+Wraps the existing `ConfidenceScorer` which computes regression confidence from before/after snapshots. The evaluator produces a confidence score; the `RegressionDetector` applies the two-tier threshold policy (auto-revert vs pause) from `RollbackPolicy`.
+
 ```java
 // runtime-core, io.casehub.engine.internal.improvement
 @ApplicationScoped
 public class HealthScoreDeltaRegressionEvaluator implements RegressionEvaluator {
+
+  private final ConfidenceScorer scorer;
 
   @Override
   public String evaluatorId() { return "health-score-delta"; }
@@ -242,14 +246,13 @@ public class HealthScoreDeltaRegressionEvaluator implements RegressionEvaluator 
 
   @Override
   public RegressionVerdict evaluate(
-      UUID caseId, String tenancyId,
+      UUID caseId,
       HealthScoreSnapshot baseline, HealthScoreSnapshot current,
       String category) {
-    double delta = current.score() - baseline.score();
-    if (delta < -0.1) {
-      return new RegressionVerdict.Detected(
-          Math.min(1.0, Math.abs(delta)),
-          "Health score dropped by " + String.format("%.2f", Math.abs(delta)));
+    double confidence = scorer.score(caseId, null, baseline, current);
+    if (confidence > 0.0) {
+      return new RegressionVerdict.Detected(confidence,
+          "Health score regression detected");
     }
     return new RegressionVerdict.NoRegression();
   }
@@ -450,15 +453,16 @@ When `ImprovementConfig.enabledCategories` is null, ALL categories from all prov
 
 ### 3.2 RegressionDetector → delegates to evaluators
 
-The `onMetricsDegraded()` method changes from inline health-score comparison to calling registered evaluators:
+The `onMetricsDegraded()` method changes from using a single `ConfidenceScorer` to calling all registered evaluators. The two-tier threshold response (auto-revert vs pause) from `RollbackPolicy` stays in the detector — evaluators produce confidence, the detector decides the response.
 
 **Before:**
 ```java
 private void onMetricsDegraded(UUID caseId, MonitoredImprovement monitor,
     RollbackPolicy policy, HealthSnapshot before, HealthSnapshot after) {
-  // inline health score comparison
-  double delta = after.score() - before.score();
-  if (delta < -policy.effectiveRegressionThreshold()) { ... }
+  double confidence = scorer.score(caseId, monitor.improvementCaseId(), before, after);
+  regressionDetectedEvent.fireAsync(...);
+  if (confidence >= policy.effectiveAutoRevertThreshold()) { /* revert + pause */ }
+  else if (confidence >= policy.effectivePauseThreshold()) { /* pause only */ }
 }
 ```
 
@@ -466,14 +470,20 @@ private void onMetricsDegraded(UUID caseId, MonitoredImprovement monitor,
 ```java
 private void onMetricsDegraded(UUID caseId, MonitoredImprovement monitor,
     RollbackPolicy policy, HealthScoreSnapshot before, HealthScoreSnapshot after) {
+  double maxConfidence = 0.0;
+  String reason = null;
   for (var evaluator : regressionEvaluatorRegistry.all()) {
-    var verdict = evaluator.evaluate(
-        caseId, monitor.tenancyId(), before, after, monitor.category());
-    if (verdict instanceof RegressionVerdict.Detected detected) {
-      // existing regression handling: fire event, record in rollback history
-      handleRegression(caseId, monitor, detected);
-      return;
+    var verdict = evaluator.evaluate(caseId, before, after, monitor.category());
+    if (verdict instanceof RegressionVerdict.Detected detected
+        && detected.confidence() > maxConfidence) {
+      maxConfidence = detected.confidence();
+      reason = detected.reason();
     }
+  }
+  if (maxConfidence > 0.0) {
+    regressionDetectedEvent.fireAsync(...);
+    if (maxConfidence >= policy.effectiveAutoRevertThreshold()) { /* revert + pause */ }
+    else if (maxConfidence >= policy.effectivePauseThreshold()) { /* pause only */ }
   }
 }
 ```
@@ -544,7 +554,7 @@ public GateMode effectiveMode(String stageId) {
 }
 ```
 
-The "PR_REVIEW defaults to GATED" semantic moves to the `CodeEvolutionCategoryProvider`'s stage definition or to the initial `ImprovementConfig` that a code-evolution case starts with.
+The "PR_REVIEW defaults to GATED" semantic moves to the initial `ImprovementConfig` on the code-evolution case template (`caseTemplateId: "self-improvement"`). The template's `gatePolicy` field sets `{"pr-review": "GATED"}` as the starting configuration. This is case-level config, not provider-level — different cases in the same domain can have different gate defaults.
 
 ### YAML codegen impact
 
@@ -603,7 +613,7 @@ public List<String> effectiveEnabledCategories() {
 
 ### Critical test scenarios
 
-1. **Multi-provider coexistence:** Two category providers register — both domains' categories appear in registry, no collision on category IDs (different domains can have same-named categories, distinguished by domainId).
+1. **Multi-provider coexistence:** Two category providers register — both domains' categories appear in registry. Category IDs must be globally unique across domains (e.g., "dependency-update" for code-evolution, "parameter-tuning" for trading). If two providers register the same ID, the second registration logs a warning and overwrites — this is a configuration error, not a supported use case.
 2. **Proposal source aggregation:** Three sources return proposals — coordinator collects all, applies shared filtering pipeline, generates combined goal set.
 3. **Evaluator aggregation (any-triggered):** Two evaluators registered — first returns NoRegression, second returns Detected — regression IS triggered (any-trigger semantics).
 4. **Category filtering as intersection:** Config.enabledCategories = ["dependency-update", "parameter-tuning"], provider A has "dependency-update", provider B has "parameter-tuning" — both active. Config has "nonexistent-category" — silently ignored (no error, just no matching proposals).

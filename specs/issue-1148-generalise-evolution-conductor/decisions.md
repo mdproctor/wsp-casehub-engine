@@ -18,8 +18,8 @@
 **Alternatives:**
 - Categories as data on ImprovementConfig — categories stay as strings, each domain sets enabledCategories in YAML; no type safety or metadata
 - Category enum SPI — sealed interface per domain; strong typing but couples domains
-**Rationale:** Categories are currently hardcoded strings ("dependency-update", "lint-fix", etc.) in ImprovementConfig.effectiveEnabledCategories(). A provider SPI lets domains contribute categories with metadata (id, name, description, default gate mode, compatible capability areas) while the engine discovers them at bootstrap via the established CapabilityAreaBootstrap pattern.
-**Trade-offs:** More infrastructure than pure string config. ImprovementConfig.enabledCategories becomes a filter over provider-contributed categories rather than the source of truth.
+**Rationale:** Categories are currently hardcoded strings ("dependency-update", "lint-fix", etc.) in ImprovementConfig.effectiveEnabledCategories(). A provider SPI lets domains contribute categories with metadata (id, name, description, domainId) while the engine discovers them at bootstrap via the established CapabilityAreaBootstrap pattern. Default gate mode is handled per-case via the case template's ImprovementConfig.gatePolicy, not per-category — different cases in the same domain can have different gate defaults. Compatible capability areas are implicit from the domain — the domain's categories and capability areas share a domainId.
+**Trade-offs:** More infrastructure than pure string config. ImprovementConfig.enabledCategories becomes a filter over provider-contributed categories rather than the source of truth. Category IDs must be globally unique across domains.
 **Sources:** ImprovementConfig.java:94-98, CapabilityAreaBootstrap.java, PP-20260921-b7c277 (no @DefaultBean on multi-instance SPIs)
 **Exploration:** quick
 **Status:** captured
