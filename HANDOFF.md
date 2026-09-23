@@ -2,13 +2,19 @@
 
 ## Last Session
 
-Brainstorming and planning for #1148 (generalise evolution conductor). Advanced queue past #1146 (already closed) to #1148 (position 5/6). Completed full design cycle: 8 decisions captured, spec written and self-reviewed (5 fixes), post-spec standard review (3 rounds, 15 issues, 14 verified, 1 accepted, APPROVED). Review expanded scope from 3 to 5 SPIs — added ConflictStrategy and DenyPatternProvider for filtering-pipeline generalisation. Implementation plan written (6 tasks, 3 batches), self-reviewed (1 gap fixed — ImprovementRequest field removal step added).
+Implemented #1148 (generalise evolution conductor) — 6 commits across the full 3-batch plan. Created 5 SPI interfaces (ImprovementCategoryProvider, ImprovementProposalSource, RegressionEvaluator, ConflictStrategy, DenyPatternProvider), 5 model records, 5 registries, CodeEvolutionCategoryProvider, EvolutionBootstrap, CodeEvolutionStages constants, CodeEvolutionMetadata utility, and 4 default domain implementations. Migrated ImprovementStage enum→String across 24 files. Refactored ImprovementGoalFormationStrategy into a domain-aware coordinator with 6-stage filtering pipeline. Cleaned ImprovementBudgetEnforcer (deny logic moved to CodeEvolutionDenyPatternProvider), deleted ConflictDetector (replaced by FilePathConflictStrategy). Added MultiDomainEvolutionTest. All api+runtime-core tests pass (512+). Full project build was running at session end — verify.
 
 ## Immediate Next Step
 
-Execute the implementation plan at `plans/2026-09-23-generalise-evolution-conductor.md`. Use executing-plans skill. Start with Batch 1 Task 1 (create API model types and SPI interfaces). This is L/XL scale work — expect 2-3 sessions across the 3 batches.
+Three deferred items from #1148 need completing (issues filed, in .plan deferred section). Start with #1168 (HealthSnapshot→HealthScoreSnapshot migration, S/Low), then #1169 (RegressionDetector wiring, S/Low — depends on #1168), then #1170 (ImprovementRequest field removal, M/Low). After those, #1148 can be closed and `work end` run.
 
-The spec at `specs/issue-1148-generalise-evolution-conductor/2026-09-23-generalise-evolution-conductor-design.md` is the design authority. The plan sequences the spec into TDD tasks.
+Alternatively, if the full project build (`mvn clean test`) revealed cross-module failures, fix those first.
+
+## Deferred Items (GitHub Issues)
+
+- #1168 — Migrate HealthSnapshot→HealthScoreSnapshot (S / Low) — mechanical type migration, bridged by evaluator
+- #1169 — Wire RegressionDetector to RegressionEvaluatorRegistry (S / Low) — depends on #1168
+- #1170 — Remove targetRepo/targetPaths from ImprovementRequest (M / Low) — ~27 call sites
 
 ## Key Design Decisions (D1-D8)
 
@@ -26,5 +32,5 @@ The spec at `specs/issue-1148-generalise-evolution-conductor/2026-09-23-generali
 - Spec: `specs/issue-1148-generalise-evolution-conductor/2026-09-23-generalise-evolution-conductor-design.md`
 - Decisions: `specs/issue-1148-generalise-evolution-conductor/decisions.md`
 - Plan: `plans/2026-09-23-generalise-evolution-conductor.md`
-- Queue: slot `.plan` (position 5/6, #1148 active)
+- Queue: slot `.plan` (position 5/6, #1148 active, 3 deferred items)
 - Epic: casehubio/engine#1139 (6/7 child issues closed)
