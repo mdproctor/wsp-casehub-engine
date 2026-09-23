@@ -1,7 +1,7 @@
 # Generalise Evolution Conductor — Design Spec
 
 **Issue:** casehubio/engine#1148
-**Epic:** casehubio/engine#1139
+**Epic:** casehubio/engine#1149
 **Parent spec:** `2026-09-21-command-centre-conductor-design.md` (#1132)
 **Decisions:** D1–D8 in `decisions.md`
 **Date:** 2026-09-23
@@ -19,7 +19,7 @@ The evolution conductor (EvolutionTicker, HealthScoreTracker, RegressionDetector
 
 The orchestration backbone (ticker, circuit breaker, budget enforcer, conflict detector) is already domain-agnostic. Health scoring via `CapabilityArea` is already a multi-instance SPI (D1). Execution via workers/case lifecycle is already pluggable (D6). Gate policies are already configurable (verified generic).
 
-**Scope:** Extract 3 new SPIs, migrate `ImprovementStage` from enum to string, and refactor `ImprovementGoalFormationStrategy` into a coordinator. Code-evolution implementations stay in runtime-core as defaults (D5).
+**Scope:** Extract 5 new SPIs, generalise `ImprovementRequest` target model, migrate `ImprovementStage` from enum to string, and refactor `ImprovementGoalFormationStrategy` into a coordinator. Code-evolution implementations stay in runtime-core as defaults (D5). The 5 SPIs cover the three orchestration concerns (categories, proposals, regression evaluation) plus the two filtering-pipeline concerns (conflict detection, structural deny patterns) identified in the issue's predecessor audit (#1148 Comment 1).
 
 ## Design Overview
 
@@ -50,6 +50,13 @@ Three new SPIs replace hardcoded domain assumptions. The orchestration backbone 
                           │ contributes categories│
                           │ + stage definitions   │
                           └──────────────────────┘
+
+                  ┌────────────────┐   ┌──────────────────┐
+                  │ConflictStrategy│   │DenyPatternProvider│
+                  │  (NEW SPI)     │   │   (NEW SPI)       │
+                  │ domain-aware   │   │ domain-specific   │
+                  │ conflict check │   │ structural guards │
+                  └────────────────┘   └──────────────────┘
 ```
 
 ## 1. New SPI Interfaces
@@ -150,7 +157,27 @@ public interface ImprovementProposalSource {
 }
 ```
 
-Sources return raw `ImprovementRequest` lists. The coordinator (`ImprovementGoalFormationStrategy`) applies shared filtering — budget, conflict, suppression, anti-oscillation — to all proposals regardless of source (D7).
+Sources return raw `ImprovementRequest` lists. The coordinator (`ImprovementGoalFormationStrategy`) applies shared filtering — budget, conflict, suppression, anti-oscillation — to all proposals regardless of source (D7). Domain-specific filtering (deny patterns, conflict detection) is delegated to the corresponding domain's `DenyPatternProvider` and `ConflictStrategy`.
+
+#### ImprovementRequest generalisation
+
+`ImprovementRequest` is currently code-evolution-shaped (`targetRepo`, `targetPaths`, `estimatedSize`). These fields have no meaning for trading, AML, or clinical domains. The record becomes domain-agnostic:
+
+```java
+// api, io.casehub.api.model.stigmergy
+public record ImprovementRequest(
+    String improvementType,
+    String category,
+    String target,
+    String domainId,
+    int estimatedSize,
+    Map<String, String> metadata) {}
+```
+
+- `targetRepo` and `targetPaths` removed from the record — code-evolution stores these in `metadata` (keys: `"target-repo"`, `"target-paths"` as comma-separated)
+- `domainId` added — each proposal identifies its domain
+- `estimatedSize` retained — all domains have a notion of change magnitude (line count for code, parameter count for trading, rule count for AML)
+- `metadata` retained — domain-specific data that doesn't warrant dedicated fields
 
 **Code-evolution default source (runtime-core):**
 
@@ -259,6 +286,143 @@ public class HealthScoreDeltaRegressionEvaluator implements RegressionEvaluator 
 }
 ```
 
+### 1.4 ConflictStrategy
+
+Multi-instance SPI. Each domain defines what "conflict" means for concurrent improvements.
+
+```java
+// api, io.casehub.api.spi.improvement
+public interface ConflictStrategy {
+
+  String domainId();
+
+  ConflictResult check(
+      ImprovementRequest request,
+      Map<UUID, ImprovementRequest> activeImprovements,
+      int trivialThreshold);
+
+  sealed interface ConflictResult
+      permits ConflictResult.Clear, ConflictResult.Conflicting {
+
+    record Clear() implements ConflictResult {}
+
+    record Conflicting(UUID blockingImprovementId, String reason)
+        implements ConflictResult {}
+  }
+}
+```
+
+**Code-evolution default (runtime-core):** Moves the existing `ConflictDetector` file-path logic. Extracts `target-paths` from `ImprovementRequest.metadata()` and checks for same-file or same-directory overlap between the request and active improvements.
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@ApplicationScoped
+public class FilePathConflictStrategy implements ConflictStrategy {
+
+  @Override
+  public String domainId() { return "code-evolution"; }
+
+  @Override
+  public ConflictResult check(
+      ImprovementRequest request,
+      Map<UUID, ImprovementRequest> activeImprovements,
+      int trivialThreshold) {
+    List<String> requestPaths = extractPaths(request);
+    boolean isTrivial =
+        request.estimatedSize() <= trivialThreshold && requestPaths.size() == 1;
+
+    for (var entry : activeImprovements.entrySet()) {
+      List<String> activePaths = extractPaths(entry.getValue());
+      for (String rp : requestPaths) {
+        for (String ap : activePaths) {
+          if (rp.equals(ap)) {
+            return new ConflictResult.Conflicting(entry.getKey(), rp);
+          }
+          if (!isTrivial && sameDirectory(rp, ap)) {
+            return new ConflictResult.Conflicting(entry.getKey(), rp);
+          }
+        }
+      }
+    }
+    return new ConflictResult.Clear();
+  }
+
+  private List<String> extractPaths(ImprovementRequest request) {
+    String paths = request.metadata().getOrDefault("target-paths", "");
+    return paths.isEmpty() ? List.of() : List.of(paths.split(","));
+  }
+
+  private boolean sameDirectory(String a, String b) {
+    return parentDir(a).equals(parentDir(b));
+  }
+
+  private String parentDir(String path) {
+    int last = path.lastIndexOf('/');
+    return last > 0 ? path.substring(0, last) : "";
+  }
+}
+```
+
+The existing `ConflictDetector` is deleted. Its file-path logic moves to `FilePathConflictStrategy`. The `ConflictDetector.ConflictCheck` sealed interface is superseded by `ConflictStrategy.ConflictResult`.
+
+### 1.5 DenyPatternProvider
+
+Multi-instance SPI. Each domain defines structural invariants that must never be self-modified by the improvement loop.
+
+```java
+// api, io.casehub.api.spi.improvement
+public interface DenyPatternProvider {
+
+  String domainId();
+
+  boolean isDenied(UUID caseId, String tenancyId, ImprovementRequest request);
+}
+```
+
+**Code-evolution default (runtime-core):** Moves the existing `STRUCTURAL_DENIED_PATTERNS` set from `ImprovementBudgetEnforcer`. Also checks dynamic deny patterns via `DenyPatternStore` and config-driven denied paths and allowed repos from `ImprovementBudget`.
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@ApplicationScoped
+public class CodeEvolutionDenyPatternProvider implements DenyPatternProvider {
+
+  private static final Set<String> STRUCTURAL_DENIED_PATTERNS =
+      Set.of(
+          "ImprovementBudget", "ImprovementBudgetEnforcer", "ImprovementConfig",
+          "SafetyConfig", "improvement-case-template", "EvolutionTicker",
+          "ImprovementCircuitBreaker", "RegressionDetector", "ConfidenceScorer",
+          "HealthScoreTracker", "HealthPolicy", "RollbackPolicy",
+          "ConflictDetector", "ImprovementCategoryTracker",
+          "RollbackHistory", "self-improvement-rollback");
+
+  private final DenyPatternStore denyPatternStore;
+
+  @Override
+  public String domainId() { return "code-evolution"; }
+
+  @Override
+  public boolean isDenied(UUID caseId, String tenancyId, ImprovementRequest request) {
+    List<String> paths = extractPaths(request);
+    for (String path : paths) {
+      for (String pattern : STRUCTURAL_DENIED_PATTERNS) {
+        if (path.contains(pattern)) return true;
+      }
+      for (String pattern : denyPatternStore.findAll(caseId, tenancyId)) {
+        if (path.contains(pattern)) return true;
+      }
+    }
+    return false;
+  }
+
+  private List<String> extractPaths(ImprovementRequest request) {
+    String paths = request.metadata().getOrDefault("target-paths", "");
+    return paths.isEmpty() ? List.of() : List.of(paths.split(","));
+  }
+}
+```
+
+A trading domain would provide its own `TradingDenyPatternProvider` that protects risk limit parameters, regulatory thresholds, and circuit breaker configuration from self-modification — using domain-specific matching logic, not file paths.
+
 ## 2. Registries and Bootstrap
 
 Following the established `CapabilityAreaRegistry` / `CapabilityAreaBootstrap` pattern (CDI discovery via `Instance<T>` at startup → register into `ConcurrentHashMap`-backed registry). Per protocol PP-20260921-b7c277: NO `@DefaultBean` on multi-instance SPIs.
@@ -272,8 +436,6 @@ public class ImprovementCategoryRegistry implements Resettable {
 
   private final ConcurrentHashMap<String, CategoryDescriptor> categories =
       new ConcurrentHashMap<>();
-  private final ConcurrentHashMap<String, StageDescriptor> stages =
-      new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, List<StageDescriptor>> stagesByDomain =
       new ConcurrentHashMap<>();
 
@@ -285,9 +447,6 @@ public class ImprovementCategoryRegistry implements Resettable {
         .sorted(Comparator.comparingInt(StageDescriptor::ordinal))
         .toList();
     stagesByDomain.put(provider.domainId(), sortedStages);
-    for (var stage : sortedStages) {
-      stages.put(stage.id(), stage);
-    }
   }
 
   public List<CategoryDescriptor> allCategories() {
@@ -298,9 +457,11 @@ public class ImprovementCategoryRegistry implements Resettable {
     return Optional.ofNullable(categories.get(categoryId));
   }
 
-  public boolean isGateCheckpoint(String stageId) {
-    var stage = stages.get(stageId);
-    return stage != null && stage.gateCheckpoint();
+  public boolean isGateCheckpoint(String domainId, String stageId) {
+    var domainStages = stagesByDomain.get(domainId);
+    if (domainStages == null) return false;
+    return domainStages.stream()
+        .anyMatch(s -> s.id().equals(stageId) && s.gateCheckpoint());
   }
 
   public List<StageDescriptor> stagesForDomain(String domainId) {
@@ -315,11 +476,12 @@ public class ImprovementCategoryRegistry implements Resettable {
   @Override
   public void reset() {
     categories.clear();
-    stages.clear();
     stagesByDomain.clear();
   }
 }
 ```
+
+Stage IDs are scoped per domain — different domains may reuse stage IDs (e.g., both "code-evolution" and "trading" can have an "analyze" stage) without collision. The flat `stages` map is removed; lookups always go through `stagesByDomain`. `isGateCheckpoint(domainId, stageId)` requires the caller to provide domain context, which is available from the case's category via `domainForCategory()`.
 
 ### ImprovementProposalSourceRegistry
 
@@ -369,6 +531,56 @@ public class RegressionEvaluatorRegistry implements Resettable {
 }
 ```
 
+### ConflictStrategyRegistry
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@ApplicationScoped
+public class ConflictStrategyRegistry implements Resettable {
+
+  private final ConcurrentHashMap<String, ConflictStrategy> strategies =
+      new ConcurrentHashMap<>();
+
+  public void register(ConflictStrategy strategy) {
+    strategies.put(strategy.domainId(), strategy);
+  }
+
+  public Optional<ConflictStrategy> forDomain(String domainId) {
+    return Optional.ofNullable(strategies.get(domainId));
+  }
+
+  @Override
+  public void reset() {
+    strategies.clear();
+  }
+}
+```
+
+### DenyPatternProviderRegistry
+
+```java
+// runtime-core, io.casehub.engine.internal.improvement
+@ApplicationScoped
+public class DenyPatternProviderRegistry implements Resettable {
+
+  private final ConcurrentHashMap<String, DenyPatternProvider> providers =
+      new ConcurrentHashMap<>();
+
+  public void register(DenyPatternProvider provider) {
+    providers.put(provider.domainId(), provider);
+  }
+
+  public Optional<DenyPatternProvider> forDomain(String domainId) {
+    return Optional.ofNullable(providers.get(domainId));
+  }
+
+  @Override
+  public void reset() {
+    providers.clear();
+  }
+}
+```
+
 ### EvolutionBootstrap (unified)
 
 A single bootstrap class that discovers and registers all evolution SPIs:
@@ -381,10 +593,14 @@ public class EvolutionBootstrap {
   @Inject ImprovementCategoryRegistry categoryRegistry;
   @Inject ImprovementProposalSourceRegistry proposalSourceRegistry;
   @Inject RegressionEvaluatorRegistry regressionEvaluatorRegistry;
+  @Inject ConflictStrategyRegistry conflictStrategyRegistry;
+  @Inject DenyPatternProviderRegistry denyPatternProviderRegistry;
 
   @Inject @Any Instance<ImprovementCategoryProvider> categoryProviders;
   @Inject @Any Instance<ImprovementProposalSource> proposalSources;
   @Inject @Any Instance<RegressionEvaluator> regressionEvaluators;
+  @Inject @Any Instance<ConflictStrategy> conflictStrategies;
+  @Inject @Any Instance<DenyPatternProvider> denyPatternProviders;
 
   void onStartup(@Observes StartupEvent event) {
     for (var provider : categoryProviders) {
@@ -395,6 +611,12 @@ public class EvolutionBootstrap {
     }
     for (var evaluator : regressionEvaluators) {
       regressionEvaluatorRegistry.register(evaluator);
+    }
+    for (var strategy : conflictStrategies) {
+      conflictStrategyRegistry.register(strategy);
+    }
+    for (var provider : denyPatternProviders) {
+      denyPatternProviderRegistry.register(provider);
     }
   }
 }
@@ -428,9 +650,32 @@ public GoalFormationProposal proposeImprovements(UUID caseId, String tenancyId, 
 
   // 2. Filter by enabled categories (ImprovementConfig)
   var enabledCategories = effectiveEnabledCategories(config);
-  // ... existing filtering pipeline unchanged (suppression, rollback, budget, conflict)
 
-  // 3. Build goals
+  // 3. Domain-agnostic filtering (suppression, anti-oscillation, budget)
+  // ... existing suppression, rollback history, budget checks unchanged
+
+  // 4. Domain-aware deny pattern check
+  for (var proposal : filtered) {
+    var provider = denyPatternProviderRegistry.forDomain(proposal.domainId());
+    if (provider.isPresent() && provider.get().isDenied(caseId, tenancyId, proposal)) {
+      continue; // denied by domain safety rules
+    }
+  }
+
+  // 5. Domain-aware conflict check
+  for (var proposal : afterDenyFilter) {
+    var strategy = conflictStrategyRegistry.forDomain(proposal.domainId());
+    if (strategy.isPresent()) {
+      var check = strategy.get().check(
+          proposal, budgetEnforcer.activeImprovementRequests(),
+          config.effectiveConflictTrivialThreshold());
+      if (check instanceof ConflictStrategy.ConflictResult.Conflicting) {
+        continue; // conflict with active improvement
+      }
+    }
+  }
+
+  // 6. Build goals
 }
 ```
 
@@ -449,7 +694,7 @@ private Set<String> effectiveEnabledCategories(ImprovementConfig config) {
 
 When `ImprovementConfig.enabledCategories` is null, ALL categories from all providers are enabled. When specified, it acts as a filter.
 
-**Constructor changes:** Remove `SignalRegistry` and `ImprovementSignalContext` (moved to `SignalConsensusProposalSource`). Add `ImprovementProposalSourceRegistry` and `ImprovementCategoryRegistry`.
+**Constructor changes:** Remove `SignalRegistry`, `ImprovementSignalContext`, and `ConflictDetector` (moved to `SignalConsensusProposalSource` and `FilePathConflictStrategy`). Add `ImprovementProposalSourceRegistry`, `ImprovementCategoryRegistry`, `ConflictStrategyRegistry`, and `DenyPatternProviderRegistry`.
 
 ### 3.2 RegressionDetector → delegates to evaluators
 
@@ -470,9 +715,12 @@ private void onMetricsDegraded(UUID caseId, MonitoredImprovement monitor,
 ```java
 private void onMetricsDegraded(UUID caseId, MonitoredImprovement monitor,
     RollbackPolicy policy, HealthScoreSnapshot before, HealthScoreSnapshot after) {
+  String domainId = categoryRegistry.domainForCategory(monitor.category())
+      .orElse("unknown");
   double maxConfidence = 0.0;
   String reason = null;
   for (var evaluator : regressionEvaluatorRegistry.all()) {
+    if (!evaluator.domainId().equals(domainId)) continue;
     var verdict = evaluator.evaluate(caseId, before, after, monitor.category());
     if (verdict instanceof RegressionVerdict.Detected detected
         && detected.confidence() > maxConfidence) {
@@ -488,13 +736,74 @@ private void onMetricsDegraded(UUID caseId, MonitoredImprovement monitor,
 }
 ```
 
-**Constructor changes:** Add `RegressionEvaluatorRegistry`.
+Evaluators are filtered by domain: only the evaluators whose `domainId()` matches the improvement's domain (resolved from the improvement's category via `categoryRegistry.domainForCategory()`) are called. This ensures a trading improvement is evaluated by trading-domain evaluators, not code-evolution evaluators. If multiple evaluators exist for the same domain, max-confidence within the domain drives the revert/pause decision.
+
+**Constructor changes:** Add `RegressionEvaluatorRegistry` and `ImprovementCategoryRegistry`.
 
 ### 3.3 HealthScoreTracker.HealthSnapshot → HealthScoreSnapshot
 
 `HealthScoreTracker.HealthSnapshot` (inner record) moves to `api` module as `HealthScoreSnapshot` (top-level record). This avoids leaking runtime-core types into SPI interfaces.
 
 `HealthScoreTracker` continues to use `HealthScoreSnapshot` internally — the move is a type relocation, not a redesign.
+
+**Full chain of type migrations for HealthSnapshot → HealthScoreSnapshot:**
+- `HealthScoreTracker.HealthSnapshot` → `HealthScoreSnapshot` (inner record → top-level record in api)
+- `ConfidenceScorer.score()` parameter types: `HealthScoreTracker.HealthSnapshot` → `HealthScoreSnapshot`
+- `RegressionDetector.MonitoredImprovement.baseline` field type: `HealthScoreTracker.HealthSnapshot` → `HealthScoreSnapshot`
+- `RegressionDetector.checkActiveMonitors()` — `healthTracker.latestSnapshot()` return type
+- `RegressionDetector.onMetricsDegraded()` parameter types
+
+### 3.4 ImprovementBudgetEnforcer refactoring
+
+`ImprovementBudgetEnforcer.check()` is refactored to remove domain-specific logic:
+
+**Removed from the enforcer (moved to domain SPIs):**
+- Structural deny pattern check (`STRUCTURAL_DENIED_PATTERNS`) → `DenyPatternProvider`
+- Dynamic deny pattern check (path-based matching) → `DenyPatternProvider`
+- Config denied paths check (`budget.effectiveDeniedPaths()`) → `DenyPatternProvider`
+- Allowed repos check (`budget.effectiveAllowedRepos()`) → `CodeEvolutionDenyPatternProvider`
+
+**Retained in the enforcer (domain-agnostic budget limits):**
+- Concurrent improvement limit (`effectiveMaxConcurrent()`)
+- Daily improvement limit (`effectiveMaxPerDay()`)
+- Cooldown between improvements (`effectiveCooldownMinutes()`)
+- Max change size (`effectiveMaxChangeSize()` — renamed from `effectiveMaxPRSize()`)
+
+The coordinator calls deny pattern checking (§3.1 step 4) BEFORE budget checking, so the enforcer no longer needs to duplicate deny logic.
+
+### 3.5 TickTrace.SignalFilteringSummary → ProposalFilteringSummary
+
+`TickTrace.SignalFilteringSummary` has signal-consensus-specific fields (`consensusSignals`, `afterNamespaceFilter`) that don't apply to non-signal proposal sources. After refactoring, the coordinator collects from multiple sources, only one of which uses the signal-consensus model.
+
+**Before:**
+```java
+public record SignalFilteringSummary(
+    int consensusSignals,
+    int afterNamespaceFilter,
+    int afterCategoryFilter,
+    int afterSuppressionFilter,
+    int afterAntiOscillationFilter,
+    int afterBudgetFilter,
+    int afterConflictFilter,
+    int proposed) {}
+```
+
+**After:**
+```java
+public record ProposalFilteringSummary(
+    Map<String, Integer> proposalsBySource,
+    int afterCategoryFilter,
+    int afterSuppressionFilter,
+    int afterAntiOscillationFilter,
+    int afterDenyFilter,
+    int afterBudgetFilter,
+    int afterConflictFilter,
+    int proposed) {}
+```
+
+- `consensusSignals` and `afterNamespaceFilter` replaced by `proposalsBySource` — a map from source ID to proposal count, generalising per-source observability
+- `afterDenyFilter` added — tracks deny pattern filtering (previously bundled into budget check)
+- `TickOutcome.ProposalGenerated` updated to use `ProposalFilteringSummary`
 
 ## 4. ImprovementStage Migration
 
@@ -504,9 +813,11 @@ private void onMetricsDegraded(UUID caseId, MonitoredImprovement monitor,
 
 | Type | Field/Method | Change |
 |------|-------------|--------|
+| `ImprovementRequest` | `targetRepo`, `targetPaths` fields | Removed — code-evolution stores in `metadata` |
+| `ImprovementRequest` | (new field) | `domainId` added |
 | `GatePolicy` | `Map<ImprovementStage, GateMode> modes` | → `Map<String, GateMode> modes` |
 | `GatePolicy` | `effectiveMode(ImprovementStage)` | → `effectiveMode(String stageId)` |
-| `GatePolicy` | constructor validation (`isGateCheckpoint()`) | → validation via `ImprovementCategoryRegistry.isGateCheckpoint(stageId)`. Deferred to runtime — the record constructor no longer validates because it has no registry reference. Validation moves to `DefaultEngineEvolutionApi.setGatePolicy()`. |
+| `GatePolicy` | constructor validation (`isGateCheckpoint()`) | → validation via `ImprovementCategoryRegistry.isGateCheckpoint(domainId, stageId)`. Deferred to runtime — the record constructor no longer validates because it has no registry reference. Validation moves to `DefaultEngineEvolutionApi.setGatePolicy()`. |
 | `ConductorInboxEntry` | `ImprovementStage stage` | → `String stage` |
 | `ArtifactEntry` | `ImprovementStage stage` | → `String stage` |
 | `ResearchPipelineResult.AwaitingGate` | `ImprovementStage stage` | → `String stage` |
@@ -514,13 +825,21 @@ private void onMetricsDegraded(UUID caseId, MonitoredImprovement monitor,
 | `EvolutionStateSnapshot.ImprovementStreamView` | `ImprovementStage currentStage` | → `String currentStage` |
 | `EvolutionStateSnapshot.StageProgress` | `ImprovementStage stage` | → `String stage` |
 | `ResearchPipelineOrchestrator` | Stage references (`ImprovementStage.RESEARCH_SCOPE`) | → String constants from `CodeEvolutionStages` |
+| `ConfidenceScorer` | `score(..., HealthScoreTracker.HealthSnapshot, HealthScoreTracker.HealthSnapshot)` | → `score(..., HealthScoreSnapshot, HealthScoreSnapshot)` |
+| `RegressionDetector.MonitoredImprovement` | `HealthScoreTracker.HealthSnapshot baseline` | → `HealthScoreSnapshot baseline` |
+| `RegressionDetector` | `checkActiveMonitors()`, `onMetricsDegraded()` parameter types | `HealthScoreTracker.HealthSnapshot` → `HealthScoreSnapshot` |
+| `ConflictDetector` | entire class | Deleted — logic moves to `FilePathConflictStrategy` |
+| `ImprovementBudgetEnforcer` | `STRUCTURAL_DENIED_PATTERNS`, path/repo/deny checks | Moved to `CodeEvolutionDenyPatternProvider` |
+| `ImprovementBudget` | `maxPRSize`, `effectiveMaxPRSize()` | → `maxChangeSize`, `effectiveMaxChangeSize()` |
+| `TickTrace.SignalFilteringSummary` | Signal-consensus-specific fields | → `ProposalFilteringSummary` with per-source counts (see §3.5) |
 
 ### Well-known stage constants
 
+Code-evolution stage constants are a companion to `CodeEvolutionCategoryProvider`, placed in runtime-core alongside the provider. They do NOT belong in the api module — the api module defines interfaces and shared model types; domain-specific constants live in domain implementations.
+
 ```java
-// api, io.casehub.api.model.stigmergy
-public final class ImprovementStages {
-  // Code-evolution stages (backward compat)
+// runtime-core, io.casehub.engine.internal.improvement
+public final class CodeEvolutionStages {
   public static final String INTROSPECT = "introspect";
   public static final String RESEARCH_SCOPE = "research-scope";
   public static final String SEARCH = "search";
@@ -533,7 +852,7 @@ public final class ImprovementStages {
   public static final String INTEGRATE = "integrate";
   public static final String OUTCOME_RECORDING = "outcome-recording";
 
-  private ImprovementStages() {}
+  private CodeEvolutionStages() {}
 }
 ```
 
@@ -541,7 +860,13 @@ public final class ImprovementStages {
 
 `GatePolicy`'s constructor currently validates that only gate checkpoints appear in the `modes` map. This validation used `ImprovementStage.isGateCheckpoint()` which is available at construction time for an enum. With strings, the validation needs access to the `ImprovementCategoryRegistry` which is a runtime bean.
 
-**Resolution:** Remove the constructor validation from `GatePolicy`. Move validation to `DefaultEngineEvolutionApi.setGatePolicy()` and `InMemoryGatePolicyStore.store()` where the registry is available. `GatePolicy` becomes a pure data record.
+**Resolution:** Remove the constructor validation from `GatePolicy`. `GatePolicy` becomes a pure data record with no invariant enforcement. Validation moves to a single point: `DefaultEngineEvolutionApi.setGatePolicy()`, which has access to the `ImprovementCategoryRegistry` and the case's domain context.
+
+Validation is NOT added to `GatePolicyStore.save()` — that would couple the store SPI (in common-core) to the improvement registry (in runtime-core), which is an architectural regression. The store is a persistence abstraction; validation belongs at the API layer.
+
+**YAML deserialization path:** `YamlGatePolicy` constructs a `GatePolicy` via the canonical constructor. After migration, a YAML config with a non-checkpoint stage would be accepted at deserialization time. Validation occurs when the gate policy is applied to a case — all case configuration changes route through `DefaultEngineEvolutionApi`, which validates before persisting. The template application path (case creation from a case template) must also validate via the API layer.
+
+**`isGateCheckpoint` call site:** The validation at `setGatePolicy()` resolves the case's domain from its category configuration, then calls `categoryRegistry.isGateCheckpoint(domainId, stageId)` for each stage in the `modes` map.
 
 The `effectiveMode()` default also changes — the code-evolution-specific "PR_REVIEW defaults to GATED" moves to a per-domain default. `GatePolicy.effectiveMode()` returns `GateMode.AUTO` for any unknown stage. The code-evolution provider can set its own defaults:
 
@@ -560,7 +885,13 @@ The "PR_REVIEW defaults to GATED" semantic moves to the initial `ImprovementConf
 
 `YamlGatePolicy` (generated) currently has `Map<ImprovementStage, GateMode> modes`. After migration, this becomes `Map<String, GateMode> modes`. The codegen entry in `yaml-record-mappings.yaml` needs updating to reflect the key type change from enum to String.
 
-## 5. ImprovementConfig Changes
+## 5. ImprovementConfig and ImprovementBudget Changes
+
+### ImprovementBudget field rename
+
+`ImprovementBudget.maxPRSize` → `maxChangeSize`, `effectiveMaxPRSize()` → `effectiveMaxChangeSize()`. "PR size" is code-evolution terminology; "change size" is domain-neutral (line count for code, parameter count for trading, rule count for AML).
+
+The `allowedRepos` and `deniedPaths` fields remain on the record (nullable, defaulting to empty) but their enforcement moves from `ImprovementBudgetEnforcer` to `CodeEvolutionDenyPatternProvider`. Non-code domains leave them null — the fields are inert when no code-evolution deny pattern provider is registered.
 
 ### effectiveEnabledCategories()
 
@@ -583,32 +914,41 @@ public List<String> effectiveEnabledCategories() {
 
 | Test class | What it covers |
 |------------|---------------|
-| `ImprovementCategoryRegistryTest` | Provider registration, category lookup, stage lookup, domain resolution, gate checkpoint check, multi-provider coexistence, reset |
+| `ImprovementCategoryRegistryTest` | Provider registration, category lookup, domain-scoped stage lookup, domain resolution, gate checkpoint check with domain context, multi-provider coexistence, stage ID collision across domains resolved correctly, reset |
 | `ImprovementProposalSourceRegistryTest` | Source registration, retrieval, reset |
 | `RegressionEvaluatorRegistryTest` | Evaluator registration, retrieval, reset |
+| `ConflictStrategyRegistryTest` | Strategy registration by domain, domain lookup, reset |
+| `DenyPatternProviderRegistryTest` | Provider registration by domain, domain lookup, reset |
 | `CodeEvolutionCategoryProviderTest` | Default categories (5), default stages (11), stage ordering, gate checkpoints match expected set |
 | `SignalConsensusProposalSourceTest` | Signal-consensus proposal generation (extracted from ImprovementGoalFormationStrategyTest), namespace filtering |
 | `HealthScoreDeltaRegressionEvaluatorTest` | Delta threshold detection, no-regression case, boundary values |
-| `EvolutionBootstrapTest` | Multi-provider discovery, all registries populated |
+| `FilePathConflictStrategyTest` | File-path-based conflict detection (extracted from ConflictDetectorTest), trivial threshold, same-directory detection, metadata path extraction |
+| `CodeEvolutionDenyPatternProviderTest` | Structural deny patterns, dynamic deny patterns, path extraction from metadata |
+| `EvolutionBootstrapTest` | Multi-provider discovery, all 5 registries populated |
 
 ### Modified existing tests
 
 | Test class | Change |
 |------------|--------|
-| `ImprovementGoalFormationStrategyTest` | Refactor: inject mock ImprovementProposalSourceRegistry instead of SignalRegistry. Test filtering pipeline with proposals from multiple sources. |
-| `RegressionDetectorTest` | Refactor: inject RegressionEvaluatorRegistry. Test that evaluators are called and first Detected verdict triggers regression handling. |
+| `ImprovementGoalFormationStrategyTest` | Refactor: inject mock ImprovementProposalSourceRegistry, ConflictStrategyRegistry, DenyPatternProviderRegistry instead of SignalRegistry and ConflictDetector. Test filtering pipeline with proposals from multiple sources, domain-aware deny and conflict checks. |
+| `RegressionDetectorTest` | Refactor: inject RegressionEvaluatorRegistry and ImprovementCategoryRegistry. Test that evaluators are filtered by domain and first Detected verdict triggers regression handling. |
 | `GatePolicyTest` | Change ImprovementStage enum → String constants. Remove constructor validation tests (moved to API layer). |
 | `ConductorInboxManagerTest` | Change ImprovementStage enum → String constants. |
+| `ConductorInboxRepositoryContractTest` | Change ImprovementStage enum → String constants (makeEntry helper and all entry construction sites). |
+| `InMemoryConductorInboxRepositoryContractTest` | Change ImprovementStage enum → String constants (entry construction at line 46). |
 | `DefaultEscalationProviderTest` | Change ImprovementStage enum → String constants. |
-| `EvolutionApiTest` | Change ImprovementStage enum → String constants. Add gate policy validation tests (moved from GatePolicy constructor). |
+| `EvolutionApiTest` | Change ImprovementStage enum → String constants. Add gate policy validation tests with domain-scoped `isGateCheckpoint(domainId, stageId)` (moved from GatePolicy constructor). |
 | `ResearchPipelineCheckpointTest` | Change ImprovementStage enum → String constants. |
-| `TickTraceTest` | Remove `improvementStageGateCheckpoints` test (gate checkpoint logic moves to registry). |
+| `TickTraceTest` | Remove `improvementStageGateCheckpoints` test (gate checkpoint logic moves to registry). Update `SignalFilteringSummary` → `ProposalFilteringSummary`. |
+| `ConflictDetectorTest` | Renamed to `FilePathConflictStrategyTest`. Update to test `ConflictStrategy` SPI with metadata-based path extraction. |
+| `ImprovementBudgetEnforcerTest` | Remove deny pattern and path-based tests (moved to `CodeEvolutionDenyPatternProviderTest`). Retain domain-agnostic budget tests. Rename `maxPRSize` → `maxChangeSize`. |
+| `ConfidenceScorerTest` | Update `HealthScoreTracker.HealthSnapshot` → `HealthScoreSnapshot` in all test fixtures. |
 
 ### Integration tests
 
 | Test class | What it covers |
 |------------|---------------|
-| `MultiDomainEvolutionTest` | Two domains registered (code-evolution + trading-stub), categories from both discovered, proposals from both sources collected, filtering applies to all. Trading regression evaluator detects trading-specific regression while code-evolution evaluator sees no regression — correct routing. |
+| `MultiDomainEvolutionTest` | Two domains registered (code-evolution + trading-stub), categories from both discovered, proposals from both sources collected, domain-specific deny patterns and conflict strategies applied per-domain. Trading regression evaluator detects trading-specific regression while code-evolution evaluator sees no regression — domain-filtered evaluation routes correctly. |
 | `CategoryFilteringIntegrationTest` | ImprovementConfig.enabledCategories filters across domain providers. Null enables all. Explicit list filters to subset. |
 
 ### Critical test scenarios
@@ -628,31 +968,40 @@ public List<String> effectiveEnabledCategories() {
 | `ImprovementCategoryProvider` SPI | `api` | `io.casehub.api.spi.improvement` |
 | `ImprovementProposalSource` SPI | `api` | `io.casehub.api.spi.improvement` |
 | `RegressionEvaluator` SPI | `api` | `io.casehub.api.spi.improvement` |
+| `ConflictStrategy` SPI | `api` | `io.casehub.api.spi.improvement` |
+| `DenyPatternProvider` SPI | `api` | `io.casehub.api.spi.improvement` |
 | `CategoryDescriptor` | `api` | `io.casehub.api.model.stigmergy` |
 | `StageDescriptor` | `api` | `io.casehub.api.model.stigmergy` |
 | `RegressionVerdict` | `api` | `io.casehub.api.model.stigmergy` |
 | `HealthScoreSnapshot` | `api` | `io.casehub.api.model.stigmergy` |
-| `ImprovementStages` (constants) | `api` | `io.casehub.api.model.stigmergy` |
+| `ProposalFilteringSummary` | `api` | `io.casehub.api.model.stigmergy` |
 | `ImprovementCategoryRegistry` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `ImprovementProposalSourceRegistry` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `RegressionEvaluatorRegistry` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `ConflictStrategyRegistry` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `DenyPatternProviderRegistry` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `EvolutionBootstrap` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `CodeEvolutionCategoryProvider` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `CodeEvolutionStages` (constants) | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `SignalConsensusProposalSource` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 | `HealthScoreDeltaRegressionEvaluator` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `FilePathConflictStrategy` | `runtime-core` | `io.casehub.engine.internal.improvement` |
+| `CodeEvolutionDenyPatternProvider` | `runtime-core` | `io.casehub.engine.internal.improvement` |
 
 ## 8. Migration Sequence
 
 The changes have dependencies that determine ordering:
 
-1. **API types first:** `CategoryDescriptor`, `StageDescriptor`, `RegressionVerdict`, `HealthScoreSnapshot`, `ImprovementStages` constants
-2. **SPI interfaces:** `ImprovementCategoryProvider`, `ImprovementProposalSource`, `RegressionEvaluator`
+1. **API types first:** `CategoryDescriptor`, `StageDescriptor`, `RegressionVerdict`, `HealthScoreSnapshot`, `ProposalFilteringSummary`, `ImprovementRequest` generalisation (remove `targetRepo`/`targetPaths`, add `domainId`)
+2. **SPI interfaces:** `ImprovementCategoryProvider`, `ImprovementProposalSource`, `RegressionEvaluator`, `ConflictStrategy`, `DenyPatternProvider`
 3. **ImprovementStage migration:** Delete enum, update all references to `String`, update `GatePolicy`, update YAML codegen
-4. **Registries:** `ImprovementCategoryRegistry`, `ImprovementProposalSourceRegistry`, `RegressionEvaluatorRegistry`
-5. **Default implementations:** `CodeEvolutionCategoryProvider`, `SignalConsensusProposalSource`, `HealthScoreDeltaRegressionEvaluator`
-6. **Bootstrap:** `EvolutionBootstrap`
-7. **Backbone refactoring:** `ImprovementGoalFormationStrategy` (coordinator), `RegressionDetector` (delegation), `HealthScoreTracker` (HealthSnapshot → HealthScoreSnapshot)
-8. **ImprovementConfig:** Remove `effectiveEnabledCategories()` hardcoded default
+4. **ImprovementBudget rename:** `maxPRSize` → `maxChangeSize`
+5. **Registries:** `ImprovementCategoryRegistry`, `ImprovementProposalSourceRegistry`, `RegressionEvaluatorRegistry`, `ConflictStrategyRegistry`, `DenyPatternProviderRegistry`
+6. **Default implementations:** `CodeEvolutionCategoryProvider`, `CodeEvolutionStages` (runtime-core), `SignalConsensusProposalSource`, `HealthScoreDeltaRegressionEvaluator`, `FilePathConflictStrategy`, `CodeEvolutionDenyPatternProvider`
+7. **Bootstrap:** `EvolutionBootstrap` (discovers all 5 SPI types)
+8. **Backbone refactoring:** `ImprovementGoalFormationStrategy` (coordinator with domain-aware filtering), `RegressionDetector` (domain-filtered evaluation), `HealthScoreTracker` (HealthSnapshot → HealthScoreSnapshot), `ConfidenceScorer` (type migration), `ImprovementBudgetEnforcer` (remove domain-specific logic), `TickTrace` (SignalFilteringSummary → ProposalFilteringSummary)
+9. **ImprovementConfig:** Remove `effectiveEnabledCategories()` hardcoded default
+10. **Delete:** `ConflictDetector` (replaced by `FilePathConflictStrategy`), `ImprovementStage` enum, `ImprovementStages` constants class (if created — now `CodeEvolutionStages` in runtime-core instead)
 
 ## References
 
@@ -665,9 +1014,15 @@ The changes have dependencies that determine ordering:
 - `HealthScoreTracker.java:37-38` — HealthSnapshot to relocate
 - `ImprovementStage.java:20-39` — enum to migrate to strings
 - `GatePolicy.java:21-50` — Map<ImprovementStage, GateMode> to migrate
+- `ConflictDetector.java:25-68` — conflict logic to extract to ConflictStrategy SPI
+- `ImprovementBudgetEnforcer.java:37-53` — STRUCTURAL_DENIED_PATTERNS to extract to DenyPatternProvider SPI
+- `ImprovementRequest.java:21-28` — target model to generalise
+- `ConfidenceScorer.java:22-58` — type migration for HealthSnapshot
+- `TickTrace.java:55-63` — SignalFilteringSummary to generalise
 - `EvolutionTicker.java:36-131` — orchestration backbone (unchanged)
 - PP-20260921-b7c277 — never use @DefaultBean on multi-instance SPIs
-- PP-20260915-aa504e — API surface parity (YAML, DSL, annotations)
+- PP-20260915-aa504e — API surface parity (YAML, DSL, annotations) — applies to GatePolicy codegen change; new SPI/model types are not CaseDefinition fields and do not require YAML codegen entries
 - Decisions D1–D8 in `decisions.md`
-- Issue casehubio/engine#1148
+- Issue casehubio/engine#1148 (Comment 1 predecessor audit: ImprovementRequest target model, ConflictStrategy SPI, DenyPatternProvider SPI)
+- Epic casehubio/engine#1149
 - Parent spec: `2026-09-21-command-centre-conductor-design.md`
