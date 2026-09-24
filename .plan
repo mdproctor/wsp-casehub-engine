@@ -26,4 +26,4 @@ date: 2026-09-23
 - [x] casehubio/engine#1163 — test: add contract tests for SubCaseGroupRepository, CrossTenant*, PlanVersionStore, ExecutionSnapshotStore
 - [x] casehubio/engine#1164 — test: JPA implementations should extend abstract contract tests
 - [x] casehubio/engine#1165 — test: add integration test for full DLQ replay path
-- [ ] casehubio/engine#1179 — feat: admin case recovery API ← active
+- [x] casehubio/engine#1179 — feat: admin case recovery API
