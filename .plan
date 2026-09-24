@@ -10,7 +10,7 @@ covers: 1141
 design-repo: project
 design-section-hashes: 
 flyway-next-v: none
-active-issue: casehubio/engine#1168
+active-issue: 
 
 ## Queue
 - [x] casehubio/engine#1141 — Issue #1141
@@ -19,9 +19,9 @@ active-issue: casehubio/engine#1168
 - [x] casehubio/engine#1144 — DefaultSummarizationProvider
 - [x] casehubio/engine#1146 — MCP annotation adapter
 - [x] casehubio/engine#1148 — Generalise evolution conductor
-- [ ] casehubio/engine#1168 — Migrate HealthSnapshot to HealthScoreSnapshot ← active
-- [ ] casehubio/engine#1169 — Wire RegressionDetector to RegressionEvaluatorRegistry
-- [ ] casehubio/engine#1170 — Remove targetRepo and targetPaths from ImprovementRequest
+- [x] casehubio/engine#1168 — Migrate HealthSnapshot to HealthScoreSnapshot
+- [x] casehubio/engine#1169 — Wire RegressionDetector to RegressionEvaluatorRegistry
+- [x] casehubio/engine#1170 — Remove targetRepo and targetPaths from ImprovementRequest
 
 ## Deferred
 - [ ] Migrate HealthSnapshot to HealthScoreSnapshot (#1168) (S / Low) [casehubio/engine] — Bridged internally by HealthScoreDeltaRegressionEvaluator — mechanical type migration, no architectural blocker
