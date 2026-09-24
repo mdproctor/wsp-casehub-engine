@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1150-persistence-coherence
-state: transitioning
+state: active
 issue-repo: casehubio/engine
 covers: casehubio/engine#1150
 Current: casehubio/engine#1165 — test: add integration test for full DLQ replay path
@@ -25,4 +25,4 @@ date: 2026-09-23
 - [x] casehubio/engine#1162 — fix: resolve duplicate JpaPlanItemStore in persistence-hibernate and work-adapter
 - [x] casehubio/engine#1163 — test: add contract tests for SubCaseGroupRepository, CrossTenant*, PlanVersionStore, ExecutionSnapshotStore
 - [x] casehubio/engine#1164 — test: JPA implementations should extend abstract contract tests
-- [ ] casehubio/engine#1165 — test: add integration test for full DLQ replay path ← active
+- [x] casehubio/engine#1165 — test: add integration test for full DLQ replay path
