@@ -275,6 +275,89 @@ Each justification is documented in the module's README under a
 
 ---
 
+## Phased Delivery
+
+### Phase 1 — Enterprise Concerns (decorator-first)
+
+"Your LC4j app is now compliant, multi-tenant, and governed."
+
+| Module | LC4j Hook | CaseHub Concern | Developer Effort |
+|---|---|---|---|
+| audit | ChatModelListener, AgentMonitor | Tamper-evident ledger, compliance supplements | Add dependency |
+| tenancy | Decorator on any store/retriever | Tenant isolation via CurrentPrincipal | Add dependency |
+| governance | AgentMonitor, CDI interception | Oversight gates, trust routing, causal lineage | Add dependency |
+| hybrid-search | ContentRetriever impl | SPLADE + dense + RRF + reranking | Swap one bean |
+
+Deliverables: 18 modules (5 groups × 3 framework variants + bom + examples +
+parent pom). The 5 groups: audit, tenancy, governance, hybrid-search, agents
+(bridge moved from platform). All modules build, test, and publish via CI.
+
+### Phase 2 — Enterprise Implementations (where justified)
+
+"Your LC4j app has enterprise-grade RAG and memory."
+
+Additional SPI implementations, each with documented justification (D8):
+
+- **CBR memory** — case-based reasoning memory is a different category from
+  ChatMemoryStore (not a competing Redis/PostgreSQL impl). Outcome tracking,
+  retention policies, trust-weighted retrieval.
+- **SPLADE embedding** — no JVM implementation exists outside neocortex.
+  Unique capability, not competitive.
+- **Corpus ingestion** — DocumentLoader/DocumentSplitter with tenant-scoped
+  corpus management. LC4j has basic Tika support; enterprise corpus lifecycle
+  (versioning, provenance, change tracking) is a different category.
+
+Each module ships only when the justification is documented and defensible.
+
+### Phase 3 — Application Showcase
+
+"Here's what becomes possible when LC4j meets CaseHub's full stack."
+
+This phase demonstrates CaseHub's application-level capabilities using LC4j
+as the developer's familiar entry point. Not selling modules — showing what
+the integrated platform delivers.
+
+**Showcase patterns:**
+
+- **Governed supervisor** — LC4j `@SupervisorAgent` orchestrating a
+  multi-worker case. The supervisor plans using LC4j patterns. CaseHub
+  provides the execution kernel (routing, binding, stage gating). Ledger
+  records every decision. Trust scores evolve from case outcomes. Human
+  oversight gates pause sensitive actions for approval.
+
+- **Adaptive agent selection** — CaseHub's case-based reasoning remembers
+  which agents performed well on similar past cases and routes accordingly.
+  The LC4j developer gets adaptive routing without writing routing logic.
+  The system learns from outcomes.
+
+- **Cross-boundary lineage** — an LC4j agent calls an MCP tool which
+  dispatches a CaseHub worker which invokes another LC4j agent. The full
+  causal chain across all boundaries is one tamper-evident ledger trail.
+  Compliance auditors can trace any decision back to its root cause.
+
+- **SLA-enforced workflows** — LC4j agents operating within CaseHub's work
+  management: SLA timers, escalation policies, failure rerouting, dead
+  letter queues. The LC4j code doesn't handle any of this — CaseHub's
+  orchestration layer manages it transparently.
+
+- **Multi-agent deliberation** — LC4j agents participating in structured
+  debate via Qhorus channels. Agents propose, critique, and synthesise
+  positions. The deliberation is auditable, the outcome is governed, and
+  the best argument wins — not the loudest agent.
+
+**Delivery vehicle:** Reference architectures in `examples/`, following the
+tutorial strategy's layer-by-layer structure. Each example exercises LC4j
+patterns in familiar territory and progressively reveals CaseHub's
+enterprise capabilities. A developer who completes the examples has seen
+the full value proposition without being forced to adopt anything.
+
+**Relationship to existing tutorials:** Phase 3 examples complement (not
+replace) the AML, clinical, and devtown reference architectures. Those
+demonstrate CaseHub-native development. Phase 3 demonstrates the LC4j
+on-ramp — a developer arrives via LC4j and discovers the platform.
+
+---
+
 ## References
 
 - [ADR-0004](../../blocks/docs/adr/0004-own-orchestration-annotations.md) — dual-track LC4j strategy
