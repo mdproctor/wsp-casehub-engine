@@ -2,24 +2,34 @@
 
 ## Last Session
 
-Closed branch `issue-1141-cdi-event-wiring` — landed 9 squashed commits on main covering 10 issues (#1141-#1146, #1148, #1168-#1170). This session completed the final 3 follow-ups (#1168 HealthSnapshot migration, #1169 RegressionDetector registry wiring, #1170 ImprovementRequest field removal). All review dimensions clean. 513 runtime-core tests pass.
+Closed epic #1150 (persistence layer coherence, 18 issues). Final two issues this session:
 
-Design direction conversation captured as issues: devtown as first evolution conductor consumer (#1180), soredium as agent workflow methodology (#1181). Diary entry written.
+- **#1165** — DLQ replay integration test. Exposed a bug where `DeadLetterReplayService` didn't set `ExecutionMode.REINVOKED`, causing the idempotency guard in `WorkerScheduleEventHandler` to silently skip replayed work. Fixed by adding `REINVOKED` mode and `ExecutionOrigin.REPLAY`. Added `DeadLetterReplayIntegrationTest` (4 tests, all green).
 
-## Immediate Next Step
+- **#1179** — `CaseRecoveryService.unfault(UUID caseId)` in `runtime-core`. Transitions FAULTED → RUNNING: sets state synchronously, re-registers completion tracker, dispatches `CaseStatusChanged` for persistence and binding re-evaluation. CDI producer in `RuntimeBeans`.
 
-`work continue`. Queue has 3 items. Start with #1143 (research pipeline checkpoint — verify whether code landed or needs work, shows OPEN on GitHub).
+Branch squashed (27 → 18 commits), rebased onto origin/main, merged, and pushed.
 
-## Key Design Decisions
+## What's Next
 
-- D9: blocks-ui gets composable primitives, devtown composes them into the developer workbench
-- D10: Devtown is the first consumer — observes its own development pipeline
-- D11: Soredium provides the agent execution methodology — one LLM types in another's terminal
+Recovery hardening — 5 issues queued in `.plan`:
+
+| # | Issue | Scale | Complexity | Notes |
+|---|-------|-------|------------|-------|
+| 1 | #1182 — SnapshotRecoveryStrategy fallback on null snapshot | S | Low | Fall back to event-log replay instead of throwing. Migration path concern. |
+| 2 | #732 — wire CaseContextStoreFactory through recovery path | M | Med | Pre-existing issue. Recovery hardcodes InMemory factory. Prerequisite for durable stores. |
+| 3 | #1183 — harden CaseRecoveryService.unfault | M | Med | Re-register evicted engine registries, fix JPA persistence race, document CANCELLED policy. |
+| 4 | #1184 — enforce replay handler registration | S | Med | Contract test that fails when a new event type lacks a replay handler. Prevents #1151/#1152 class of bugs. |
+| 5 | #1185 — persistent DLQ storage | M | Med | DLQ entries lost on restart. Add DeadLetterEntryStore SPI + JPA implementation. |
+
+Recommended order: #1182 first (smallest, unblocks migration path), then #732 (prerequisite for durable stores), then #1183 (depends on understanding from #732), then #1184 and #1185 in either order.
 
 ## References
 
-- Spec: `specs/issue-1148-generalise-evolution-conductor/2026-09-23-generalise-evolution-conductor-design.md`
-- Decisions: `specs/issue-1148-generalise-evolution-conductor/decisions.md`
-- Plan: `plans/2026-09-23-generalise-evolution-conductor.md`
-- Diary: `blog/2026-09-25-mdp01-the-conductor-that-types-for-itself.md`
-- Epic #1139 (CLOSED), next epic #1149 (production readiness)
+| Artifact | Path |
+|----------|------|
+| Design spec | `wksp/specs/issue-1150-persistence-coherence/2026-09-23-case-context-recovery-strategy-design.md` |
+| Decisions | `wksp/specs/issue-1150-persistence-coherence/decisions.md` |
+| Diary (SPI design) | `wksp/blog/2026-09-23-mdp01-snapshot-over-replay.md` |
+| Diary (DLQ replay) | `wksp/blog/2026-09-25-mdp01-the-replay-the-engine-ignored.md` |
+| Parent epic for recovery | #210 — cancellation, timeout, and error recovery |

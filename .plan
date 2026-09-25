@@ -1,0 +1,14 @@
+# Work Plan — recovery-hardening
+
+## State
+branch: main
+state: idle
+issue-repo: casehubio/engine
+date: 2026-09-25
+
+## Queue
+- [ ] casehubio/engine#1182 — fix: SnapshotRecoveryStrategy fallback on null snapshot
+- [ ] casehubio/engine#732 — feat: wire CaseContextStoreFactory through recovery path
+- [ ] casehubio/engine#1183 — fix: harden CaseRecoveryService.unfault
+- [ ] casehubio/engine#1184 — fix: enforce replay handler registration for new event types
+- [ ] casehubio/engine#1185 — feat: persistent DLQ storage
