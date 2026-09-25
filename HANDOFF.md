@@ -2,33 +2,39 @@
 
 ## Last Session
 
-Implemented #1148 (generalise evolution conductor) — 6 commits across the full 3-batch plan. Created 5 SPI interfaces (ImprovementCategoryProvider, ImprovementProposalSource, RegressionEvaluator, ConflictStrategy, DenyPatternProvider), 5 model records, 5 registries, CodeEvolutionCategoryProvider, EvolutionBootstrap, CodeEvolutionStages constants, CodeEvolutionMetadata utility, and 4 default domain implementations. Migrated ImprovementStage enum→String across 24 files. Refactored ImprovementGoalFormationStrategy into a domain-aware coordinator with 6-stage filtering pipeline. Cleaned ImprovementBudgetEnforcer (deny logic moved to CodeEvolutionDenyPatternProvider), deleted ConflictDetector (replaced by FilePathConflictStrategy). Added MultiDomainEvolutionTest. All api+runtime-core tests pass (512+). Full project build was running at session end — verify.
+Completed the final 3 issues in the queue (#1168, #1169, #1170) — all follow-ups from #1148 generalisation. Closed #1148 and all child issues on GitHub. 513 runtime-core tests pass throughout.
+
+### #1168 — Migrate HealthSnapshot to HealthScoreSnapshot (5 files)
+Deleted `HealthScoreTracker.HealthSnapshot` inner record. All usages now use the API record `HealthScoreSnapshot` directly. Removed bridge conversion in `HealthScoreDeltaRegressionEvaluator`.
+
+### #1169 — Wire RegressionDetector to RegressionEvaluatorRegistry (5 files)
+Replaced direct `ConfidenceScorer` dependency with domain-filtered evaluation through `RegressionEvaluatorRegistry`. Detector resolves domain via `ImprovementCategoryRegistry.domainForCategory()`, filters evaluators by `domainId()`, takes max confidence across matches.
+
+### #1170 — Remove targetRepo/targetPaths from ImprovementRequest (19 files)
+Deleted vestigial `targetRepo` and `targetPaths` fields and 7-arg backward-compatible constructor. Workers now read paths exclusively via `CodeEvolutionMetadata.extractPaths()`. Updated 41 constructor call sites across 12 test files.
 
 ## Immediate Next Step
 
-Use `work continue`. Queue has 3 remaining items (#1168, #1169, #1170) — all follow-ups from #1148 implementation, now in the .plan queue. Full project build passed clean. Start with `work next` to advance past #1148 to #1168, then execute sequentially (#1168 → #1169 → #1170). After all three, #1148 can be closed and `work end` run.
+Queue has 3 follow-up items. Use `work continue` → `work next` to advance to #1143.
 
-## Deferred Items (GitHub Issues)
+## What's Next
 
-- #1168 — Migrate HealthSnapshot→HealthScoreSnapshot (S / Low) — mechanical type migration, bridged by evaluator
-- #1169 — Wire RegressionDetector to RegressionEvaluatorRegistry (S / Low) — depends on #1168
-- #1170 — Remove targetRepo/targetPaths from ImprovementRequest (M / Low) — ~27 call sites
+| # | Title | Scale | Complexity | Notes |
+|---|---|---|---|---|
+| #1143 | Research pipeline checkpoint | S | Med | Shows OPEN on GitHub — verify whether code landed or needs implementation |
+| #1180 | Surface evolution conductor UI in devtown | M | Med | blocks-ui composables + devtown as first consumer. Design direction captured in issue |
+| #1181 | Soredium as agent workflow methodology | L | High | Experimental. Conductor triggers soredium-managed Claude Code sessions. One LLM types in another's terminal |
 
-## Key Design Decisions (D1-D8)
+## Key Design Decisions (This Session)
 
-- D1: CapabilityArea IS HealthSensor — no new SPI needed
-- D2: ImprovementCategoryProvider SPI (multi-instance, contributes categories + stages)
-- D3: ImprovementProposalSource SPI (multi-instance, generates ImprovementRequests directly)
-- D4: RegressionEvaluator SPI (pluggable evaluators, RegressionDetector stays as orchestrator)
-- D5: Code-evolution stays in runtime-core as defaults
-- D6: Worker infrastructure IS the executor — no new SPI
-- D7: Direct proposals bypass signal-consensus (consensus becomes one source's implementation detail)
-- D8: ImprovementStage enum → string (domains define stage sequences via provider)
+- **D9: blocks-ui/devtown split** — blocks-ui gets composable primitives (health panel, gate card, improvement stream, conductor inbox, tick timeline, workbench shell). Devtown gets a page that instantiates the workbench with code-evolution sensors and developer-specific chrome. Split principle: blocks-ui = what to show, devtown = where to show it.
+- **D10: Devtown as forcing function** — devtown is the first consumer of the evolution loop applied to its own development pipeline (design → code → PRs → builds). Components built for observing the dev pipeline are naturally reusable for trading, AML, clinical, SOC.
+- **D11: Soredium as agent methodology** — the conductor provides what/when, soredium provides how. Executing agents are standard Claude Code sessions with full skill discipline. The garden's retain step provides cross-session learning.
 
 ## References
 
 - Spec: `specs/issue-1148-generalise-evolution-conductor/2026-09-23-generalise-evolution-conductor-design.md`
 - Decisions: `specs/issue-1148-generalise-evolution-conductor/decisions.md`
 - Plan: `plans/2026-09-23-generalise-evolution-conductor.md`
-- Queue: slot `.plan` (position 6/9, #1148 active → advance to #1168)
-- Epic: casehubio/engine#1139 (6/7 child issues closed)
+- Epic: casehubio/engine#1139 (CLOSED — all child issues done)
+- Next epic: casehubio/engine#1149 (production readiness, UI, blog)

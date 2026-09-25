@@ -22,6 +22,8 @@ active-issue:
 - [x] casehubio/engine#1168 — Migrate HealthSnapshot to HealthScoreSnapshot
 - [x] casehubio/engine#1169 — Wire RegressionDetector to RegressionEvaluatorRegistry
 - [x] casehubio/engine#1170 — Remove targetRepo and targetPaths from ImprovementRequest
+- [ ] casehubio/engine#1180 — Surface evolution conductor UI in devtown
+- [ ] casehubio/engine#1181 — Soredium as agent workflow methodology
 
 ## Deferred
 - [ ] Migrate HealthSnapshot to HealthScoreSnapshot (#1168) (S / Low) [casehubio/engine] — Bridged internally by HealthScoreDeltaRegressionEvaluator — mechanical type migration, no architectural blocker
