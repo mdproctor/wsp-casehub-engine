@@ -19,3 +19,4 @@
 | [2026-09-15-mp01-examples-as-gap-detectors.md](2026-09-15-mp01-examples-as-gap-detectors.md) | 2026-09-15 | Building a three-pathway CBR example exposed parity gaps between YAML schema, Java DSL, and annotations — examples as gap detectors |
 | [2026-09-23-mdp01-the-persistence-boundary.md](2026-09-23-mdp01-the-persistence-boundary.md) | 2026-09-23 | Extracting conductor state behind persistence SPIs — why four stores instead of three, the EventLog trap, and what the boundary opens up |
 | [2026-09-23-mdp02-the-map-key-nobody-imported.md](2026-09-23-mdp02-the-map-key-nobody-imported.md) | 2026-09-23 | Codegen import bug — Map key types invisible to collectTypeImports; notable-only tick events for SSE |
+| [2026-09-25-mdp01-the-conductor-that-types-for-itself.md](2026-09-25-mdp01-the-conductor-that-types-for-itself.md) | 2026-09-25 | Soredium as agent methodology for the evolution conductor — one LLM types in another's terminal, devtown as first consumer |
