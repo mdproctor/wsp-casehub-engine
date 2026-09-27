@@ -2,34 +2,43 @@
 
 ## Last Session
 
-Closed epic #1150 (persistence layer coherence, 18 issues). Final two issues this session:
+Completed 4 of 5 recovery hardening issues on branch `issue-1182-snapshot-recovery-fallback`. This session completed #1183 and #1184, and fully designed #1185 with a ready-to-execute plan.
 
-- **#1165** — DLQ replay integration test. Exposed a bug where `DeadLetterReplayService` didn't set `ExecutionMode.REINVOKED`, causing the idempotency guard in `WorkerScheduleEventHandler` to silently skip replayed work. Fixed by adding `REINVOKED` mode and `ExecutionOrigin.REPLAY`. Added `DeadLetterReplayIntegrationTest` (4 tests, all green).
+### Previously completed (prior sessions)
 
-- **#1179** — `CaseRecoveryService.unfault(UUID caseId)` in `runtime-core`. Transitions FAULTED → RUNNING: sets state synchronously, re-registers completion tracker, dispatches `CaseStatusChanged` for persistence and binding re-evaluation. CDI producer in `RuntimeBeans`.
+- **#1182** (S/Low) — `SnapshotRecoveryStrategy` fallback to `EventLogReplayRecoveryStrategy` on null snapshot.
+- **#732** (M/Med) — Wired `CaseContextStoreFactory` through recovery path.
 
-Branch squashed (27 → 18 commits), rebased onto origin/main, merged, and pushed.
+### Completed this session
 
-## What's Next
+- **#1183** (M/Med) — Hardened `CaseRecoveryService.unfault()`. Fixed JPA-specific persistence race: `unfault()` now persists RUNNING to DB via `CaseInstanceRepository.update()` before dispatching the async `CaseStatusChanged` event. Added `caseInstanceCache.put()` for cache consistency. Re-opens coordination channel and re-registers scheduled triggers (mirrors `CaseStartedEventHandler` setup). CANCELLED cases documented as non-recoverable with specific WARN log. 8 unit tests + 4 integration tests pass. `CaseRecoveryService` constructor grew from 4 to 7 parameters (added `CaseInstanceRepository`, `CaseChannelProvider`, `SchedulerService`); `RuntimeBeans.caseRecoveryService()` producer updated.
 
-Recovery hardening — 5 issues queued in `.plan`:
+- **#1184** (S/Med) — Contract test enforcing replay handler coverage. Extracted `REPLAYED_TYPES` constant from `EventLogReplayRecoveryStrategy.rebuildStateContext()`. Test asserts every `CaseHubEventType` is either in `REPLAYED_TYPES` (has a replay handler) or `NON_MUTATING_TYPES` (explicitly reviewed). Adding a new enum value without updating either set fails the build.
 
-| # | Issue | Scale | Complexity | Notes |
-|---|-------|-------|------------|-------|
-| 1 | #1182 — SnapshotRecoveryStrategy fallback on null snapshot | S | Low | Fall back to event-log replay instead of throwing. Migration path concern. |
-| 2 | #732 — wire CaseContextStoreFactory through recovery path | M | Med | Pre-existing issue. Recovery hardcodes InMemory factory. Prerequisite for durable stores. |
-| 3 | #1183 — harden CaseRecoveryService.unfault | M | Med | Re-register evicted engine registries, fix JPA persistence race, document CANCELLED policy. |
-| 4 | #1184 — enforce replay handler registration | S | Med | Contract test that fails when a new event type lacks a replay handler. Prevents #1151/#1152 class of bugs. |
-| 5 | #1185 — persistent DLQ storage | M | Med | DLQ entries lost on restart. Add DeadLetterEntryStore SPI + JPA implementation. |
+## Immediate Next Step
 
-Recommended order: #1182 first (smallest, unblocks migration path), then #732 (prerequisite for durable stores), then #1183 (depends on understanding from #732), then #1184 and #1185 in either order.
+**#1185** — persistent DLQ storage. Design and plan are complete. Execute the plan at `wksp/plans/2026-09-27-persistent-dlq-storage.md`.
+
+The plan has 2 batches, 4 tasks:
+1. SPI + InMemory: Define `DeadLetterEntryStore` SPI in `resilience-core`, create `InMemoryDeadLetterEntryStore`
+2. Facade: Refactor `DeadLetterQueue` to delegate to the store (constructor takes store)
+3. JPA: `DeadLetterEntryEntity` + `JpaDeadLetterEntryStore` in `persistence-hibernate` (new `resilience-core` dep)
+4. Integration: Verify full build, resolve CDI wiring (JPA vs InMemory bean precedence)
+
+Key constraint: no Flyway — Hibernate `drop-and-create` manages schema.
+
+## Pre-existing Build Issue
+
+`api` module has a compilation error in `JsonNodeForEachAdapter.java` — `ForEachAdapter` interface method renamed (`getWhen` → `getCondition`). Not caused by this branch's work. Test modules compile and pass independently.
 
 ## References
 
 | Artifact | Path |
 |----------|------|
-| Design spec | `wksp/specs/issue-1150-persistence-coherence/2026-09-23-case-context-recovery-strategy-design.md` |
-| Decisions | `wksp/specs/issue-1150-persistence-coherence/decisions.md` |
-| Diary (SPI design) | `wksp/blog/2026-09-23-mdp01-snapshot-over-replay.md` |
-| Diary (DLQ replay) | `wksp/blog/2026-09-25-mdp01-the-replay-the-engine-ignored.md` |
-| Parent epic for recovery | #210 — cancellation, timeout, and error recovery |
+| Design spec (#1183) | `wksp/specs/issue-1182-snapshot-recovery-fallback/2026-09-27-unfault-hardening-design.md` |
+| Design spec (#1185) | `wksp/specs/issue-1182-snapshot-recovery-fallback/2026-09-27-persistent-dlq-storage-design.md` |
+| Replay handler contract spec (#1184) | `wksp/specs/issue-1182-snapshot-recovery-fallback/2026-09-27-replay-handler-contract-design.md` |
+| Decisions (all issues) | `wksp/specs/issue-1182-snapshot-recovery-fallback/decisions.md` (D1-D11) |
+| Implementation plan (#1183) | `wksp/plans/2026-09-27-unfault-hardening.md` |
+| Implementation plan (#1185) | `wksp/plans/2026-09-27-persistent-dlq-storage.md` |
+| Parent epic | #210 — cancellation, timeout, and error recovery |
