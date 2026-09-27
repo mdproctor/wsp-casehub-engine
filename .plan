@@ -16,9 +16,9 @@ active-issue: casehubio/engine#732
 - [x] casehubio/engine#1182 — Issue #1182
 - [x] casehubio/engine#732 — wire CaseContextStoreFactory through recovery path
 - [ ] casehubio/engine#1183 — harden CaseRecoveryService.unfault ← active
-  - [ ] Batch 1: Harden unfault
-    - [ ] Task 1: Add deps and fix persistence race
-    - [ ] Task 2: CANCELLED rejection and unit tests
+  - [x] Batch 1: Harden unfault
+    - [x] Task 1: Add deps and fix persistence race
+    - [x] Task 2: CANCELLED rejection and unit tests
   - [ ] Batch 2: Integration
     - [ ] Task 3: Verify integration test and full build
 - [ ] casehubio/engine#1184 — enforce replay handler registration for new event types
