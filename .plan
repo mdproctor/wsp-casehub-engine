@@ -14,13 +14,7 @@ active-issue: casehubio/engine#732
 
 ## Queue
 - [x] casehubio/engine#1182 — Issue #1182
-- [ ] casehubio/engine#732 — wire CaseContextStoreFactory through recovery path ← active
-  - [x] Batch 1: loadFromStore
-    - [x] Task 1: Add loadFromStore static method to CaseContextImpl
-  - [x] Batch 2: Recovery wiring
-    - [x] Task 2: Wire factory resolution into recovery service
-  - [x] Batch 3: Guard removal
-    - [x] Task 3: Remove durable guard from CaseHubRuntimeImpl
-- [ ] casehubio/engine#1183 — harden CaseRecoveryService.unfault
+- [x] casehubio/engine#732 — wire CaseContextStoreFactory through recovery path
+- [ ] casehubio/engine#1183 — harden CaseRecoveryService.unfault ← active
 - [ ] casehubio/engine#1184 — enforce replay handler registration for new event types
 - [ ] casehubio/engine#1185 — persistent DLQ storage
