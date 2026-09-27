@@ -43,7 +43,7 @@ caseChannelProvider.openChannel(instance.getUuid(), "coordination");
 schedulerService.registerScheduledTriggers(instance);
 ```
 
-`registerScheduledTriggers` reads bindings from the `CaseDefinition` and re-registers all `ScheduleTrigger`-based bindings with the `JobScheduler`. Idempotent — the scheduler handles duplicate registrations.
+`registerScheduledTriggers` reads bindings from the `CaseDefinition` and re-registers all `ScheduleTrigger`-based bindings with the `JobScheduler`. Since `cancelAllTriggers` was called during the FAULTED transition, no stale jobs exist — this creates fresh jobs from the definition.
 
 `openChannel` re-opens the coordination channel. Channels closed during terminal cleanup are not automatically re-created.
 
