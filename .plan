@@ -15,11 +15,12 @@ active-issue: casehubio/engine#732
 ## Queue
 - [x] casehubio/engine#1182 — Issue #1182
 - [x] casehubio/engine#732 — wire CaseContextStoreFactory through recovery path
-- [ ] casehubio/engine#1183 — harden CaseRecoveryService.unfault ← active
-  - [x] Batch 1: Harden unfault
-    - [x] Task 1: Add deps and fix persistence race
-    - [x] Task 2: CANCELLED rejection and unit tests
-  - [x] Batch 2: Integration
-    - [x] Task 3: Verify integration test and full build
-- [ ] casehubio/engine#1184 — enforce replay handler registration for new event types
-- [ ] casehubio/engine#1185 — persistent DLQ storage
+- [x] casehubio/engine#1183 — harden CaseRecoveryService.unfault
+- [x] casehubio/engine#1184 — enforce replay handler registration for new event types
+- [ ] casehubio/engine#1185 — persistent DLQ storage ← active
+  - [ ] Batch 1: SPI + facade
+    - [ ] Task 1: Define store SPI and InMemory impl
+    - [ ] Task 2: Refactor DeadLetterQueue to delegate
+  - [ ] Batch 2: JPA + integration
+    - [ ] Task 3: JPA entity and store impl
+    - [ ] Task 4: Integration verification
