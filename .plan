@@ -19,7 +19,7 @@ active-issue: casehubio/engine#732
   - [x] Batch 1: Harden unfault
     - [x] Task 1: Add deps and fix persistence race
     - [x] Task 2: CANCELLED rejection and unit tests
-  - [ ] Batch 2: Integration
-    - [ ] Task 3: Verify integration test and full build
+  - [x] Batch 2: Integration
+    - [x] Task 3: Verify integration test and full build
 - [ ] casehubio/engine#1184 — enforce replay handler registration for new event types
 - [ ] casehubio/engine#1185 — persistent DLQ storage
