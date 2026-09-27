@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1182-snapshot-recovery-fallback
-state: transitioning
+state: closing:review
 project-sha: bc071ca4d7aa53755ef2c99ecc11a76a735aee4e
 date: 2026-09-25
 issue-repo: casehubio/engine
@@ -12,6 +12,7 @@ design-section-hashes: 4d2cc5ab:## §1 Introduction and Goals|4f6b26ef:## §2 Co
 flyway-next-v: none
 active-issue: casehubio/engine#732
 
+evidence-era: true
 ## Queue
 - [x] casehubio/engine#1182 — Issue #1182
 - [x] casehubio/engine#732 — wire CaseContextStoreFactory through recovery path
