@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1182-snapshot-recovery-fallback
-state: active
+state: transitioning
 project-sha: bc071ca4d7aa53755ef2c99ecc11a76a735aee4e
 date: 2026-09-25
 issue-repo: casehubio/engine
@@ -17,10 +17,4 @@ active-issue: casehubio/engine#732
 - [x] casehubio/engine#732 — wire CaseContextStoreFactory through recovery path
 - [x] casehubio/engine#1183 — harden CaseRecoveryService.unfault
 - [x] casehubio/engine#1184 — enforce replay handler registration for new event types
-- [ ] casehubio/engine#1185 — persistent DLQ storage ← active
-  - [x] Batch 1: SPI + facade
-    - [x] Task 1: Define store SPI and InMemory impl
-    - [x] Task 2: Refactor DeadLetterQueue to delegate
-  - [x] Batch 2: JPA + integration
-    - [x] Task 3: JPA entity and store impl
-    - [x] Task 4: Integration verification
+- [x] casehubio/engine#1185 — persistent DLQ storage
