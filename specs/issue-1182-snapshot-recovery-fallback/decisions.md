@@ -88,3 +88,17 @@
 **Exploration:** deep-analysis
 **Status:** captured
 **Depends on:** D5 (state must be persisted before infrastructure restoration)
+
+---
+
+## D8: Exhaustive enum coverage test for replay handlers
+
+**Choice:** Extract the handled `EnumSet` from `rebuildStateContext()` to a package-visible `static final REPLAYED_TYPES` field. Write a contract test that computes `allTypes - REPLAYED_TYPES - NON_MUTATING_TYPES` and asserts it's empty. `NON_MUTATING_TYPES` is defined in the test as an explicit allowlist.
+**Alternatives:**
+- Test-only (no extraction) using reflection or source scanning — avoids production code change but fragile and harder to maintain
+- Annotation-based (`@ContextMutating` on enum values) — too much machinery for the benefit
+**Rationale:** The standard "exhaustive switch" pattern applied via test. Every new `CaseHubEventType` value forces a build failure until the developer either adds a replay handler or adds the type to the allowlist. Simple, no reflection, no source scanning.
+**Trade-offs:** The `REPLAYED_TYPES` field becomes part of the package-visible API. Acceptable — it's already implicitly public via the method's behavior.
+**Sources:** `EventLogReplayRecoveryStrategy.java:74-84` (current inline EnumSet), `CaseHubEventType.java` (~100+ enum values)
+**Exploration:** quick
+**Status:** captured
