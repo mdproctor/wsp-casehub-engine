@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1182-snapshot-recovery-fallback
-state: closing:review
+state: closing:promoted
 project-sha: bc071ca4d7aa53755ef2c99ecc11a76a735aee4e
 date: 2026-09-25
 issue-repo: casehubio/engine
