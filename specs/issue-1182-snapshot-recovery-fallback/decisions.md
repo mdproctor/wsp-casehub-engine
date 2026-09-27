@@ -102,3 +102,41 @@
 **Sources:** `EventLogReplayRecoveryStrategy.java:74-84` (current inline EnumSet), `CaseHubEventType.java` (~100+ enum values)
 **Exploration:** quick
 **Status:** captured
+
+---
+
+## D9: DeadLetterEntryStore SPI in resilience-core
+
+**Choice:** Define `DeadLetterEntryStore` SPI in `resilience-core` alongside `DeadLetterEntry`. Add `resilience-core` as a dependency of `persistence-hibernate` for the JPA implementation.
+**Alternatives:**
+- SPI in `engine-support-core` — would require `engine-support-core` to depend on `resilience-core` for `DeadLetterEntry`. Worse layering.
+- New shared module — overkill for one interface
+**Rationale:** The SPI references `DeadLetterEntry` which is in `resilience-core`. Co-locating avoids cross-module dependencies. `persistence-hibernate` implements store SPIs wherever they're defined — adding one dependency is standard.
+**Trade-offs:** `persistence-hibernate` gains a dependency on `resilience-core`. Narrow and justified.
+**Sources:** `CaseQueueEntryStore.java` (existing pattern in engine-support-core), `DeadLetterEntry.java`, `DeadLetterQueue.java`
+**Exploration:** quick
+**Status:** captured
+
+## D10: DeadLetterQueue becomes a facade over DeadLetterEntryStore
+
+**Choice:** `DeadLetterQueue` takes a `DeadLetterEntryStore` constructor parameter. All storage operations delegate to the store. Entry creation logic (ID generation, defaults) stays in the queue.
+**Alternatives:**
+- Replace DeadLetterQueue entirely — breaks existing consumer API, forces all callers to change
+**Rationale:** Preserves the existing API (`add`, `query`, `findById`, `discard`, `markReplayed`). The queue owns entry construction; the store owns persistence. Clean separation.
+**Trade-offs:** One extra indirection layer. Negligible.
+**Sources:** `DeadLetterQueue.java:33-113` (current implementation), `DeadLetterReplayService.java` (consumer)
+**Exploration:** quick
+**Status:** captured
+**Depends on:** D9 (SPI definition)
+
+## D11: Hibernate drop-and-create for DLQ entity schema
+
+**Choice:** JPA entity uses Hibernate's `drop-and-create` schema management. No Flyway migration.
+**Alternatives:**
+- Flyway migration — explicitly prohibited by CLAUDE.md project constraints
+**Rationale:** CLAUDE.md states: "This project has no installed instances to migrate. Do not add Flyway or Liquibase dependencies." Schema is managed by `quarkus.hibernate-orm.schema-management.strategy=drop-and-create`.
+**Trade-offs:** None — this is a project constraint, not a trade-off.
+**Sources:** CLAUDE.md §No Migration Tooling
+**Exploration:** quick
+**Status:** captured
+**Depends on:** D9 (SPI location determines JPA module)
