@@ -1,0 +1,15 @@
+# Work Plan — issue-1190-yaml-core-cbr-bridge
+
+## State
+branch: issue-1190-yaml-core-cbr-bridge
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/engine
+covers: 1190,1191,1192
+design-repo: project
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [ ] casehubio/engine#1190 — Issue #1190 ← active
