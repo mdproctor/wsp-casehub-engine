@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1186-evolution-mcp-queries
-state: active
+state: closing:review
 project-sha: 
 date: 
 issue-repo: casehubio/engine
@@ -11,5 +11,6 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: 
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/engine#1186 — Issue #1186 ← active
