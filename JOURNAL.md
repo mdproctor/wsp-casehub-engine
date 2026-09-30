@@ -1,1 +1,1 @@
-# Design Journal — issue-1186-evolution-mcp-queries
+# Design Journal — batch-s-xs-fixes
