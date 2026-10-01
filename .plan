@@ -1,0 +1,15 @@
+# Work Plan — issue-1176-structural-cleanup-batch
+
+## State
+branch: issue-1176-structural-cleanup-batch
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/engine
+covers: 1176,1134,1085,1138
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [ ] casehubio/engine#1176 — Issue #1176 ← active
