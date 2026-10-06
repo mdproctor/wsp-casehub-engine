@@ -2,43 +2,31 @@
 
 ## Last Session
 
-Completed 4 of 5 recovery hardening issues on branch `issue-1182-snapshot-recovery-fallback`. This session completed #1183 and #1184, and fully designed #1185 with a ready-to-execute plan.
+Landed #1218 (fix @DefaultBean producers for new engine subsystems) and partially fixed CI. CI is red — #1222 tracks the remaining fix.
 
-### Previously completed (prior sessions)
+### Completed
 
-- **#1182** (S/Low) — `SnapshotRecoveryStrategy` fallback to `EventLogReplayRecoveryStrategy` on null snapshot.
-- **#732** (M/Med) — Wired `CaseContextStoreFactory` through recovery path.
+- **#1218** (M/Med) — Fixed 13 unsatisfied CDI dependencies breaking all consumer apps. Added `Instance<>` wrapping for optional stigmergy/improvement/qhorus deps, no-op constructors with `active` flag guards on `SwarmProvisioner` and `EvolutionTicker`, `@DefaultBean NoOpEngineEvolutionApi`, and `ConvergenceDetector`/`TickTraceBuffer` producers. Also fixed yaml-cbr compilation errors from PluginStep API change. Landed as `7beae492b` on main.
 
-### Completed this session
+- **CI fix (partial)** — Landed caps-api dependency, rag expansion mode config, compensation event types, and `@PlatformStream` annotation removal. These fixed 21 of 22 test failures.
 
-- **#1183** (M/Med) — Hardened `CaseRecoveryService.unfault()`. Fixed JPA-specific persistence race: `unfault()` now persists RUNNING to DB via `CaseInstanceRepository.update()` before dispatching the async `CaseStatusChanged` event. Added `caseInstanceCache.put()` for cache consistency. Re-opens coordination channel and re-registers scheduled triggers (mirrors `CaseStartedEventHandler` setup). CANCELLED cases documented as non-recoverable with specific WARN log. 8 unit tests + 4 integration tests pass. `CaseRecoveryService` constructor grew from 4 to 7 parameters (added `CaseInstanceRepository`, `CaseChannelProvider`, `SchedulerService`); `RuntimeBeans.caseRecoveryService()` producer updated.
+### Remaining — #1222
 
-- **#1184** (S/Med) — Contract test enforcing replay handler coverage. Extracted `REPLAYED_TYPES` constant from `EventLogReplayRecoveryStrategy.rebuildStateContext()`. Test asserts every `CaseHubEventType` is either in `REPLAYED_TYPES` (has a replay handler) or `NON_MUTATING_TYPES` (explicitly reviewed). Adding a new enum value without updating either set fails the build.
+One CI failure remains: `SpringBootCompositionTest` fails with `BeanDefinitionOverrideException` for `crossTenantCaseInstanceRepository`. 
 
-## Immediate Next Step
+**Root cause:** `RuntimeManualConfig` defines identity passthrough beans for `crossTenantCaseInstanceRepository` and `crossTenantEventLogRepository` (satisfy Quarkus `@CrossTenant` qualifier — unnecessary in Spring). `PersistenceAutoConfiguration` defines the real JPA-backed beans. Spring rejects the duplicate.
 
-**#1185** — persistent DLQ storage. Design and plan are complete. Execute the plan at `wksp/plans/2026-09-27-persistent-dlq-storage.md`.
+**Fix:** Remove the two passthrough `@Bean` methods (lines ~403-416) from `RuntimeManualConfig.java`. The persistence module provides the real beans. This is a one-line deletion — the IntelliJ edit was applied but not persisted to disk.
 
-The plan has 2 batches, 4 tasks:
-1. SPI + InMemory: Define `DeadLetterEntryStore` SPI in `resilience-core`, create `InMemoryDeadLetterEntryStore`
-2. Facade: Refactor `DeadLetterQueue` to delegate to the store (constructor takes store)
-3. JPA: `DeadLetterEntryEntity` + `JpaDeadLetterEntryStore` in `persistence-hibernate` (new `resilience-core` dep)
-4. Integration: Verify full build, resolve CDI wiring (JPA vs InMemory bean precedence)
-
-Key constraint: no Flyway — Hibernate `drop-and-create` manages schema.
-
-## Pre-existing Build Issue
-
-`api` module has a compilation error in `JsonNodeForEachAdapter.java` — `ForEachAdapter` interface method renamed (`getWhen` → `getCondition`). Not caused by this branch's work. Test modules compile and pass independently.
+```
+File: runtime-spring/src/main/java/io/casehub/engine/runtime/spring/RuntimeManualConfig.java
+Remove: the crossTenantEventLogRepository and crossTenantCaseInstanceRepository @Bean methods at the end of the class
+```
 
 ## References
 
 | Artifact | Path |
 |----------|------|
-| Design spec (#1183) | `wksp/specs/issue-1182-snapshot-recovery-fallback/2026-09-27-unfault-hardening-design.md` |
-| Design spec (#1185) | `wksp/specs/issue-1182-snapshot-recovery-fallback/2026-09-27-persistent-dlq-storage-design.md` |
-| Replay handler contract spec (#1184) | `wksp/specs/issue-1182-snapshot-recovery-fallback/2026-09-27-replay-handler-contract-design.md` |
-| Decisions (all issues) | `wksp/specs/issue-1182-snapshot-recovery-fallback/decisions.md` (D1-D11) |
-| Implementation plan (#1183) | `wksp/plans/2026-09-27-unfault-hardening.md` |
-| Implementation plan (#1185) | `wksp/plans/2026-09-27-persistent-dlq-storage.md` |
-| Parent epic | #210 — cancellation, timeout, and error recovery |
+| CI fix issue | casehubio/engine#1222 |
+| CDI fix commit | `7beae492b` on main |
+| CI fix commit | quick-fix commit on main (caps-api, rag mode, compensation types, @PlatformStream) |
