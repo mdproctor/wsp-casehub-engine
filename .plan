@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1222-fix-ci-spring-bean-conflicts
-state: closing:verified
+state: closing:promoted
 project-sha: 
 date: 
 issue-repo: casehubio/engine
