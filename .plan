@@ -13,3 +13,8 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#1222 — Issue #1222 ← active
+  - [ ] Batch 1: Spring-API-fixes
+    - [ ] Task 1: Remove crossTenant beans and fix excludes
+    - [ ] Task 2: Restore @PlatformStream annotations
+  - [ ] Batch 2: Test-fix-verify
+    - [ ] Task 3: Fix flaky HybridOrchestrationIntegrationTest
