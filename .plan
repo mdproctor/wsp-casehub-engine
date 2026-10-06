@@ -1,0 +1,21 @@
+# Work Plan — issue-1222-fix-ci-spring-bean-conflicts
+
+## State
+branch: issue-1222-fix-ci-spring-bean-conflicts
+state: closing:promoted
+project-sha: 
+date: 
+issue-repo: casehubio/engine
+covers: 1222
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+evidence-era: true
+## Queue
+- [ ] casehubio/engine#1222 — Issue #1222 ← active
+  - [x] Batch 1: Spring-API-fixes
+    - [x] Task 1: Remove crossTenant beans and fix excludes
+    - [x] Task 2: Restore @PlatformStream annotations
+  - [x] Batch 2: Test-fix-verify
+    - [x] Task 3: Fix flaky HybridOrchestrationIntegrationTest
