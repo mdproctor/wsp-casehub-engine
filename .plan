@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1222-fix-ci-spring-bean-conflicts
-state: active
+state: closing:review
 project-sha: 
 date: 
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo:
 design-section-hashes: 
 flyway-next-v: 
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/engine#1222 — Issue #1222 ← active
   - [x] Batch 1: Spring-API-fixes
