@@ -9,3 +9,16 @@
 **Sources:** engine CapabilityAreaRegistry, EvolutionTicker health_refresh gate, #1148 design spec §1.1
 **Exploration:** quick
 **Status:** captured
+
+## D2: Devtown capability areas — which 5 and what they measure
+
+**Choice:** Core 5 — CI Reliability, Review Quality, Merge Queue Health, Reviewer Trust, SLA Compliance
+**Alternatives:**
+- Full 7 (add Code Churn + Contributor Health) — valuable but requires heavier data gathering (git history, cross-PR aggregation) not readily available
+- Start with 3 (CI, Review, Queue) — tightest loop but misses trust and SLA dimensions
+**Rationale:** These 5 map directly to devtown's existing data sources and cover the full PR lifecycle: code arrives (CI) → gets reviewed (Review Quality) → trust routes it (Reviewer Trust) → human gates fire (SLA) → it merges (Queue Health). Code Churn and Contributor Health are natural follow-ups.
+**Trade-offs:** Omits code churn and contributor health, which are indirect signals. Can be added later without changing the architecture.
+**Sources:** devtown ReviewFinding, MergeQueueService, TrustRoutingPolicy, SlaCalibrationService, CiRunnerWorker
+**Exploration:** quick
+**Depends on:** D1 (areas registered alongside engine defaults)
+**Status:** captured
