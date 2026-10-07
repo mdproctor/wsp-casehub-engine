@@ -60,3 +60,16 @@
 **Exploration:** quick
 **Depends on:** D1 (areas alongside engine defaults), D2 (5 areas drive category relevance)
 **Status:** captured
+
+## D6: Deep links — how the workbench renders devtown context
+
+**Choice:** Custom workbench tabs via TabDefinition extension — existing tabs render enriched strings (target becomes "PR #42: Fix auth middleware"), devtown adds 1-2 custom tabs for domain-specific views. No blocks-ui changes needed.
+**Alternatives:**
+- Blocks-ui component extension via render callbacks — more flexible but requires blocks-ui changes and adds API surface
+- Devtown-specific component wrappers — full rendering control but duplicates blocks-ui logic and diverges over time
+**Rationale:** The workbench's existing tabs already render target, category, stage as strings. Enriching those strings at the API layer makes them meaningful without touching blocks-ui. Custom tabs via TabDefinition[] handle anything the base tabs can't show.
+**Trade-offs:** PR links won't be clickable in the Streams tab (they're rendered as text, not anchor tags). Acceptable for v1 — clickable links can be added later via blocks-ui render callbacks if needed.
+**Sources:** blocks-evolution-workbench TabDefinition[] extension, EvolutionWorkbenchProps.tabs
+**Exploration:** quick
+**Depends on:** D3 (view-layer enrichment), D4 (tab integration)
+**Status:** captured
