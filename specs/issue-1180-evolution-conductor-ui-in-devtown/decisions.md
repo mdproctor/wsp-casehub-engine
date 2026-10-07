@@ -73,3 +73,16 @@
 **Exploration:** quick
 **Depends on:** D3 (view-layer enrichment), D4 (tab integration)
 **Status:** captured
+
+## D7: Evolution case lifecycle — singleton auto-bootstrap
+
+**Choice:** Singleton evolution case, auto-bootstrapped at startup using a devtown-evolution case template. Case starts at L0_INERT with all gates GATED. DevtownEvolutionCaseResolver looks it up by template ID.
+**Alternatives:**
+- Per-project evolution cases — more flexible for multi-project setups but devtown is single-project, adds unnecessary complexity and case selection UI
+- Manual case creation via bootstrap API — follows documented L0→L3 progression explicitly but adds friction, Evolution tab shows nothing until user acts
+**Rationale:** Devtown is a single-project instance. The case exists from startup so the Evolution tab always has content. L0→L3 progression still applies — the case starts inert and the user configures it up. No case selection UI needed.
+**Trade-offs:** Limits to one evolution context per devtown instance. If devtown ever becomes multi-project, this needs revisiting.
+**Sources:** engine compliance level bootstrap design (§7 command-centre-conductor-design), ImprovementConfig case template pattern
+**Exploration:** quick
+**Depends on:** D1 (capability areas), D2 (which areas registered), D5 (which categories configured)
+**Status:** captured
