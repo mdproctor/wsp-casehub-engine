@@ -2,11 +2,18 @@
 
 ## Last Session
 
-Designed and began implementing evolution conductor UI integration for devtown as first consumer (#1180, devtown#230). Brainstormed 7 design decisions, wrote spec, created 4-batch implementation plan. Completed Batch 1: 5 capability areas (CiReliability, ReviewQuality, MergeQueueHealth, ReviewerTrust, SlaCompliance) + DevtownCategoryProvider with 5 review-pipeline categories and a 5-stage pipeline. All 22 tests green in devtown's `app` module. Capability areas placed in `app` module (not `domain`) because domain lacks engine dependencies.
+Completed Batch 2 of the evolution conductor UI integration (#1180, devtown#230): filtering SPIs. Implemented 4 classes with 27 new tests (49 total evolution tests green):
+
+- **DevtownConflictStrategy** — category-based conflict detection; two improvements in the same category within the devtown domain conflict (race on shared config)
+- **DevtownDenyPatternProvider** — structural invariant protection; never auto-modify security-review targets
+- **DevtownRegressionEvaluator** — health score delta regression detection with -10% threshold; uses simple delta comparison (devtown improvements are config changes, not code)
+- **DevtownProposalSource** — generates improvement proposals when capability area health scores drop below 0.6; maps 5 capability areas to 5 improvement categories
+
+All files in `app` module at `io.casehub.devtown.app.evolution` (not `domain` — domain lacks engine dependencies).
 
 ## Immediate Next Step
 
-Execute Batch 2 of the implementation plan: filtering SPIs (DevtownConflictStrategy, DevtownDenyPatternProvider, DevtownRegressionEvaluator, DevtownProposalSource) in devtown's `app/src/main/java/io/casehub/devtown/app/evolution/`.
+Execute Batch 3: API + Bootstrap (Case Template + Bootstrap + Resolver, DevtownEvolutionApi Facade + REST Resource) in devtown's `app/src/main/java/io/casehub/devtown/app/evolution/`.
 
 ## References
 
