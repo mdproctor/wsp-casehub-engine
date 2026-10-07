@@ -561,7 +561,34 @@ public class DevtownDenyPatternProvider implements DenyPatternProvider {
 }
 ```
 
-## 8. Test Strategy
+## 8. Devtown RegressionEvaluator
+
+Devtown needs a regression evaluator so the `RegressionDetector` can assess whether health degradation after an improvement constitutes a regression in devtown's domain:
+
+```java
+@ApplicationScoped
+public class DevtownRegressionEvaluator implements RegressionEvaluator {
+
+  @Override public String evaluatorId() { return "devtown-health-delta"; }
+  @Override public String domainId() { return "devtown"; }
+
+  @Override
+  public RegressionVerdict evaluate(UUID caseId, HealthScoreSnapshot baseline,
+      HealthScoreSnapshot current, String category) {
+    double delta = current.score() - baseline.score();
+    if (delta < -0.1) {
+      return new RegressionVerdict.Detected(Math.abs(delta),
+          "Health score dropped by " + String.format("%.1f%%", Math.abs(delta) * 100)
+          + " after " + category + " improvement");
+    }
+    return new RegressionVerdict.NoRegression();
+  }
+}
+```
+
+The evaluator uses a simple delta threshold (-10% health score drop). This is intentionally conservative — devtown improvements are configuration changes, not code changes, so regressions should be rare and obvious. The threshold can be tuned via configuration.
+
+## 9. Test Strategy
 
 ### Devtown unit tests
 
@@ -576,6 +603,7 @@ public class DevtownDenyPatternProvider implements DenyPatternProvider {
 | `DevtownProposalSourceTest` | Proposals generated when health scores drop below thresholds, no proposals when healthy |
 | `DevtownConflictStrategyTest` | Same-category conflicts detected, cross-category improvements are clear |
 | `DevtownDenyPatternProviderTest` | Security-review target denied, other targets allowed |
+| `DevtownRegressionEvaluatorTest` | Regression detected at -10% delta, no regression above threshold, boundary values |
 | `DevtownEvolutionCaseResolverTest` | Resolves singleton case by template ID, throws if missing |
 | `DevtownEvolutionEnricherTest` | Stream targets enriched with devtown context |
 | `DevtownEvolutionBootstrapTest` | Creates case on first startup, skips if already exists |
@@ -597,7 +625,7 @@ public class DevtownDenyPatternProvider implements DenyPatternProvider {
 4. **Singleton case:** Bootstrap creates case once → restart finds existing case → Evolution tab shows persisted state
 5. **Enrichment correctness:** Raw ImprovementStreamView target "reviewer:agent-security" → enriched to human-readable display string with trust score context
 
-## 9. Module Placement
+## 10. Module Placement
 
 ### Engine (casehubio/engine) — minimal changes
 
@@ -618,6 +646,7 @@ public class DevtownDenyPatternProvider implements DenyPatternProvider {
 | `DevtownProposalSource` | `domain` | `io.casehub.devtown.domain.evolution` |
 | `DevtownConflictStrategy` | `domain` | `io.casehub.devtown.domain.evolution` |
 | `DevtownDenyPatternProvider` | `domain` | `io.casehub.devtown.domain.evolution` |
+| `DevtownRegressionEvaluator` | `domain` | `io.casehub.devtown.domain.evolution` |
 | `DevtownEvolutionApi` | `app` | `io.casehub.devtown.app.evolution` |
 | `DevtownEvolutionResource` | `app` | `io.casehub.devtown.app.evolution` |
 | `DevtownEvolutionCaseResolver` | `app` | `io.casehub.devtown.app.evolution` |
