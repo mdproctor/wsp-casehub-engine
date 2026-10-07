@@ -35,3 +35,16 @@
 **Exploration:** quick
 **Depends on:** D1 (capability areas), D2 (which areas → what enrichment fields)
 **Status:** captured
+
+## D4: Evolution tab integration in devtown dashboard
+
+**Choice:** 9th tab with hostPanel — registerPanel + hostPanel following existing pattern, endpoint at /api/devtown/evolution, positioned after System before Definitions
+**Alternatives:**
+- Nested under System tab — fewer top-level tabs but undersells a major feature surface
+- Standalone page (separate route) — more screen real estate but breaks devtown's single-dashboard pattern
+**Rationale:** Follows devtown's existing dashboard pattern. The workbench is substantial enough for a top-level tab. Wiring is trivial — registerPanel + configure() with endpoint.
+**Trade-offs:** 9 tabs is getting crowded. If the tab count grows further, devtown may need tab grouping or a navigation redesign — but that's not this issue's concern.
+**Sources:** devtown index.ts registerPanel/hostPanel pattern, blocks-evolution-workbench configure() API
+**Exploration:** quick
+**Depends on:** D3 (DevtownEvolutionApi at /api/devtown/evolution)
+**Status:** captured
