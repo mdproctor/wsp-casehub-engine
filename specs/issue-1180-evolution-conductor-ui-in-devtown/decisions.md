@@ -22,3 +22,16 @@
 **Exploration:** quick
 **Depends on:** D1 (areas registered alongside engine defaults)
 **Status:** captured
+
+## D3: DevtownEvolutionApi facade — enrichment strategy
+
+**Choice:** Enrichment at the view layer — DevtownEvolutionApi delegates to EngineEvolutionApi for all core operations, then enriches returned views with devtown context (PR links, CI dashboard URLs, reviewer names)
+**Alternatives:**
+- Enrichment via metadata — populate ImprovementRequest.metadata at proposal time, workbench renders generically. Stringly-typed, no semantic rendering.
+- Enrichment at workbench level (frontend) — client resolves PR links via separate API calls. Two API calls per view, complexity in frontend.
+**Rationale:** Clean separation. Engine API stays pure. Mutations pass through unchanged — only queries get enriched. Matches devtown's existing pattern of wrapping engine APIs with domain context.
+**Trade-offs:** Requires thin wrapper record types (DevtownEvolutionStateSnapshot etc.) for the enriched views. Additional serialization layer.
+**Sources:** devtown DefaultEngineCaseControlApi pattern, engine DefaultEngineEvolutionApi
+**Exploration:** quick
+**Depends on:** D1 (capability areas), D2 (which areas → what enrichment fields)
+**Status:** captured
