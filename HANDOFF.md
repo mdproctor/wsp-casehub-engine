@@ -2,18 +2,29 @@
 
 ## Last Session
 
-Completed Batch 2 of the evolution conductor UI integration (#1180, devtown#230): filtering SPIs. Implemented 4 classes with 27 new tests (49 total evolution tests green):
+Completed Batches 2 and 3 of the evolution conductor UI integration (#1180, devtown#230).
 
-- **DevtownConflictStrategy** — category-based conflict detection; two improvements in the same category within the devtown domain conflict (race on shared config)
-- **DevtownDenyPatternProvider** — structural invariant protection; never auto-modify security-review targets
-- **DevtownRegressionEvaluator** — health score delta regression detection with -10% threshold; uses simple delta comparison (devtown improvements are config changes, not code)
-- **DevtownProposalSource** — generates improvement proposals when capability area health scores drop below 0.6; maps 5 capability areas to 5 improvement categories
+**Batch 2 — Filtering SPIs (27 tests):**
+- DevtownConflictStrategy — category-based conflict detection
+- DevtownDenyPatternProvider — blocks security-review target modifications
+- DevtownRegressionEvaluator — health score delta regression detection (-10% threshold)
+- DevtownProposalSource — generates proposals when capability area scores < 0.6
 
-All files in `app` module at `io.casehub.devtown.app.evolution` (not `domain` — domain lacks engine dependencies).
+**Batch 3 — API + Bootstrap (15 tests):**
+- evolution.yaml case template — L0_INERT, all gates GATED, maxConcurrent 1
+- DevtownEvolutionCaseHub — YamlCaseHub for the template
+- DevtownEvolutionBootstrap — singleton case on startup via findByNamespaceAndName
+- DevtownEvolutionCaseResolver — resolves the singleton by namespace/name
+- DevtownEvolutionEnricher — enriches stream targets with display strings
+- DevtownEvolutionApi — facade delegating to EngineEvolutionApi with case resolution
+- DevtownEvolutionResource — REST at /api/devtown/evolution (15 endpoints)
+- View records + GateResolutionRequest
+
+All files in `app` module at `io.casehub.devtown.app.evolution`. 64 total evolution tests green.
 
 ## Immediate Next Step
 
-Execute Batch 3: API + Bootstrap (Case Template + Bootstrap + Resolver, DevtownEvolutionApi Facade + REST Resource) in devtown's `app/src/main/java/io/casehub/devtown/app/evolution/`.
+Execute Batch 4: Frontend (Evolution Tab Integration) — add the Evolution tab to devtown's dashboard wiring it to blocks-ui-evolution-workbench against /api/devtown/evolution.
 
 ## References
 

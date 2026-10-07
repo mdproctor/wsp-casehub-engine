@@ -3,7 +3,7 @@
 ## State
 branch: issue-1180-evolution-conductor-ui-in-devtown
 state: scaffolded
-project-sha: fa3af04
+project-sha: 972b1f4
 date: 2026-10-07
 issue-repo: casehubio/engine
 covers: 1180
@@ -21,8 +21,8 @@ flyway-next-v: unknown
     - [x] Task 4: DevtownConflictStrategy
     - [x] Task 5: DevtownDenyPatternProvider + DevtownRegressionEvaluator
     - [x] Task 6: DevtownProposalSource
-  - [ ] Batch 3: API + Bootstrap
-    - [ ] Task 7: Case Template + Bootstrap + Resolver
-    - [ ] Task 8: DevtownEvolutionApi Facade + REST Resource
+  - [x] Batch 3: API + Bootstrap
+    - [x] Task 7: Case Template + Bootstrap + Resolver
+    - [x] Task 8: DevtownEvolutionApi Facade + REST Resource
   - [ ] Batch 4: Frontend
     - [ ] Task 9: Evolution Tab Integration
