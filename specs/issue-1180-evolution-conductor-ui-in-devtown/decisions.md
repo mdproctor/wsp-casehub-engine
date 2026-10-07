@@ -48,3 +48,15 @@
 **Exploration:** quick
 **Depends on:** D3 (DevtownEvolutionApi at /api/devtown/evolution)
 **Status:** captured
+
+## D5: Devtown ImprovementCategoryProvider — review pipeline categories
+
+**Choice:** Review pipeline improvement categories — 5 devtown-specific categories (reviewer-calibration, routing-adjustment, sla-tuning, gate-tightening, queue-optimization) with a shorter 5-stage pipeline (analyze → propose → review → apply → observe)
+**Alternatives:**
+- Mirror code-evolution categories for devtown's codebase — reuses existing definitions but doesn't leverage devtown's unique domain data. Any CaseHub app could do this.
+**Rationale:** Makes devtown the genuine "first consumer" — the conductor improves devtown's review orchestration, not just its source code. Each category has a clear actionable improvement the conductor can drive.
+**Trade-offs:** Some actions (trust weight adjustment, routing changes) may be too impactful for full automation initially — they'd start with GATED gate policy. Shorter stage pipeline means less granular gating but faster improvement cycles.
+**Sources:** engine ImprovementCategoryProvider SPI, CodeEvolutionCategoryProvider pattern, #1148 design spec §1.1
+**Exploration:** quick
+**Depends on:** D1 (areas alongside engine defaults), D2 (5 areas drive category relevance)
+**Status:** captured
