@@ -2,29 +2,31 @@
 
 ## Last Session
 
-Completed Batches 2 and 3 of the evolution conductor UI integration (#1180, devtown#230).
+Completed all 4 batches of the evolution conductor UI integration (#1180, devtown#230). 64 Java tests green, frontend wiring in place.
 
 **Batch 2 — Filtering SPIs (27 tests):**
-- DevtownConflictStrategy — category-based conflict detection
-- DevtownDenyPatternProvider — blocks security-review target modifications
-- DevtownRegressionEvaluator — health score delta regression detection (-10% threshold)
-- DevtownProposalSource — generates proposals when capability area scores < 0.6
+- DevtownConflictStrategy, DevtownDenyPatternProvider, DevtownRegressionEvaluator, DevtownProposalSource
 
 **Batch 3 — API + Bootstrap (15 tests):**
-- evolution.yaml case template — L0_INERT, all gates GATED, maxConcurrent 1
-- DevtownEvolutionCaseHub — YamlCaseHub for the template
-- DevtownEvolutionBootstrap — singleton case on startup via findByNamespaceAndName
-- DevtownEvolutionCaseResolver — resolves the singleton by namespace/name
-- DevtownEvolutionEnricher — enriches stream targets with display strings
-- DevtownEvolutionApi — facade delegating to EngineEvolutionApi with case resolution
-- DevtownEvolutionResource — REST at /api/devtown/evolution (15 endpoints)
-- View records + GateResolutionRequest
+- evolution.yaml case template (L0_INERT, all gates GATED, maxConcurrent 1)
+- DevtownEvolutionCaseHub, DevtownEvolutionBootstrap, DevtownEvolutionCaseResolver
+- DevtownEvolutionEnricher, DevtownEvolutionApi facade, DevtownEvolutionResource (15 REST endpoints)
+- View records: DevtownEvolutionStateSnapshot, DevtownImprovementStreamView, GateResolutionRequest
 
-All files in `app` module at `io.casehub.devtown.app.evolution`. 64 total evolution tests green.
+**Batch 4 — Frontend:**
+- evolution.ts view + index.ts wiring — Evolution tab between System and Definitions
+
+All files in devtown `app` module at `io.casehub.devtown.app.evolution`.
+
+## Open Item
+
+Frontend build requires `@casehubio/blocks-ui-evolution-workbench` (and `evolution-config` transitive) to be packed from blocks-ui via `pack-all.sh` and added to devtown's `.casehub-packages/tarballs/` + `package.json`. The TypeScript code is correct but the package isn't available yet.
 
 ## Immediate Next Step
 
-Execute Batch 4: Frontend (Evolution Tab Integration) — add the Evolution tab to devtown's dashboard wiring it to blocks-ui-evolution-workbench against /api/devtown/evolution.
+1. Pack blocks-ui evolution packages and add to devtown
+2. Run `yarn build` in devtown webui to verify frontend
+3. Run work-end to close the branch
 
 ## References
 
