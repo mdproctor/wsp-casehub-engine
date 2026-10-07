@@ -13,10 +13,10 @@ flyway-next-v: unknown
 
 ## Queue
 - [ ] casehubio/engine#1180 — Issue #1180 ← active
-  - [ ] Batch 1: Domain SPIs
-    - [ ] Task 1: CiReliabilityCapabilityArea
-    - [ ] Task 2: ReviewQualityCapabilityArea
-    - [ ] Task 3: Remaining 3 areas + DevtownCategoryProvider
+  - [x] Batch 1: Domain SPIs
+    - [x] Task 1: CiReliabilityCapabilityArea
+    - [x] Task 2: ReviewQualityCapabilityArea
+    - [x] Task 3: Remaining 3 areas + DevtownCategoryProvider
   - [ ] Batch 2: Filtering SPIs
     - [ ] Task 4: DevtownConflictStrategy
     - [ ] Task 5: DevtownDenyPatternProvider + DevtownRegressionEvaluator
