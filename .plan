@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1180-evolution-conductor-ui-in-devtown
-state: closing:review
+state: closing:verified
 project-sha: 455cb35
 date: 2026-10-07
 issue-repo: casehubio/engine
@@ -10,20 +10,7 @@ covers: 1180
 design-repo: project
 design-section-hashes: 
 flyway-next-v: unknown
-
 evidence-era: true
+
 ## Queue
-- [ ] casehubio/engine#1180 — Issue #1180 ← active
-  - [x] Batch 1: Domain SPIs
-    - [x] Task 1: CiReliabilityCapabilityArea
-    - [x] Task 2: ReviewQualityCapabilityArea
-    - [x] Task 3: Remaining 3 areas + DevtownCategoryProvider
-  - [x] Batch 2: Filtering SPIs
-    - [x] Task 4: DevtownConflictStrategy
-    - [x] Task 5: DevtownDenyPatternProvider + DevtownRegressionEvaluator
-    - [x] Task 6: DevtownProposalSource
-  - [x] Batch 3: API + Bootstrap
-    - [x] Task 7: Case Template + Bootstrap + Resolver
-    - [x] Task 8: DevtownEvolutionApi Facade + REST Resource
-  - [x] Batch 4: Frontend
-    - [x] Task 9: Evolution Tab Integration
+- [x] casehubio/engine#1180 — Issue #1180
