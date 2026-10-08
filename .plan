@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1180-evolution-conductor-ui-in-devtown
-state: active
+state: closing:review
 project-sha: 455cb35
 date: 2026-10-07
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: unknown
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/engine#1180 — Issue #1180 ← active
   - [x] Batch 1: Domain SPIs
