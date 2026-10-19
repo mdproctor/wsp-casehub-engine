@@ -49,6 +49,17 @@
 **Depends on:** D3 (annotation approach)
 **Status:** captured
 
+## D6: Scope expanded — EvolutionMcpAdapter has 22 unprotected endpoints
+
+**Choice:** Include all 27 gaps (5 core + 22 evolution) in this issue, not just the original 4.
+**Alternatives:**
+- Split evolution into a separate issue — delays full ACL coverage, leaves a security gap
+**Rationale:** The `@AclCheck` annotation + filter approach handles all endpoints uniformly. Adding annotations and `requireCaseAccess` calls to evolution methods is mechanical work, not a design change. One issue, one PR, complete coverage.
+**Trade-offs:** Larger PR. Acceptable — the changes are repetitive and low-risk.
+**Sources:** Full endpoint audit (fork)
+**Exploration:** quick
+**Status:** captured
+
 ## D5: Follow-up issue for scaffold cleanup
 
 **Choice:** Create a follow-up issue on casehubio/scaffold to delete `AclRequestFilter`, `AclIntegrationTest`, and `JwtAclTestProfile` once engine#768 lands.
