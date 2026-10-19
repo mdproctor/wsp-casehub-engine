@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-768-move-acl-checks-into-engine-rest-spi
-state: scaffolded
+state: active
 project-sha: 
 date: 
 issue-repo: casehubio/engine
@@ -13,10 +13,10 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#768 — Issue #768 ← active
-  - [ ] Batch 1: Foundation
-    - [ ] Task 1: Create @AclCheck annotation and apply to all APIs
-    - [ ] Task 2: Fill service-level ACL gaps
-  - [ ] Batch 2: Defense-in-depth
-    - [ ] Task 3: Implement AclEnforcementFilter with tests
-  - [ ] Batch 3: Verification
-    - [ ] Task 4: Full build verification and cleanup
+  - [x] Batch 1: Foundation
+    - [x] Task 1: Create @AclCheck annotation and apply to all APIs
+    - [x] Task 2: Fill service-level ACL gaps
+  - [x] Batch 2: Defense-in-depth
+    - [x] Task 3: Implement AclEnforcementFilter with tests
+  - [x] Batch 3: Verification
+    - [x] Task 4: Full build verification and cleanup
