@@ -1,0 +1,15 @@
+# Work Plan — issue-768-move-acl-checks-into-engine-rest-spi
+
+## State
+branch: issue-768-move-acl-checks-into-engine-rest-spi
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/engine
+covers: 768
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [ ] casehubio/engine#768 — Issue #768 ← active
