@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-768-move-acl-checks-into-engine-rest-spi
-state: closing:verified
+state: closing:promoted
 project-sha: 
 date: 
 issue-repo: casehubio/engine
