@@ -1,0 +1,15 @@
+# Work Plan — issue-1258-choreography-saga-capability
+
+## State
+branch: issue-1258-choreography-saga-capability
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/engine
+covers: 1258
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [ ] casehubio/engine#1258 — Issue #1258 ← active
