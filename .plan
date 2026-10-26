@@ -13,3 +13,9 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#1225 — Issue #1225 ← active
+  - [ ] Batch 1: Standalone Evolution Page
+    - [ ] Task 1: Wire packages and create page routing
+    - [ ] Task 2: Fix DevtownEvolutionBootstrap
+  - [ ] Batch 2: Cross-App Integration
+    - [ ] Task 3: Conductor-origin indicator
+    - [ ] Task 4: Deep linking evolution to review
