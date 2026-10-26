@@ -3,7 +3,7 @@
 ## State
 branch: issue-1115-continuous-evolution-loop
 state: active
-project-sha: 
+project-sha: 24b32b8467ae9ac8fa90201b74c0c3282019ae0f
 date: 
 issue-repo: casehubio/engine
 covers: 1115
