@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1115-continuous-evolution-loop
-state: active
+state: closing:review
 project-sha: 24b32b8467ae9ac8fa90201b74c0c3282019ae0f
 date: 
 issue-repo: casehubio/engine
@@ -11,7 +11,6 @@ design-repo:
 design-section-hashes: 
 flyway-next-v: 
 
+evidence-era: true
 ## Queue
-- [ ] casehubio/engine#1115 — Issue #1115 ← active
-  - [ ] Batch 1: Batch 1
-    - [ ] Task 1: done
+- [x] casehubio/engine#1115 — Issue #1115
