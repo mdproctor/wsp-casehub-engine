@@ -2,35 +2,25 @@
 
 ## Last Session (2026-10-26)
 
-Implemented core continuous evolution loop infrastructure for #1115 (8 commits on `issue-1115-continuous-evolution-loop`):
+Implemented continuous evolution loop for #1115 — all 7 batches, 11 tasks, 9 commits on `issue-1115-continuous-evolution-loop`.
 
-**Batch 1 — TriggerLoop:**
-- Wired EvolutionTicker into CaseContextChangedEventHandler, replacing direct ImprovementGoalFormationStrategy call. All improvement proposals now route through the safety gate pipeline.
-- Added EvolutionTimerBackstop — registry-based periodic sweep that ticks evolution-enabled cases as a backstop for infrequent context changes.
+**Batch 1 — TriggerLoop:** EvolutionTicker wired as single entry point in convergence handler. Timer backstop for periodic ticks.
 
-**Batch 2 — FeedbackLoop:**
-- ImprovementOutcomeEventCapture now implements CaseOutcomeObserver. Detects self-improvement cases by caseType, extracts outcome from `_improvement` context key, and routes through all 6 processing layers.
-- Created ImprovementOutcomeStore for CBR feedback. ImprovementCbrProjector writes to it; ImprovementGoalFormationStrategy reads failureRate() and suppresses targets with >= 70% failure rate.
+**Batch 2 — FeedbackLoop:** ImprovementOutcomeEventCapture implements CaseOutcomeObserver. ImprovementOutcomeStore for CBR-informed goal formation (suppresses targets with >= 70% failure rate).
 
-**Batch 3 — RollbackWiring:**
-- Created RollbackRequestedEvent. RegressionDetector fires it at high-confidence auto-revert threshold. MonitoredImprovement now tracks targetPaths.
+**Batch 3 — RollbackWiring:** RollbackRequestedEvent fired at high-confidence auto-revert threshold. MonitoredImprovement tracks targetPaths.
 
-**Batch 4 — Robustness:**
-- Circuit breaker hysteresis: sustained recovery requirement prevents OPEN → HALF_OPEN flapping.
-- Lazy startup recovery: evaluate() calls restoreFromEventLog() on first access per case.
+**Batch 4 — Robustness:** Circuit breaker hysteresis (sustained recovery). Lazy startup recovery from EventLog.
 
-**Batch 5 — Observability:**
-- ProposalFilteringSummary wired into goal formation strategy with new afterCbrFilter stage. EvolutionTicker includes summary in tick traces.
+**Batch 5 — Observability:** ProposalFilteringSummary wired through tick traces with CBR filter stage.
 
-**Batch 6 — IntegrationTests:**
-- 3 new integration tests: CBR feedback loop suppression, outcome capture bridge, timer backstop sweep.
+**Batch 6 — IntegrationTests:** 3 new end-to-end tests (CBR feedback, outcome capture, timer backstop).
 
-**Deferred:**
-- Batch 7 (DevTownWorkers): Workers are stubbed; blocks-layer intelligence needed for actual execution. Per issue scope: "engine provides pipeline and contracts; blocks provides the intelligence."
+**Batch 7 — Workers:** ImprovementOutcomeWorkerFunction writes `_improvement` context key. Case templates updated with outcome-recorder workers using DSL setResult.
 
 ## Immediate Next Step
 
-Batch 7 requires blocks integration (improvement-introspect, improvement-revert, improvement-implement workers). Alternatively, continue with remaining #1104 epic cleanup or move to next issue.
+Branch ready for review and merge. This is the last child of epic #1104 (Hive Mind).
 
 ## References
 
