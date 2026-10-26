@@ -13,3 +13,21 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#1115 — Issue #1115 ← active
+  - [ ] Batch 1: TriggerLoop
+    - [ ] Task 1: Wire EvolutionTicker into convergence handler
+    - [ ] Task 2: Timer backstop
+  - [ ] Batch 2: FeedbackLoop
+    - [ ] Task 3: Wire ImprovementOutcomeEventCapture as CaseOutcomeObserver
+    - [ ] Task 4: CBR projector and goal formation CBR read
+  - [ ] Batch 3: RollbackWiring
+    - [ ] Task 5: RollbackRequested event and MonitoredImprovement targetPaths
+    - [ ] Task 6: RegressionDetector rollback callback and RollbackCaseSpawner
+  - [ ] Batch 4: Robustness
+    - [ ] Task 7: Circuit breaker hysteresis
+    - [ ] Task 8: Startup recovery
+  - [ ] Batch 5: Observability
+    - [ ] Task 9: ProposalFilteringSummary and YAML codegen
+  - [ ] Batch 6: IntegrationTests
+    - [ ] Task 10: Integration tests and research pipeline test
+  - [ ] Batch 7: DevTownWorkers
+    - [ ] Task 11: DevTown improvement workers and services
