@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 440" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="8" markerHeight="6" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="8" markerHeight="6" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="8" markerHeight="6" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#d97706"/>
+    </marker>
+  </defs>
+
+  <style>
+    .box { rx: 8; ry: 8; stroke-width: 2; }
+    .active { fill: #dbeafe; stroke: #3b82f6; }
+    .safety { fill: #fef3c7; stroke: #d97706; }
+    .feedback { fill: #dcfce7; stroke: #16a34a; }
+    .label { font-size: 13px; fill: #1e293b; font-weight: 600; text-anchor: middle; }
+    .sublabel { font-size: 11px; fill: #64748b; text-anchor: middle; }
+    .status { font-size: 10px; font-weight: 700; text-anchor: middle; }
+    .title { font-size: 18px; fill: #0f172a; font-weight: 700; }
+    .subtitle { font-size: 13px; fill: #64748b; }
+    .phase { font-size: 11px; fill: #475569; font-weight: 600; }
+  </style>
+
+  <text x="360" y="30" class="title" text-anchor="middle">The Closed Loop</text>
+  <text x="360" y="50" class="subtitle" text-anchor="middle">Every component wired, every gate active, feedback flows</text>
+
+  <!-- Phase labels -->
+  <text x="110" y="75" class="phase" text-anchor="middle">TRIGGER</text>
+  <text x="360" y="75" class="phase" text-anchor="middle">EXECUTE</text>
+  <text x="610" y="75" class="phase" text-anchor="middle">FEEDBACK</text>
+
+  <!-- Timer Backstop -->
+  <rect x="30" y="85" width="160" height="50" class="box active"/>
+  <text x="110" y="108" class="label">Timer Backstop</text>
+  <text x="110" y="122" class="sublabel">@Scheduled 60m</text>
+
+  <!-- Convergence Handler -->
+  <rect x="30" y="150" width="160" height="50" class="box active"/>
+  <text x="110" y="173" class="label">Convergence</text>
+  <text x="110" y="187" class="sublabel">Event-driven</text>
+
+  <!-- Both arrows into Ticker -->
+  <line x1="190" y1="110" x2="230" y2="235" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <line x1="190" y1="175" x2="230" y2="245" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <!-- EvolutionTicker -->
+  <rect x="230" y="220" width="160" height="70" class="box safety"/>
+  <text x="310" y="245" class="label">EvolutionTicker</text>
+  <text x="310" y="260" class="sublabel">per-case lock</text>
+  <text x="310" y="278" class="sublabel">6-gate pipeline</text>
+
+  <!-- Safety gates inside ticker -->
+  <rect x="30" y="225" width="160" height="90" class="box safety"/>
+  <text x="110" y="248" class="label" style="font-size:12px">Safety Gates</text>
+  <text x="110" y="266" class="sublabel">Circuit breaker</text>
+  <text x="110" y="280" class="sublabel">Health score</text>
+  <text x="110" y="294" class="sublabel">Regression monitor</text>
+  <text x="110" y="308" class="sublabel">Hysteresis</text>
+
+  <!-- Arrow: ticker to gates -->
+  <line x1="230" y1="255" x2="190" y2="265" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+
+  <!-- Arrow: ticker to goal formation -->
+  <line x1="390" y1="255" x2="430" y2="170" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <!-- Goal Formation -->
+  <rect x="430" y="140" width="160" height="50" class="box active"/>
+  <text x="510" y="163" class="label">Goal Formation</text>
+  <text x="510" y="177" class="sublabel">+ CBR read + filtering stats</text>
+
+  <!-- Improvement Case -->
+  <rect x="430" y="220" width="160" height="60" class="box active"/>
+  <text x="510" y="243" class="label">Improvement Case</text>
+  <text x="510" y="260" class="sublabel">11-stage lifecycle</text>
+
+  <!-- Arrow down -->
+  <line x1="510" y1="190" x2="510" y2="220" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <!-- CaseOutcomeObserver -->
+  <rect x="430" y="310" width="160" height="50" class="box feedback"/>
+  <text x="510" y="333" class="label">Outcome Capture</text>
+  <text x="510" y="347" class="sublabel">CaseOutcomeObserver</text>
+
+  <!-- Arrow case to outcome -->
+  <line x1="510" y1="280" x2="510" y2="310" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+  <!-- 6 layers -->
+  <rect x="620" y="130" width="80" height="230" class="box feedback" style="fill:#f0fdf4"/>
+  <text x="660" y="155" class="sublabel" style="font-size:10px">EventLog</text>
+  <text x="660" y="175" class="sublabel" style="font-size:10px">Signals</text>
+  <text x="660" y="195" class="sublabel" style="font-size:10px">CBR</text>
+  <text x="660" y="215" class="sublabel" style="font-size:10px">Budget</text>
+  <text x="660" y="235" class="sublabel" style="font-size:10px">Category</text>
+  <text x="660" y="255" class="sublabel" style="font-size:10px">Regression</text>
+  <text x="660" y="285" class="sublabel" style="font-size:10px;font-weight:600">Rollback</text>
+  <text x="660" y="300" class="sublabel" style="font-size:10px">spawner</text>
+  <text x="660" y="330" class="sublabel" style="font-size:10px;font-weight:600">Restart</text>
+  <text x="660" y="345" class="sublabel" style="font-size:10px">recovery</text>
+
+  <!-- Arrow outcome to layers -->
+  <line x1="590" y1="335" x2="620" y2="280" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+  <!-- Feedback loop back -->
+  <path d="M 660 360 Q 660 410 360 410 Q 60 410 60 320" fill="none" stroke="#16a34a" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+  <text x="360" y="400" class="status" style="fill:#16a34a;font-size:12px">FEEDBACK CLOSES THE LOOP</text>
+</svg>

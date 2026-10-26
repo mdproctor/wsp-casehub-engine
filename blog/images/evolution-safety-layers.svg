@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 360" font-family="system-ui, -apple-system, sans-serif">
+  <style>
+    .ring { fill: none; stroke-width: 2; }
+    .ring-text { font-size: 12px; fill: #1e293b; font-weight: 600; }
+    .ring-sub { font-size: 10px; fill: #64748b; }
+    .title { font-size: 16px; fill: #0f172a; font-weight: 700; }
+    .core-label { font-size: 13px; fill: white; font-weight: 700; text-anchor: middle; }
+    .core-sub { font-size: 10px; fill: #e2e8f0; text-anchor: middle; }
+  </style>
+
+  <text x="340" y="28" class="title" text-anchor="middle">Data Autophagy Defense Layers</text>
+
+  <!-- Outermost ring: Structural deny list -->
+  <ellipse cx="340" cy="200" rx="310" ry="145" class="ring" stroke="#94a3b8" stroke-dasharray="8 4"/>
+  <text x="340" y="72" class="ring-text" text-anchor="middle">Structural Deny List</text>
+  <text x="340" y="86" class="ring-sub" text-anchor="middle">Cannot modify: EvolutionTicker, CircuitBreaker, RegressionDetector, ConfidenceScorer...</text>
+
+  <!-- Ring 2: Circuit breaker -->
+  <ellipse cx="340" cy="200" rx="250" ry="115" class="ring" stroke="#d97706"/>
+  <text x="340" y="102" class="ring-text" text-anchor="middle" style="fill:#92400e">Circuit Breaker</text>
+  <text x="340" y="116" class="ring-sub" text-anchor="middle">Trips OPEN when aggregate health degrades — blocks ALL improvements</text>
+  <text x="340" y="130" class="ring-sub" text-anchor="middle">Hysteresis: recovery requires margin above trip threshold</text>
+
+  <!-- Ring 3: Category suppression -->
+  <ellipse cx="340" cy="200" rx="190" ry="85" class="ring" stroke="#ea580c"/>
+  <text x="340" y="132" class="ring-text" text-anchor="middle" style="fill:#9a3412">Category Suppression</text>
+  <text x="340" y="146" class="ring-sub" text-anchor="middle">3 failures or 3 rejections → category paused</text>
+
+  <!-- Ring 4: Regression detection -->
+  <ellipse cx="340" cy="200" rx="130" ry="58" class="ring" stroke="#dc2626"/>
+  <text x="340" y="158" class="ring-text" text-anchor="middle" style="fill:#991b1b">Regression Detection</text>
+  <text x="340" y="172" class="ring-sub" text-anchor="middle">Per-improvement health monitoring</text>
+
+  <!-- Core: Improvement -->
+  <ellipse cx="340" cy="210" rx="70" ry="30" fill="#1e40af"/>
+  <text x="340" y="207" class="core-label">Improvement</text>
+  <text x="340" y="220" class="core-sub">executes here</text>
+
+  <!-- Response tiers -->
+  <rect x="20" y="270" width="200" height="75" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="120" y="290" class="ring-text" text-anchor="middle" style="fill:#991b1b">High confidence (≥0.9)</text>
+  <text x="120" y="305" class="ring-sub" text-anchor="middle">Auto-rollback case spawned</text>
+  <text x="120" y="320" class="ring-sub" text-anchor="middle">Category paused</text>
+  <text x="120" y="335" class="ring-sub" text-anchor="middle">Anti-cascade check first</text>
+
+  <rect x="240" y="270" width="200" height="75" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1"/>
+  <text x="340" y="290" class="ring-text" text-anchor="middle" style="fill:#92400e">Medium confidence (≥0.5)</text>
+  <text x="340" y="305" class="ring-sub" text-anchor="middle">Signal emitted</text>
+  <text x="340" y="320" class="ring-sub" text-anchor="middle">Category paused</text>
+  <text x="340" y="335" class="ring-sub" text-anchor="middle">No auto-rollback</text>
+
+  <rect x="460" y="270" width="200" height="75" rx="6" fill="#f0f9ff" stroke="#93c5fd" stroke-width="1"/>
+  <text x="560" y="290" class="ring-text" text-anchor="middle" style="fill:#1e40af">Low confidence (&lt;0.5)</text>
+  <text x="560" y="305" class="ring-sub" text-anchor="middle">Signal only</text>
+  <text x="560" y="320" class="ring-sub" text-anchor="middle">CBR trace enriched</text>
+  <text x="560" y="335" class="ring-sub" text-anchor="middle">No category pause</text>
+</svg>
