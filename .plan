@@ -1,16 +1,15 @@
-# Work Plan — issue-1251-yaml-project-view-rest-surface
+# Work Plan — issue-1115-continuous-evolution-loop
 
 ## State
-branch: main
-state: drained
+branch: issue-1115-continuous-evolution-loop
+state: scaffolded
 project-sha: 
 date: 
 issue-repo: casehubio/engine
-covers: 1251
+covers: 1115
 design-repo: 
 design-section-hashes: 
 flyway-next-v: 
-evidence-era: true
 
 ## Queue
-- [x] casehubio/engine#1251 — Issue #1251
+- [ ] casehubio/engine#1115 — Issue #1115 ← active
