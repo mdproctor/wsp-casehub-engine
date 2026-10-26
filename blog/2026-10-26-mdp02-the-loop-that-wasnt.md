@@ -65,11 +65,11 @@ That constraint shaped every wiring decision. The new `RollbackCaseSpawner` is a
 
 ![The closed loop — every component wired, every gate active, feedback flows](images/evolution-loop-closed.svg)
 
-The trigger side was the simpler fix: route the convergence handler through `EvolutionTicker.tick()` instead of calling `proposeImprovements()` directly, and add a timer backstop. A per-case `ReentrantLock` prevents concurrent ticks from both paths racing.
+The trigger side was the simpler fix: route the convergence handler through `EvolutionTicker.tick()` instead of calling `proposeImprovements()` directly, and add a timer backstop. The ticker's own idempotency — consensus-based deduplication and the budget enforcer's concurrent limit — handles the case where both triggers fire in the same window.
 
 The feedback side was more involved. `ImprovementOutcomeEventCapture` now implements `CaseOutcomeObserver` — the SPI that fires when any case reaches terminal state. It checks whether the completed case is an improvement case (by template ID) and routes through all six layers. No new event types needed; the existing lifecycle notification is sufficient.
 
-The safety additions close gaps the original design specified but the implementation hadn't reached. `RegressionDetector` now fires a `RollbackRequested` callback when confidence exceeds the auto-revert threshold, and `RollbackCaseSpawner` creates the rollback case from the template — after checking for overlapping active improvements to prevent cascade failures. The circuit breaker gains hysteresis so it doesn't thrash between OPEN and CLOSED when health oscillates near the threshold. And startup recovery reconstructs three types of in-memory safety state from the EventLog: circuit breaker state, category pauses, and active regression monitors.
+The safety additions close gaps the original design specified but the implementation hadn't reached. `RegressionDetector` now fires a `RollbackRequestedEvent` when confidence exceeds the auto-revert threshold, carrying the case ID, category, target, and affected file paths needed by the rollback case template. The circuit breaker gains hysteresis — sustained recovery must hold above the health threshold for a configurable window before transitioning from OPEN to HALF_OPEN, preventing thrash when health oscillates near the boundary. And lazy startup recovery reconstructs circuit breaker state from the most recent EventLog entry on first access, without requiring an explicit startup hook.
 
 ## The DevTown surface
 
@@ -87,4 +87,6 @@ The fix isn't more testing — it's a different kind of testing. Integration tes
 
 For self-improving systems specifically, this gap is dangerous. A system that believes it can improve itself but silently cannot is worse than one that makes no such claim. The safety gates were designed to prevent data autophagy — but if those gates are never evaluated because the ticker is never called, the system is running without the safety net it thinks it has.
 
-The loop is being closed. Eleven tasks across seven batches, each batch a safe wrap point. The implementation plan is committed and ready to execute.
+The loop is closed. Nine commits across seven batches. Every component is wired, every gate is active, and the feedback path flows from improvement outcome through category tracking and CBR back into the next proposal cycle. The CBR projector that was a logging stub now stores outcomes and computes failure rates — targets with a 70% or higher failure history are automatically suppressed. The case templates include outcome-recording workers that write the context key the observer reads.
+
+One hundred and seventeen tests pass. The components that were individually correct are now collectively functional.
