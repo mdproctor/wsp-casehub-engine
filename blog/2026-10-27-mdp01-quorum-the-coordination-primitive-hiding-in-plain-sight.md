@@ -118,11 +118,37 @@ The annotation surface required two new concepts. First, a `@Requires` annotatio
 
 Second, a `name()` attribute on `@Bind` itself. Until now, binding names came from the method name. But `requires` references other bindings by name, and method names in Java don't have hyphens. Adding `name()` lets annotations match the naming conventions used in YAML definitions. A small change with a subtle consequence: the `BindingDescriptor` now carries both `name` (the declared or overridden name) and `methodName` (the Java method), because the worker lookup in `CaseDefinitionRecorder` matches on method name, not binding name.
 
+## Where It Gets Interesting: CEP Meets Quorum
+
+The composability claim becomes concrete with event-driven pipelines. Consider a sensor network where readings arrive as cloud events but shouldn't be processed until the sensors are calibrated:
+
+```yaml
+bindings:
+  - name: calibrate-a
+    capability: calibrate
+    on: { cloudEvent: { type: "sensor.initialized" } }
+
+  - name: calibrate-b
+    capability: calibrate
+    on: { cloudEvent: { type: "sensor.initialized" } }
+
+  - name: process-reading
+    capability: analyze
+    on: { cloudEvent: { type: "sensor.reading" } }
+    requires:
+      bindings: [calibrate-a, calibrate-b]
+      atLeast: 1
+```
+
+![CEP + quorum — independent trigger and guard](images/requires-cep-quorum.svg)
+
+Sensor readings start arriving immediately — the cloud event trigger fires on every `sensor.reading` event. But `process-reading` is held by `requires` until at least one calibration has completed. Once `calibrate-a` completes, the guard passes, and every subsequent `sensor.reading` event dispatches the analyzer. The second calibration can still be running — `atLeast: 1` means one is enough.
+
+The trigger and the guard never interfere. The trigger handles event matching — CEP pattern recognition, event filtering, correlation. The guard handles plan model state — which bindings have completed, whether the threshold is met. Each evaluates on its own terms. A cron-triggered binding with `requires` works the same way: each cron tick re-evaluates the guard independently.
+
 ## What Makes This Work
 
-Three design properties that matter:
-
-**Composability.** `requires` is orthogonal to trigger type. A cron-triggered binding with `requires` is valid — "run this nightly aggregation, but only if the day's extractions have completed." Each cron tick re-evaluates the guard. A context-change binding with `requires` is the most common case — the trigger and the guard evaluate independently.
+Three design properties beyond composability:
 
 **Unreachable quorum detection.** If enough referenced bindings fault that the threshold becomes unreachable, the gated binding is proactively faulted. The formula follows `SubCaseGroupPolicy`: `remaining = total - completed - faulted`, `needed = required - completed`, `remaining < needed` means the quorum can never be met. Without this, an unreachable quorum blocks forever — a silent deadlock that no monitoring would catch because the case appears to be waiting normally.
 

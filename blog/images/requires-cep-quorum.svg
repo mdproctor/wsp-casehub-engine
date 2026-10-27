@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" font-family="Inter, system-ui, sans-serif">
+  <rect width="720" height="340" fill="#fafafa" rx="8"/>
+
+  <text x="360" y="28" text-anchor="middle" font-size="14" font-weight="600" fill="#1a1a1a">CEP + Quorum — Independent Trigger and Guard</text>
+
+  <!-- Timeline -->
+  <line x1="60" y1="60" x2="660" y2="60" stroke="#ccc" stroke-width="1"/>
+  <text x="360" y="52" text-anchor="middle" font-size="9" fill="#999">event timeline</text>
+
+  <!-- Events -->
+  <circle cx="120" cy="60" r="6" fill="#ff9800" stroke="#e65100" stroke-width="1.5"/>
+  <text x="120" y="82" text-anchor="middle" font-size="8" fill="#e65100">sensor.init</text>
+
+  <circle cx="220" cy="60" r="6" fill="#ff9800" stroke="#e65100" stroke-width="1.5"/>
+  <text x="220" y="82" text-anchor="middle" font-size="8" fill="#e65100">sensor.init</text>
+
+  <circle cx="340" cy="60" r="6" fill="#2196f3" stroke="#0d47a1" stroke-width="1.5"/>
+  <text x="340" y="82" text-anchor="middle" font-size="8" fill="#0d47a1">sensor.reading</text>
+
+  <circle cx="440" cy="60" r="6" fill="#2196f3" stroke="#0d47a1" stroke-width="1.5"/>
+  <text x="440" y="82" text-anchor="middle" font-size="8" fill="#0d47a1">sensor.reading</text>
+
+  <circle cx="560" cy="60" r="6" fill="#2196f3" stroke="#0d47a1" stroke-width="1.5"/>
+  <text x="560" y="82" text-anchor="middle" font-size="8" fill="#0d47a1">sensor.reading</text>
+
+  <!-- Calibration lane -->
+  <rect x="40" y="100" width="300" height="70" rx="6" fill="#fff3e0" stroke="#ff9800" stroke-width="1"/>
+  <text x="50" y="118" font-size="10" font-weight="600" fill="#e65100">calibrate-a</text>
+  <text x="50" y="132" font-size="9" fill="#666">on: { cloudEvent: sensor.initialized }</text>
+
+  <rect x="100" y="140" width="80" height="22" rx="3" fill="#c8e6c9" stroke="#4caf50" stroke-width="1"/>
+  <text x="140" y="155" text-anchor="middle" font-size="8" fill="#2e7d32">COMPLETED</text>
+
+  <rect x="40" y="178" width="300" height="70" rx="6" fill="#fff3e0" stroke="#ff9800" stroke-width="1"/>
+  <text x="50" y="196" font-size="10" font-weight="600" fill="#e65100">calibrate-b</text>
+  <text x="50" y="210" font-size="9" fill="#666">on: { cloudEvent: sensor.initialized }</text>
+
+  <rect x="200" y="218" width="80" height="22" rx="3" fill="#fff9c4" stroke="#f9a825" stroke-width="1"/>
+  <text x="240" y="233" text-anchor="middle" font-size="8" fill="#f57f17">RUNNING</text>
+
+  <!-- Requires barrier -->
+  <line x1="368" y1="95" x2="368" y2="260" stroke="#137333" stroke-width="3"/>
+  <text x="372" y="275" font-size="9" font-weight="700" fill="#137333">requires</text>
+  <text x="372" y="289" font-size="8" fill="#137333">atLeast: 1 of 2</text>
+  <text x="372" y="303" font-size="8" fill="#137333">calibrations</text>
+
+  <!-- Analysis lane -->
+  <rect x="390" y="100" width="290" height="70" rx="6" fill="#e3f2fd" stroke="#2196f3" stroke-width="1.5"/>
+  <text x="400" y="118" font-size="10" font-weight="600" fill="#0d47a1">process-reading</text>
+  <text x="400" y="132" font-size="9" fill="#666">on: { cloudEvent: sensor.reading }</text>
+  <text x="400" y="148" font-size="9" fill="#137333">requires: [calibrate-a, calibrate-b]</text>
+
+  <text x="430" y="162" font-size="8" fill="#2e7d32">Guard passed — calibrate-a completed</text>
+
+  <!-- Blocked readings -->
+  <rect x="390" y="178" width="290" height="70" rx="6" fill="#f3e8fd" stroke="#7b1fa2" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="400" y="196" font-size="10" font-weight="500" fill="#7b1fa2">Before calibration</text>
+  <text x="400" y="212" font-size="9" fill="#7b1fa2">sensor.reading events arrive but</text>
+  <text x="400" y="228" font-size="9" fill="#7b1fa2">process-reading is held by requires</text>
+  <text x="400" y="244" font-size="9" fill="#555">Trigger fires. Guard blocks. No dispatch.</text>
+
+  <!-- Key insight -->
+  <rect x="100" y="310" width="520" height="24" rx="4" fill="#e8f5e9" stroke="#137333" stroke-width="1"/>
+  <text x="360" y="326" text-anchor="middle" font-size="10" font-weight="600" fill="#137333">The trigger says WHAT activates. The guard says WHEN it's eligible. They never interfere.</text>
+</svg>
