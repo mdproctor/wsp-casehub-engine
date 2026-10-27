@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1257-quorum-coordination-primitive
-state: closing:review
+state: closing:verified
 project-sha: be8818383
 date: 
 issue-repo: casehubio/engine
