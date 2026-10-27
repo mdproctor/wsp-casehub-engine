@@ -13,3 +13,17 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#1257 — Issue #1257 ← active
+  - [ ] Batch 1: API-Foundation
+    - [ ] Task 1: BindingRequires record and Binding integration
+    - [ ] Task 2: Load-time validation for requires
+    - [ ] Task 3: Schema and YAML record mapping
+  - [ ] Batch 2: Compound-MofN-Fix
+    - [ ] Task 4: Fix mofnRequired and CompoundBlackboardPlanConfigurer
+  - [ ] Batch 3: Runtime-Quorum
+    - [ ] Task 5: CasePlanModel metadata and RequiresBlackboardPlanConfigurer
+    - [ ] Task 6: Pre-strategy requires filter
+    - [ ] Task 7: RequiresThresholdEvaluator
+  - [ ] Batch 4: Surface-Parity
+    - [ ] Task 8: Annotation support for @Requires
+    - [ ] Task 9: CoordinationPipelineProjection quorum display
+    - [ ] Task 10: Integration test end-to-end
