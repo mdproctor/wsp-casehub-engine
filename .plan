@@ -3,7 +3,7 @@
 ## State
 branch: issue-1257-quorum-coordination-primitive
 state: active
-project-sha: 
+project-sha: a512b0291
 date: 
 issue-repo: casehubio/engine
 covers: 1257
@@ -19,10 +19,10 @@ flyway-next-v:
     - [x] Task 3: Schema and YAML record mapping
   - [x] Batch 2: Compound-MofN-Fix
     - [x] Task 4: Fix mofnRequired and CompoundBlackboardPlanConfigurer
-  - [ ] Batch 3: Runtime-Quorum
+  - [x] Batch 3: Runtime-Quorum
     - [x] Task 5: CasePlanModel metadata and RequiresBlackboardPlanConfigurer
     - [x] Task 6: Pre-strategy requires filter
-    - [ ] Task 7: RequiresThresholdEvaluator
+    - [x] Task 7: RequiresThresholdEvaluator
   - [ ] Batch 4: Surface-Parity
     - [ ] Task 8: Annotation support for @Requires
     - [ ] Task 9: CoordinationPipelineProjection quorum display
