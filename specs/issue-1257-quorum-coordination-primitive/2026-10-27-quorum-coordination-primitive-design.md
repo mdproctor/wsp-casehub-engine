@@ -233,19 +233,22 @@ The evaluator does NOT need `CaseDefinition` at evaluation time. Instead, `requi
 public class RequiresThresholdEvaluator {
 
     @Inject BlackboardRegistry registry;
+    @Inject CompoundCompletionEvaluator compoundCompletionEvaluator;
+    @Inject Event<PlanItemStateChangedEvent> stateChangedEvent;
 
     void onPlanItemStateChanged(@ObservesAsync PlanItemStateChangedEvent event) {
         CasePlanModel plan = registry.get(event.caseId()).orElse(null);
         if (plan == null) return;
 
         if (event.newStatus() == TaskStatus.COMPLETED) {
-            evaluateThresholdReached(plan, event.bindingName());
+            evaluateThresholdReached(event.caseId(), event.tenancyId(), plan, event.bindingName());
         } else if (event.newStatus().isTerminal()) {
-            evaluateUnreachable(plan, event.bindingName());
+            evaluateUnreachable(event.caseId(), event.tenancyId(), plan, event.bindingName());
         }
     }
 
-    private void evaluateThresholdReached(CasePlanModel plan, String completedBindingName) {
+    private void evaluateThresholdReached(UUID caseId, String tenancyId,
+                                           CasePlanModel plan, String completedBindingName) {
         for (var entry : plan.getRequiresMetadata().entrySet()) {
             String gatedBindingName = entry.getKey();
             BindingRequires req = entry.getValue();
@@ -256,21 +259,39 @@ public class RequiresThresholdEvaluator {
             if (completed >= req.atLeast()
                     && !plan.isRequiresThresholdTriggered(gatedBindingName)) {
                 plan.markRequiresThresholdTriggered(gatedBindingName);
-                cancelRemaining(req, plan);
+                cancelRemaining(caseId, tenancyId, req, plan);
             }
         }
     }
 
-    private void cancelRemaining(BindingRequires req, CasePlanModel plan) {
+    private void cancelRemaining(UUID caseId, String tenancyId,
+                                  BindingRequires req, CasePlanModel plan) {
         req.bindings().stream()
             .map(plan::findPlanItemByBindingName)
             .filter(Optional::isPresent)
             .map(Optional::get)
-            .filter(pi -> !pi.status().isTerminal())
-            .forEach(PlanItem::markCancelled);
+            .filter(pi -> !pi.getStatus().isTerminal())
+            .forEach(pi -> {
+                TaskStatus prev = pi.getStatus();
+                pi.markCancelled();
+                stateChangedEvent.fireAsync(new PlanItemStateChangedEvent(
+                    caseId, pi.id(), pi.getBindingName(), prev,
+                    TaskStatus.CANCELLED, tenancyId));
+                compoundCompletionEvaluator.evaluate(caseId, tenancyId, plan, pi.getBindingName());
+            });
     }
 }
 ```
+
+**Post-transition event contract.** `markFaulted()` and `markCancelled()` on `PlanItem` are pure CAS state transitions — they do not fire events or invoke callbacks. Every handler in the codebase explicitly follows `markFaulted()`/`markCancelled()` with `planItemStateChangedEvents.accept(...)` and (where applicable) `CompoundCompletionEvaluator.evaluate(...)`. The `RequiresThresholdEvaluator` must follow the same contract:
+
+- `cancelRemaining()` fires `PlanItemStateChangedEvent` and calls `CompoundCompletionEvaluator.evaluate()` for each cancelled PlanItem.
+- `evaluateUnreachable()` does the same for each faulted PlanItem (see §Unreachable quorum detection below).
+
+**Self-observation cascade safety.** The evaluator observes `PlanItemStateChangedEvent` and also fires it. This self-observation enables requires-chain cascading (if C requires B and B is faulted, the evaluator sees B's fault event and checks C's quorum). The cascade terminates because:
+1. `requires` chains are acyclic — validated at load time (§Load-time validation, step 7)
+2. PlanItem state transitions are CAS-guarded — `markFaulted()` throws `IllegalStateException` on terminal items, preventing double-fault
+3. `addPlanItemIfAbsent()` is idempotent — prevents duplicate PlanItem creation for the same binding name
 
 The `>=` check (not `==`) prevents missed thresholds when multiple prerequisite bindings complete between evaluation cycles. The one-shot `isRequiresThresholdTriggered` / `markRequiresThresholdTriggered` flag on `CasePlanModel` prevents redundant re-cancellation, following the `SubCaseGroup.policyTriggered()` pattern (PP-20260513-ecabd7). The cancellation itself is idempotent (filters to non-terminal items), so the flag is for efficiency, not correctness.
 
@@ -309,7 +330,8 @@ When a referenced binding completes (or reaches a terminal state), the next `Pla
 Unreachable quorum detection runs in `RequiresThresholdEvaluator.evaluateUnreachable()`, triggered by the same `@ObservesAsync PlanItemStateChangedEvent` observer when `newStatus.isTerminal() && newStatus != COMPLETED`. This single integration point catches all fault paths — `WorkerOutcomeResolvedHandler`, `WorkerRetryExhaustionHandler`, `JudgmentPlanItemHandler`, `ActionGateExpiredPlanItemHandler`, `ActionGateRejectedPlanItemHandler`, `PlanItemEscalationHandler`, and `PlanItemCompletionApplier` — plus any future handlers.
 
 ```java
-private void evaluateUnreachable(CasePlanModel plan, String faultedBindingName) {
+private void evaluateUnreachable(UUID caseId, String tenancyId,
+                                  CasePlanModel plan, String faultedBindingName) {
     for (var entry : plan.getRequiresMetadata().entrySet()) {
         String gatedBindingName = entry.getKey();
         BindingRequires req = entry.getValue();
@@ -324,12 +346,19 @@ private void evaluateUnreachable(CasePlanModel plan, String faultedBindingName) 
             PlanItem pi = PlanItem.create(gatedBindingName, ExecutorRef.NONE, 0, null);
             plan.addPlanItemIfAbsent(pi);
             pi.markFaulted();
+            stateChangedEvent.fireAsync(new PlanItemStateChangedEvent(
+                caseId, pi.id(), gatedBindingName, TaskStatus.PENDING,
+                TaskStatus.FAULTED, tenancyId));
+            compoundCompletionEvaluator.evaluate(caseId, tenancyId, plan, gatedBindingName);
         }
     }
 }
 ```
 
-The `requires`-gated binding's PlanItem does not exist at this point because `filterByRequires` removed it from the eligible set before `addPlanItemIfAbsent` ran. The evaluator explicitly creates a PlanItem and immediately faults it, making the unreachable quorum observable in the plan model. This triggers compound completion evaluation via `CompoundCompletionEvaluator`.
+The `requires`-gated binding's PlanItem does not exist at this point because `filterByRequires` removed it from the eligible set before `addPlanItemIfAbsent` ran. The evaluator explicitly creates a PlanItem and immediately faults it, making the unreachable quorum observable in the plan model. After faulting, it:
+
+1. **Fires `PlanItemStateChangedEvent`** — enables requires-chain cascading (the evaluator observes its own event, checking if any further bindings depend on the now-faulted gated binding), and notifies downstream observers (`CaseCompensationServiceImpl` for compensation, `CaseStreamBroadcaster` for UI updates).
+2. **Calls `CompoundCompletionEvaluator.evaluate()`** — notifies the parent compound that a scoped binding has been faulted. With `CompletionSemantics.All`, this transitions the compound to FAULTED. With `CompletionSemantics.MOfN`, it re-evaluates whether the threshold is still reachable.
 
 **`ExecutorRef.NONE`:** Add a sentinel constant to the `ExecutorRef` interface:
 
