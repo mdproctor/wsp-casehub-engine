@@ -3,7 +3,7 @@
 ## State
 branch: issue-1257-quorum-coordination-primitive
 state: active
-project-sha: a512b0291
+project-sha: edcf6b7cf
 date: 
 issue-repo: casehubio/engine
 covers: 1257
@@ -24,6 +24,6 @@ flyway-next-v:
     - [x] Task 6: Pre-strategy requires filter
     - [x] Task 7: RequiresThresholdEvaluator
   - [ ] Batch 4: Surface-Parity
-    - [ ] Task 8: Annotation support for @Requires
+    - [x] Task 8: Annotation support for @Requires
     - [ ] Task 9: CoordinationPipelineProjection quorum display
     - [ ] Task 10: Integration test end-to-end
