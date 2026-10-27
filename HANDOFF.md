@@ -2,11 +2,20 @@
 
 ## Last Session (2026-10-27)
 
-Designed and partially implemented binding-level quorum coordination (#1257). Discovered that M-of-N existed at four levels but not at binding dispatch — the real gap was "wait for N of M workers before firing the next binding." Fixed a silent bug where compound `mofnRequired` was parsed from YAML and dropped during conversion. 6 of 10 implementation tasks complete across Batch 1 (API), Batch 2 (compound fix), and half of Batch 3 (runtime).
+Completed all 10 implementation tasks for binding-level quorum coordination (#1257). This session finished Batch 3 (Task 7: RequiresThresholdEvaluator) and all of Batch 4 (Tasks 8-10: annotation support, projection, integration test). The full pipeline — YAML/builder/annotation definition through planning dispatch gating to quorum-met aggregator dispatch — is verified end-to-end.
 
 ## Immediate Next Step
 
-Task 7: `RequiresThresholdEvaluator` — CDI bean observing `PlanItemStateChangedEvent` for CANCEL on threshold reached and FAULTED on unreachable quorum. Follow the `SubCaseCompletionService.cancelPlanItemOnRejected()` pattern (planning-core, line 266).
+All implementation tasks are complete. The branch is ready for `work end` — code review, squash, and merge.
+
+## Summary of Changes
+
+| Batch | Tasks | Status |
+|-------|-------|--------|
+| 1: API-Foundation | BindingRequires record, validation, schema/YAML | Done |
+| 2: Compound-MofN-Fix | mofnRequired wiring, CompoundBlackboardPlanConfigurer | Done |
+| 3: Runtime-Quorum | CasePlanModel metadata, requires filter, RequiresThresholdEvaluator | Done |
+| 4: Surface-Parity | @Requires annotation, CoordinationPipelineProjection, integration test | Done |
 
 ## References
 
