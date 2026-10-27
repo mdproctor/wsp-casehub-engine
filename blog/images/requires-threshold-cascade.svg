@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 380" font-family="Inter, system-ui, sans-serif">
+  <rect width="720" height="380" fill="#fafafa" rx="8"/>
+
+  <text x="360" y="28" text-anchor="middle" font-size="14" font-weight="600" fill="#1a1a1a">Threshold Evaluator — Two Paths from One Observer</text>
+
+  <!-- Event source -->
+  <rect x="260" y="48" width="200" height="40" rx="5" fill="#fff3e0" stroke="#e65100" stroke-width="1.5"/>
+  <text x="360" y="73" text-anchor="middle" font-size="11" font-weight="600" fill="#e65100">PlanItemStateChangedEvent</text>
+
+  <!-- Branch point -->
+  <circle cx="360" cy="112" r="4" fill="#666"/>
+  <line x1="360" y1="88" x2="360" y2="108" stroke="#666" stroke-width="1.5"/>
+
+  <!-- Left branch: COMPLETED → threshold check -->
+  <line x1="360" y1="116" x2="180" y2="148" stroke="#137333" stroke-width="1.5"/>
+  <text x="240" y="125" text-anchor="middle" font-size="9" fill="#137333">COMPLETED</text>
+
+  <rect x="80" y="148" width="200" height="48" rx="5" fill="#e6f4ea" stroke="#137333" stroke-width="1.5"/>
+  <text x="180" y="167" text-anchor="middle" font-size="10" font-weight="600" fill="#137333">evaluateThresholdReached</text>
+  <text x="180" y="183" text-anchor="middle" font-size="9" fill="#555">completed &ge; atLeast?</text>
+
+  <!-- Left sub-branch: CANCEL -->
+  <line x1="180" y1="196" x2="180" y2="222" stroke="#137333" stroke-width="1"/>
+
+  <rect x="50" y="222" width="260" height="72" rx="5" fill="#e6f4ea" stroke="#137333" stroke-width="1"/>
+  <text x="180" y="242" text-anchor="middle" font-size="10" font-weight="600" fill="#137333">onThresholdReached: CANCEL</text>
+  <text x="180" y="260" text-anchor="middle" font-size="9" fill="#555">Cancel non-terminal referenced PlanItems</text>
+  <text x="180" y="276" text-anchor="middle" font-size="9" fill="#555">One-shot flag prevents re-cancellation</text>
+  <text x="180" y="292" text-anchor="middle" font-size="8" fill="#999">Fires PlanItemStateChangedEvent per cancel</text>
+
+  <!-- Right branch: terminal non-COMPLETED → unreachable check -->
+  <line x1="360" y1="116" x2="540" y2="148" stroke="#d93025" stroke-width="1.5"/>
+  <text x="480" y="125" text-anchor="middle" font-size="9" fill="#d93025">FAULTED / REJECTED / ...</text>
+
+  <rect x="440" y="148" width="200" height="48" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
+  <text x="540" y="167" text-anchor="middle" font-size="10" font-weight="600" fill="#d93025">evaluateUnreachable</text>
+  <text x="540" y="183" text-anchor="middle" font-size="9" fill="#555">remaining &lt; needed?</text>
+
+  <!-- Right result: FAULT gated binding -->
+  <line x1="540" y1="196" x2="540" y2="222" stroke="#d93025" stroke-width="1"/>
+
+  <rect x="410" y="222" width="260" height="72" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+  <text x="540" y="242" text-anchor="middle" font-size="10" font-weight="600" fill="#d93025">Unreachable Quorum</text>
+  <text x="540" y="260" text-anchor="middle" font-size="9" fill="#555">Create placeholder PlanItem (ExecutorRef.NONE)</text>
+  <text x="540" y="276" text-anchor="middle" font-size="9" fill="#555">Mark FAULTED immediately</text>
+  <text x="540" y="292" text-anchor="middle" font-size="8" fill="#999">Cascades through requires chains (acyclic)</text>
+
+  <!-- Cascade safety note -->
+  <rect x="120" y="315" width="480" height="48" rx="5" fill="#f3e8fd" stroke="#7b1fa2" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="360" y="335" text-anchor="middle" font-size="10" font-weight="600" fill="#7b1fa2">Self-Observation Cascade Safety</text>
+  <text x="360" y="351" text-anchor="middle" font-size="9" fill="#7b1fa2">Acyclic requires chains + CAS-guarded PlanItem transitions + idempotent addPlanItemIfAbsent</text>
+</svg>

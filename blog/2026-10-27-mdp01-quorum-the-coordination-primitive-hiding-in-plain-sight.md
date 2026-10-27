@@ -14,7 +14,7 @@ I thought we already had quorum coordination. Turns out I was half right — and
 
 The blocks-ui gallery has been rendering quorum barriers for months — those "wait for 2 of 3 agents" phase items in the `CoordinationPipeline`. The coordination-diff-view renders before/after overlays when quorum thresholds change. It looks real. But there's nothing backing it in the engine. The gallery fabricates the data.
 
-When I picked up engine#1257 to close that gap, the first thing Claude and I did was audit what already existed. The assumption was straightforward: add a quorum primitive, wire it to the UI, done.
+When I picked up the issue to close that gap, the first thing Claude and I did was audit what already existed. The assumption was straightforward: add a quorum primitive, wire it to the UI, done.
 
 ## Four Layers of Quorum That Already Existed
 
@@ -87,18 +87,43 @@ The programmatic path (Java builder, annotations) worked because tests construct
 
 We fixed both: `convertCompound()` now resolves `mofnRequired` into the completion semantics string, and a new `CompoundBlackboardPlanConfigurer` registers YAML compounds into the plan model at case start.
 
+## The Observer That Watches Itself
+
+The trickiest part of the design was the threshold evaluator. When enough referenced bindings complete to meet the quorum, two things can happen depending on `onThresholdReached`: remaining in-flight bindings are cancelled (CANCEL) or left alone (KEEP). When enough referenced bindings *fault* that the quorum becomes unreachable, the gated binding itself is proactively faulted.
+
+![Threshold evaluator — two paths from one observer](images/requires-threshold-cascade.svg)
+
+Both paths use the same integration point: `@ObservesAsync PlanItemStateChangedEvent`. This is the existing pattern from `CaseCompensationServiceImpl` — a single event catches all completion and fault paths across at least seven different handlers. Wiring into individual handlers would be fragile and miss paths.
+
+The interesting wrinkle: the evaluator observes the event *and fires it*. When it cancels a remaining PlanItem, it fires a new `PlanItemStateChangedEvent` for the cancellation. When it faults an unreachable gated binding, same thing. The evaluator receives events triggered by its own actions.
+
+This self-observation is what enables requires-chain cascading — if binding C requires B, and B is faulted by the evaluator because B's own quorum became unreachable, the evaluator sees B's fault event and checks whether C's quorum is still viable. The cascade terminates because three properties hold simultaneously: requires chains are validated as acyclic at load time, PlanItem state transitions are CAS-guarded (you can't fault an already-faulted item), and `addPlanItemIfAbsent` is idempotent. Remove any one of these and the cascade either loops or double-fires.
+
+The one-shot `thresholdTriggered` flag on `CasePlanModel` prevents redundant re-cancellation. It follows the `SubCaseGroup.policyTriggered()` pattern — the cancellation itself is idempotent (it filters to non-terminal items), so the flag is for efficiency, not correctness.
+
+## Three Surfaces, One Primitive
+
+The engine exposes case definitions through three pathways: YAML, the Java builder API, and annotations. Any feature that appears in one surface but not the others creates a parity gap that confuses users and breaks assumptions. `requires` needed to work everywhere.
+
+YAML was the first surface — the `BindingRequires` schema definition and `YamlCaseDefinitionConverter` wiring. The Java builder came for free because `Binding.Builder.requires(BindingRequires)` is the shared layer that YAML conversion targets anyway.
+
+The annotation surface required two new concepts. First, a `@Requires` annotation nested inside `@Bind`:
+
+```java
+@Bind(name = "aggregate", scopeActivated = true,
+      requires = @Requires(
+          bindings = {"extract-a", "extract-b"},
+          atLeast = 2))
+```
+
+Second, a `name()` attribute on `@Bind` itself. Until now, binding names came from the method name. But `requires` references other bindings by name, and method names in Java don't have hyphens. Adding `name()` lets annotations match the naming conventions used in YAML definitions. A small change with a subtle consequence: the `BindingDescriptor` now carries both `name` (the declared or overridden name) and `methodName` (the Java method), because the worker lookup in `CaseDefinitionRecorder` matches on method name, not binding name.
+
 ## What Makes This Work
 
-The design has three properties that matter:
+Three design properties that matter:
 
-**Composability.** `requires` is orthogonal to trigger type. A cron-triggered binding with `requires` is valid — "run this nightly aggregation, but only if the day's extractions have completed." Each cron tick re-evaluates the guard.
+**Composability.** `requires` is orthogonal to trigger type. A cron-triggered binding with `requires` is valid — "run this nightly aggregation, but only if the day's extractions have completed." Each cron tick re-evaluates the guard. A context-change binding with `requires` is the most common case — the trigger and the guard evaluate independently.
 
-**Unreachable quorum detection.** If enough referenced bindings fault that the threshold becomes unreachable, the gated binding is proactively faulted. The formula follows `SubCaseGroupPolicy`: `remaining = total - completed - faulted`, `needed = required - completed`, `remaining < needed → FAULTED`. Without this, an unreachable quorum blocks forever.
+**Unreachable quorum detection.** If enough referenced bindings fault that the threshold becomes unreachable, the gated binding is proactively faulted. The formula follows `SubCaseGroupPolicy`: `remaining = total - completed - faulted`, `needed = required - completed`, `remaining < needed` means the quorum can never be met. Without this, an unreachable quorum blocks forever — a silent deadlock that no monitoring would catch because the case appears to be waiting normally.
 
-**CANCEL semantics.** When the threshold is met and `onThresholdReached: CANCEL` is set, remaining in-flight referenced bindings are cancelled. The infrastructure already exists — `PlanItem.markCancelled()` is CAS-guarded, `SubCaseCompletionService.cancelPlanItemOnRejected()` demonstrates the pattern. Reuse, not reinvention.
-
-## What's Left
-
-The runtime quorum filter and compound fix are landed. Four tasks remain: the `RequiresThresholdEvaluator` (CDI event observer for CANCEL and unreachable quorum), annotation parity via `@Requires`, `CoordinationPipelineProjection` updates so blocks-ui can read real quorum data instead of fabricating it, and an end-to-end integration test.
-
-The blocks-ui side — replacing fabricated quorum phases with engine-backed data — is the payoff that closes the loop. The `PhaseItemView` already has `required` and `of` fields waiting to be populated. Once the projection reads `Binding.getRequires()`, the gallery shows real coordination topology instead of a fiction.
+**Projection parity.** The `CoordinationPipelineProjection` now reads `Binding.getRequires()` and populates the `required` and `of` fields on `PhaseItemView`. The blocks-ui `CoordinationPipeline` component has had `required` and `of` properties on its phase items since the beginning — it was rendering fabricated values. Now the values come from the engine, and the gallery can show real coordination topology instead of a fiction that happens to look right.
