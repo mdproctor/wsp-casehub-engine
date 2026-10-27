@@ -163,7 +163,7 @@ Add to `Binding` class (`io.casehub.api.model.Binding` — a mutable class with 
 3. Setter: `public void setRequires(BindingRequires requires)` (called from `Builder.build()`)
 4. Convenience accessor: `public BindingRequires requires()` (matching the existing `target()` convention)
 5. Builder method: `public Builder requires(BindingRequires requires)` in `Binding.Builder`
-6. Builder validation: `requires` is only valid with `ScopeActivatedTrigger` or `ContextChangeTrigger` — not with `CronTrigger` or `EventTrigger`
+6. Builder validation: `requires.bindings` must reference existing bindings (cross-validated at definition load time — see §Load-time validation). No trigger type restriction — `requires` is orthogonal to trigger type, same as `when`. A cron-triggered binding with `requires` is valid: "run this nightly aggregation only if the day's extractions have completed." Each cron tick re-evaluates the guard.
 
 #### Load-time validation
 
@@ -224,23 +224,39 @@ private boolean isRequiresSatisfied(Binding binding, CasePlanModel plan) {
 
 Cancellation when `onThresholdReached == CANCEL` must NOT run inside `select()` — `select()` is a query method that determines dispatch eligibility. Inserting side effects (PlanItem cancellation) violates its contract and diverges from every other cancellation pattern in the codebase. `SubCaseCompletionService.cancelPlanItemOnRejected()` (line 266) is called from a dedicated event handler chain, not from within selection logic.
 
-**Design:** Create a `RequiresThresholdEvaluator` in `planning-core`, invoked from `PlanItemCompletionHandler.onWorkerFinished()` after marking the prerequisite PlanItem COMPLETED — the same integration point where `CompoundCompletionEvaluator.evaluate()` is called.
+**Design:** Create a `RequiresThresholdEvaluator` in `planning-core` as an `@ApplicationScoped` CDI bean that observes `PlanItemStateChangedEvent` via `@ObservesAsync`. This is the existing pattern used by `CaseCompensationServiceImpl` (line 262) and `CaseStreamBroadcaster` (line 34). It is a single integration point that catches all fault and completion paths — at least 7 handlers fire `PlanItemStateChangedEvent` via `planItemStateChangedEvents.accept()`, and wiring into individual handlers is fragile and misses paths.
+
+The evaluator does NOT need `CaseDefinition` at evaluation time. Instead, `requires` metadata is stored in `CasePlanModel` during configuration via a `RequiresBlackboardPlanConfigurer` (see §Configuration-time metadata registration). The evaluator reads from `CasePlanModel` directly.
 
 ```java
+@ApplicationScoped
 public class RequiresThresholdEvaluator {
 
-    public void evaluate(UUID caseId, CasePlanModel plan, CaseDefinition definition,
-                         String completedBindingName) {
-        for (Binding b : definition.getBindings()) {
-            if (b.getRequires() == null) continue;
-            if (!b.getRequires().bindings().contains(completedBindingName)) continue;
-            if (b.getRequires().onThresholdReached() != OnThresholdReached.CANCEL) continue;
+    @Inject BlackboardRegistry registry;
 
-            long completed = countCompleted(b.getRequires(), plan);
-            if (completed >= b.getRequires().atLeast()
-                    && !plan.isRequiresThresholdTriggered(b.getName())) {
-                plan.markRequiresThresholdTriggered(b.getName());
-                cancelRemaining(b.getRequires(), plan);
+    void onPlanItemStateChanged(@ObservesAsync PlanItemStateChangedEvent event) {
+        CasePlanModel plan = registry.get(event.caseId()).orElse(null);
+        if (plan == null) return;
+
+        if (event.newStatus() == TaskStatus.COMPLETED) {
+            evaluateThresholdReached(plan, event.bindingName());
+        } else if (event.newStatus().isTerminal()) {
+            evaluateUnreachable(plan, event.bindingName());
+        }
+    }
+
+    private void evaluateThresholdReached(CasePlanModel plan, String completedBindingName) {
+        for (var entry : plan.getRequiresMetadata().entrySet()) {
+            String gatedBindingName = entry.getKey();
+            BindingRequires req = entry.getValue();
+            if (!req.bindings().contains(completedBindingName)) continue;
+            if (req.onThresholdReached() != OnThresholdReached.CANCEL) continue;
+
+            long completed = countCompleted(req, plan);
+            if (completed >= req.atLeast()
+                    && !plan.isRequiresThresholdTriggered(gatedBindingName)) {
+                plan.markRequiresThresholdTriggered(gatedBindingName);
+                cancelRemaining(req, plan);
             }
         }
     }
@@ -258,32 +274,54 @@ public class RequiresThresholdEvaluator {
 
 The `>=` check (not `==`) prevents missed thresholds when multiple prerequisite bindings complete between evaluation cycles. The one-shot `isRequiresThresholdTriggered` / `markRequiresThresholdTriggered` flag on `CasePlanModel` prevents redundant re-cancellation, following the `SubCaseGroup.policyTriggered()` pattern (PP-20260513-ecabd7). The cancellation itself is idempotent (filters to non-terminal items), so the flag is for efficiency, not correctness.
 
+#### Configuration-time metadata registration
+
+A `RequiresBlackboardPlanConfigurer` runs during `PlanningStrategyLoopControl`'s first-call configuration phase and stores `requires` metadata in `CasePlanModel`:
+
+```java
+@ApplicationScoped
+public class RequiresBlackboardPlanConfigurer implements BlackboardPlanConfigurer {
+    @Override
+    public void configure(CasePlanModel plan, PlanExecutionContext context) {
+        for (Binding b : context.definition().getBindings()) {
+            if (b.getRequires() != null) {
+                plan.registerRequiresMetadata(b.getName(), b.getRequires());
+            }
+        }
+    }
+}
+```
+
+Add to `CasePlanModel` interface:
+- `void registerRequiresMetadata(String bindingName, BindingRequires requires)`
+- `Map<String, BindingRequires> getRequiresMetadata()`
+- `boolean isRequiresThresholdTriggered(String bindingName)`
+- `void markRequiresThresholdTriggered(String bindingName)`
+
+This eliminates the need for `CaseDefinitionRegistry` at evaluation time — the evaluator only depends on `BlackboardRegistry`.
+
 #### Re-evaluation timing
 
 When a referenced binding completes (or reaches a terminal state), the next `PlanningStrategyLoopControl.select()` cycle re-evaluates all `requires`-gated bindings. No explicit notification is needed — the planning loop already runs on every context change, and worker completion triggers a context change via `WorkflowExecutionCompletedHandler`.
 
 #### Unreachable quorum detection
 
-Unreachable quorum detection runs in `RequiresThresholdEvaluator`, not in `select()`. When a prerequisite binding reaches a terminal non-COMPLETED state (FAULTED, CANCELLED, REJECTED), `RequiresThresholdEvaluator` checks if any gated binding's quorum is now unreachable using the `SubCaseGroupPolicy` formula:
+Unreachable quorum detection runs in `RequiresThresholdEvaluator.evaluateUnreachable()`, triggered by the same `@ObservesAsync PlanItemStateChangedEvent` observer when `newStatus.isTerminal() && newStatus != COMPLETED`. This single integration point catches all fault paths — `WorkerOutcomeResolvedHandler`, `WorkerRetryExhaustionHandler`, `JudgmentPlanItemHandler`, `ActionGateExpiredPlanItemHandler`, `ActionGateRejectedPlanItemHandler`, `PlanItemEscalationHandler`, and `PlanItemCompletionApplier` — plus any future handlers.
 
 ```java
-public void evaluateUnreachable(UUID caseId, CasePlanModel plan,
-                                 CaseDefinition definition, String faultedBindingName) {
-    for (Binding b : definition.getBindings()) {
-        if (b.getRequires() == null) continue;
-        if (!b.getRequires().bindings().contains(faultedBindingName)) continue;
+private void evaluateUnreachable(CasePlanModel plan, String faultedBindingName) {
+    for (var entry : plan.getRequiresMetadata().entrySet()) {
+        String gatedBindingName = entry.getKey();
+        BindingRequires req = entry.getValue();
+        if (!req.bindings().contains(faultedBindingName)) continue;
 
-        BindingRequires req = b.getRequires();
         long completed = countCompleted(req, plan);
         long nonCompletableTerminal = countNonCompletableTerminal(req, plan);
         long remaining = req.bindings().size() - completed - nonCompletableTerminal;
         long needed = req.atLeast() - completed;
 
         if (remaining < needed) {
-            // Create PlanItem and immediately fault it — the gated binding was
-            // never dispatched so no PlanItem exists yet. This makes the fault
-            // observable in the plan model and triggers compound completion evaluation.
-            PlanItem pi = PlanItem.create(b.getName(), ExecutorRef.NONE, 0, b.target());
+            PlanItem pi = PlanItem.create(gatedBindingName, ExecutorRef.NONE, 0, null);
             plan.addPlanItemIfAbsent(pi);
             pi.markFaulted();
         }
@@ -293,7 +331,13 @@ public void evaluateUnreachable(UUID caseId, CasePlanModel plan,
 
 The `requires`-gated binding's PlanItem does not exist at this point because `filterByRequires` removed it from the eligible set before `addPlanItemIfAbsent` ran. The evaluator explicitly creates a PlanItem and immediately faults it, making the unreachable quorum observable in the plan model. This triggers compound completion evaluation via `CompoundCompletionEvaluator`.
 
-`evaluateUnreachable()` is called from the fault/cancellation handlers (e.g., `WorkerOutcomeResolvedHandler`) when a PlanItem reaches a non-COMPLETED terminal state — mirroring how `evaluate()` is called from the completion handler.
+**`ExecutorRef.NONE`:** Add a sentinel constant to the `ExecutorRef` interface:
+
+```java
+ExecutorRef NONE = new SimpleExecutorRef("__none__", null);
+```
+
+This communicates intent — the PlanItem is a structural placeholder for a binding that will never dispatch, created solely to make the unreachable quorum observable in the plan model.
 
 #### Annotation support
 
@@ -380,13 +424,25 @@ No production `BlackboardPlanConfigurer` implementation bridges `CaseDefinition.
 **Fix:** Implement a `CompoundBlackboardPlanConfigurer` in planning-core that:
 1. Reads `CaseDefinition.getCompounds()` from the `PlanExecutionContext`
 2. For each `CompoundDeclaration`, creates a `PlanItemDefinition.Compound` with:
-   - `completionSemantics` parsed from the string (All / MofN / FirstWins)
+   - `completionSemantics` parsed from the string (see parsing rules below)
    - `dispatchMode` parsed from string
    - `scopedBindings` mapped to `Participation` enum
    - `entryCondition` / `exitCondition` preserved
 3. Registers each compound in the `CasePlanModel` via `registerCompound()`
 
 This follows the `BlackboardPlanConfigurer` SPI contract — `PlanningStrategyLoopControl` calls all `BlackboardPlanConfigurer` instances on first plan model creation.
+
+**`completionSemantics` parsing rules.** `CompoundDeclaration.completionSemantics()` is a raw string — this is the three-layer architecture (YAML string → declaration string → typed `CompletionSemantics`). The configurer parses it to the sealed `CompletionSemantics` type (`planning-core`):
+
+| Input string | Result | Notes |
+|---|---|---|
+| `null` or `"all"` (case-insensitive) | `CompletionSemantics.all()` | Default |
+| `"firstWins"` (case-insensitive) | `CompletionSemantics.firstWins()` | |
+| Numeric string (e.g. `"3"`) | `CompletionSemantics.mOfN(3)` | After Stream 2 Issue A fix, `convertCompound()` resolves `mofnRequired` into numeric string |
+| `"mofn"` (non-numeric) | **Throw `IllegalArgumentException`** | `"mofn"` without a numeric M value is unresolvable. The YAML path resolves this in the converter; the Java builder must pass a numeric string directly (e.g. `completionSemantics("3")`) or use a future typed builder method. |
+| Unrecognised string | **Throw `IllegalArgumentException`** | |
+
+The `CompoundDeclaration` record intentionally carries a raw string, not a typed `CompletionSemantics`. This keeps the `api` module free of `planning-core` types — `CompletionSemantics` is a sealed interface in `planning-core`. Parsing happens at the planning-core boundary, which is the right layer for type resolution.
 
 ## API Surface Parity
 
@@ -405,7 +461,8 @@ All three pathways must expose `requires` to maintain parity across the definiti
 | `BindingRequiresValidationTest` | api | Self-reference, existence, cycle detection, duplicate names, scope compatibility |
 | `RequiresFilterTest` | planning-core | Pre-strategy filter: eligible/blocked/threshold transitions |
 | `RequiresUnreachableTest` | planning-core | Unreachable quorum detection and FAULTED transition |
-| `RequiresThresholdEvaluatorTest` | planning-core | Threshold evaluation: one-shot cancellation, idempotent re-evaluation, unreachable quorum faulting |
+| `RequiresThresholdEvaluatorTest` | planning-core | Threshold evaluation via PlanItemStateChangedEvent: one-shot cancellation, idempotent re-evaluation, unreachable quorum faulting |
+| `RequiresBlackboardPlanConfigurerTest` | planning-core | Configuration-time requires metadata registration in CasePlanModel |
 | `RequiresCancelTest` | planning-core | OnThresholdReached.CANCEL cancels remaining plan items |
 | `RequiresIntegrationTest` | runtime | End-to-end: YAML definition → binding dispatch gating → quorum met → aggregator fires |
 | `CompoundMofnYamlWiringTest` | planning-core | YAML compound with completionSemantics parses and registers correctly |
@@ -431,7 +488,10 @@ All three pathways must expose `requires` to maintain parity across the definiti
 - `YamlCaseDefinitionConverter.convertCompound()` (api:1315) — mofnRequired drop site
 - `BlackboardPlanConfigurer` SPI (planning-core) — compound registration hook
 - `CoordinationPipelineProjection` (rest-core) — PhaseItemView projection
-- `PlanItemCompletionHandler` (planning-core) — completion handler integration point for `RequiresThresholdEvaluator`
+- `PlanItemCompletionHandler` (planning-core) — completion handler, fires `PlanItemStateChangedEvent`
+- `CaseCompensationServiceImpl` (planning) — existing `@ObservesAsync PlanItemStateChangedEvent` pattern precedent (line 262)
+- `CaseStreamBroadcaster` (rest) — existing `@ObservesAsync PlanItemStateChangedEvent` pattern precedent (line 34)
+- `CaseDefinitionRegistry` (common-core) — case definition lookup SPI (not needed by evaluator at runtime)
 - `SubCaseGroup.policyTriggered()` (common-core) — one-shot flag pattern for threshold evaluation
 - `@Bind` annotation (annotations/runtime, Bind.java) — `@Repeatable` binding annotation
 - blocks-ui#258 — gallery demo data should come from real YAML
