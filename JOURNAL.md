@@ -1,1 +1,1 @@
-# Design Journal — issue-1225-evolution-standalone-app
+# Design Journal — issue-1260-planitemview-subcase-identity
