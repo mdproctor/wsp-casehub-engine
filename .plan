@@ -13,3 +13,8 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#1260 — Issue #1260 ← active
+  - [ ] Batch 1: DataModel
+    - [ ] Task 1: SubCaseGroup bindingName + findAllByParentCaseId
+    - [ ] Task 2: PlanItem capabilityName + PlanItemView extension
+  - [ ] Batch 2: Wiring
+    - [ ] Task 3: TargetType resolution + ungrouped registration + CaseService enrichment
