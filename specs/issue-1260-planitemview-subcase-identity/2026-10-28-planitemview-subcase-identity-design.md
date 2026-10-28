@@ -6,7 +6,11 @@
 
 ## Problem
 
-`PlanItemView(UUID id, String name, TaskStatus status, String type, UUID parentId)` carries no sub-case identity. The `type` field distinguishes sub-case plan items (`"sub-case"`) but consumers cannot determine which case definition the plan item delegates to or which child cases were spawned.
+`PlanItemView(UUID id, String name, TaskStatus status, String type, UUID parentId)` carries no sub-case identity. Consumers cannot determine which case definition a plan item delegates to or which child cases were spawned.
+
+**Additional finding:** `TargetType.SUB_CASE` is dead code — never set on any `PlanItemSaveRequest`. Sub-case plan items are created in-memory in `PlanningStrategyLoopControl:121` with the actual `SubCaseTarget` binding, but plan item persistence paths (goal decomposition, adaptation) hardcode `TargetType.CAPABILITY`. This means the `type` field on `PlanItemView` currently does NOT distinguish sub-case items — it shows `"capability"` for all items regardless of binding target.
+
+This issue fixes both: (a) exposing sub-case identity fields, and (b) correctly setting `TargetType.SUB_CASE` so the `type` field works.
 
 ## Solution
 
@@ -27,7 +31,21 @@ public record PlanItemView(
 - `capabilityName`: the case definition name of the sub-case target (e.g. `"auto-assessment"`), stored at write time on PlanItemRecord
 - `subCaseIds`: child case UUIDs, sourced from SubCaseGroupRepository at query time. Empty list when the plan item is sub-case type but child cases haven't been spawned yet. Handles M-of-N (multiple IDs) and ungrouped (single ID) uniformly.
 
-## Write Path — capabilityName
+## Write Path — capabilityName and TargetType fix
+
+### Fix TargetType for sub-case plan items
+
+Sub-case plan items are created in `PlanningStrategyLoopControl:121`:
+```java
+PlanItem item = PlanItem.create(binding.getName(), executor, 0, binding.target());
+plan.addPlanItemIfAbsent(item);
+```
+
+The `PlanItem` carries the `SubCaseTarget` in memory, but plan items are currently only saved to `PlanItemStore` through goal decomposition and adaptation paths, which hardcode `TargetType.CAPABILITY`. The fix: when saving a plan item whose binding has a `SubCaseTarget`, use `TargetType.SUB_CASE` instead of `TargetType.CAPABILITY`.
+
+The plan item save happens in `DefaultGoalDecomposer.decomposeGoal()`, `DefaultPlanAdaptationEvaluator.applyRevision()`, and `DeeperDecompositionHandler.tryDecompose()`. These need to resolve the target type from the binding target rather than hardcoding `TargetType.CAPABILITY`.
+
+### Store capabilityName
 
 Store `capabilityName` at plan-item creation time. The value comes from `SubCase.name()` which is available when the binding target is resolved.
 
@@ -37,7 +55,8 @@ Store `capabilityName` at plan-item creation time. The value comes from `SubCase
 2. **PlanItemRecord** — add `String capabilityName` field (nullable)
 3. **PlanItemEntity** — add `@Column(name = "capability_name", length = 255) public String capabilityName`
 4. **PlanItemStore implementations** — pass capabilityName through save and findByCaseId
-5. **Plan item creation site** — when a plan item has `SubCaseTarget`, extract `subCase.name()` and pass it through the save request
+5. **Plan item save sites** (DefaultGoalDecomposer, DefaultPlanAdaptationEvaluator, DeeperDecompositionHandler) — resolve `TargetType` from `BindingTarget` (`SubCaseTarget → SUB_CASE`, all others → existing type), extract `subCase.name()` as `capabilityName` when target is `SubCaseTarget`
+6. **Add utility** — static `TargetType resolveFrom(BindingTarget target)` and `String capabilityNameFrom(BindingTarget target)` on `PlanItemSaveRequest` or a helper
 
 This follows the existing pattern for `executorName` and `description` — known at creation time, stored on the entity, returned in the record.
 
@@ -99,6 +118,7 @@ public List<PlanItemView> getPlanItems(UUID caseId, String tenancyId) {
 }
 
 public PlanItemView mapPlanItem(PlanItemRecord record, Map<String, List<UUID>> childMap) {
+    boolean isSubCase = record.capabilityName() != null;
     return new PlanItemView(
         UUID.fromString(record.planItemId()),
         record.bindingName(),
@@ -106,9 +126,7 @@ public PlanItemView mapPlanItem(PlanItemRecord record, Map<String, List<UUID>> c
         record.targetType().name().toLowerCase().replace('_', '-'),
         record.parentCompoundId() != null ? UUID.fromString(record.parentCompoundId()) : null,
         record.capabilityName(),
-        record.targetType() == TargetType.SUB_CASE
-            ? childMap.getOrDefault(record.bindingName(), List.of())
-            : null);
+        isSubCase ? childMap.getOrDefault(record.bindingName(), List.of()) : null);
 }
 ```
 
@@ -146,7 +164,9 @@ The REST API response JSON gains two new nullable fields. Existing consumers tha
 | testing | `TestSubCaseGroupRepository.java` | Implement `findAllByParentCaseId`, pass `bindingName` |
 | planning-core | `SubCaseExecutionHandler.java` | Register ungrouped sub-cases in SubCaseGroupRepository, pass `bindingName` to `getOrCreate` |
 | rest-core | `CaseService.java` | Inject SubCaseGroupRepository, enrich `getPlanItems` with childMap lookup |
-| planning-core (or relevant save site) | Plan item save call | Extract `capabilityName` from `SubCaseTarget` and include in save request |
+| planning-core | `DefaultGoalDecomposer.java` | Resolve `TargetType` from `BindingTarget`, extract `capabilityName` from `SubCaseTarget` |
+| planning-core | `DefaultPlanAdaptationEvaluator.java` | Same TargetType + capabilityName resolution |
+| planning-core | `DeeperDecompositionHandler.java` | Same TargetType + capabilityName resolution |
 
 ## References
 
@@ -157,5 +177,8 @@ The REST API response JSON gains two new nullable fields. Existing consumers tha
 - `planning-core/src/main/java/io/casehub/engine/planning/subcase/SubCaseExecutionHandler.java` — grouped/ungrouped sub-case dispatch
 - `common-core/src/main/java/io/casehub/engine/common/spi/SubCaseGroupRepository.java` — data source for child case IDs
 - `persistence-jpa-common/src/main/java/io/casehub/persistence/jpa/SubCaseGroupEntity.java` — JPA entity
+- `planning-core/src/main/java/io/casehub/engine/planning/control/PlanningStrategyLoopControl.java:121` — PlanItem creation with actual BindingTarget
+- `planning-core/src/main/java/io/casehub/engine/planning/decomposition/DefaultGoalDecomposer.java:275` — hardcoded TargetType.CAPABILITY
+- `common-core/src/main/java/io/casehub/engine/common/internal/model/TargetType.java` — SUB_CASE enum constant (currently dead code)
 - casehubio/engine#1260 — issue
 - casehubio/scaffold#74 — consumer blocked on this
