@@ -13,3 +13,22 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#1262 — Issue #1262 ← active
+  - [ ] Batch 1: PlaybookProvider
+    - [ ] Task 1: SWFWorkerFunction sealed interface
+    - [ ] Task 2: PlaybookWorkerFunction + Provider
+    - [ ] Task 3: Handler update for SWFWorkerFunction
+  - [ ] Batch 2: StructuredFailure
+    - [ ] Task 4: PlaybookExecutionResult types
+    - [ ] Task 5: FlowExecutionRegistry step data
+    - [ ] Task 6: PlaybookExecutionListener
+    - [ ] Task 7: PlaybookExecutionException + failure propagation
+    - [ ] Task 8: HandlerResult + RecoveryContext updates
+  - [ ] Batch 3: TriageWiring
+    - [ ] Task 9: RecoveryPolicy + RecoveryOverride triage fields
+    - [ ] Task 10: BindingRecoveryState triage tracking
+    - [ ] Task 11: DefaultRecoveryCoordinator triage integration
+    - [ ] Task 12: PlaybookTriageModification + Parser
+    - [ ] Task 13: Retry count partitioning
+  - [ ] Batch 4: CBRRecording
+    - [ ] Task 14: PlaybookOutcomeRecorder
+- [ ] casehubio/engine#1263 — PlaybookWorkerFunctionProvider — playbook YAML as worker function definition
