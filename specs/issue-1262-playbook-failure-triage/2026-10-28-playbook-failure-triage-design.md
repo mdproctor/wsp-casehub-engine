@@ -121,7 +121,7 @@ public enum StepStatus { SUCCEEDED, FAILED, SKIPPED }
 
 CDI bean implementing `WorkflowExecutionListener`. Auto-discovered by Quarkus via `quarkus-flow`'s `WorkflowApplicationCreator.injectCustomListeners()`, which discovers `@ApplicationScoped` beans implementing `WorkflowExecutionListener` via `Instance<WorkflowExecutionListener>` injection.
 
-**Step data propagation (I1):** Step results accumulate in `FlowExecutionRegistry` — not in SWF `WorkflowInstance` metadata. `FlowExecutionRegistry` already maps instance IDs to `FlowExecution` context (caseId, workerName, inputDataHash). The `FlowExecution` type gains a step accumulator (mutable list of `StepResult`). This avoids coupling to SWF SDK internals and eliminates the need to cast `WorkflowContextData` to reach `WorkflowMutableInstance.addMetadataIfAbsent()`.
+**Step data propagation (I1):** Step results accumulate in `FlowExecutionRegistry` — not in SWF `WorkflowInstance` metadata. `FlowExecutionRegistry` already maps instance IDs to `FlowExecution` context (caseId, workerName, inputDataHash). Step data is stored in a **separate** `ConcurrentHashMap<String, List<StepResult>>` in `FlowExecutionRegistry`, keyed by instance ID — `FlowExecution` remains an immutable record. This avoids coupling to SWF SDK internals and eliminates the need to cast `WorkflowContextData` to reach `WorkflowMutableInstance.addMetadataIfAbsent()`.
 
 **Lifecycle:**
 1. `onTaskStarted` — look up execution in `FlowExecutionRegistry` by instance ID. If found (casehub execution), record step start time.
@@ -130,16 +130,27 @@ CDI bean implementing `WorkflowExecutionListener`. Auto-discovered by Quarkus vi
 4. After `FlowWorkerFunctionHandler.execute()` calls `join()`, it reads the accumulated `List<StepResult>` from `FlowExecutionRegistry`.
 5. If the function is a `PlaybookWorkerFunction`, use `SourceMap.locate(taskPosition)` to map SWF task positions back to playbook step names.
 
-**Identifying casehub executions:** The listener checks `FlowExecutionRegistry.get(instanceId)`. Non-casehub executions return null — O(1) ConcurrentHashMap lookup, no wasted work.
+**Identifying casehub executions:** The listener uses a new `FlowExecutionRegistry.find(instanceId)` method (returns `Optional<FlowExecution>`) — the existing `get()` throws `IllegalStateException` on miss. Non-casehub executions return empty — O(1) ConcurrentHashMap lookup, no wasted work.
 
 **Building PlaybookExecutionResult:**
 - All steps succeeded → `Success(output, steps)`
 - Some steps succeeded, workflow failed → `PartialSuccess(partialOutput, steps)` (partialOutput is the last successful step's output)
 - First step failed or no output → `Failure(rootCause, steps)`
 
-### 3.3 HandlerResult enrichment
+### 3.3 Failure propagation mechanism
 
-`HandlerResult` gains an optional `PlaybookExecutionResult`:
+**Problem:** When a workflow fails, `wfInstance.start().join()` throws. The exception propagates through `WorkerExecutionOrchestrator` → `RetryHandler.handleFailure(taskData, Throwable, message)` → `RetryOrchestrator`. There is no parameter for `PlaybookExecutionResult` on this path.
+
+**Solution:** `FlowWorkerFunctionHandler.execute()` catches workflow exceptions, builds `PlaybookExecutionResult` from step data accumulated in `FlowExecutionRegistry`, and wraps both in a `PlaybookExecutionException` (new type in engine-support-core):
+
+```java
+public class PlaybookExecutionException extends RuntimeException {
+    private final PlaybookExecutionResult executionResult;
+    // constructor, getter
+}
+```
+
+On the success path, `HandlerResult` gains an optional `PlaybookExecutionResult`:
 
 ```java
 public record HandlerResult(
@@ -157,7 +168,7 @@ public record HandlerResult(
 }
 ```
 
-`FlowWorkerFunctionHandler.execute()` populates `executionResult` on both success and failure paths.
+On the failure path, `RetryOrchestrator` extracts the `PlaybookExecutionResult` from the `Throwable` if it is a `PlaybookExecutionException`. This minimizes blast radius — no interface changes to `RetryHandler` or its callers (Quartz, db-scheduler backends).
 
 ### 3.4 Failure detail propagation to RecoveryContext
 
@@ -176,7 +187,7 @@ public record RecoveryContext(
     PlaybookExecutionResult executionResult) {}
 ```
 
-`RetryOrchestrator.applyRetryDecision()` passes the execution result through when building `RecoveryContext` on the `Exhaust` path.
+`RetryOrchestrator.applyRetryDecision()` extracts `PlaybookExecutionResult` from `PlaybookExecutionException` (if present) and passes it through when building `RecoveryContext` on the `Exhaust` path. Non-playbook handler failures pass `null`.
 
 ### 3.5 TriageHandler wiring in DefaultRecoveryCoordinator
 
@@ -187,6 +198,8 @@ public record RecoveryContext(
 **Wiring:** `DefaultRecoveryCoordinator` injects `TriageHandler` via CDI (`Instance<TriageHandler>` for optional resolution). The `NoOpTriageHandler` from `casehub-platform-governance-core` serves as the default when no custom implementation is provided.
 
 **Per-binding triage overrides:** `RecoveryOverride` gains `skipTriage` (default false) and `maxTriageAttempts` (nullable, falls through to `RecoveryPolicy` default). `skipRecovery=true` skips structural recovery but does NOT skip triage unless `skipTriage=true` independently — a binding with `skipRecovery=true, skipTriage=false` goes directly to triage after mechanical retries exhaust.
+
+**handleFailure restructuring:** The existing `skipRecovery` check returns `false` immediately (line ~108 of DefaultRecoveryCoordinator), which exits before reaching any triage code. The method must be restructured: `skipRecovery` now skips only the structural recovery levels (TRANSIENT/REASONING/FUNDAMENTAL) and falls through to the triage section. The new flow is: (1) check skipRecovery → if true, skip to triage section; (2) classify and escalate through levels; (3) if all levels fail (or skipped), check skipTriage → if false, invoke triage loop.
 
 ### 3.6 Triage flow
 
@@ -234,16 +247,15 @@ match decision:
 
 **maxTriageAttempts configuration:** New field on `RecoveryPolicy` in `engine-api`, default 2. Per-binding override on `RecoveryOverride`.
 
-### 3.7 Typed triage modifications
+### 3.7 Triage modifications — Map convention with engine-side typed conversion
 
-`TriageDecision.Retry` carries `List<TriageModification>` where `TriageModification` is a non-sealed marker interface in `platform-api`. Handler-specific subtypes use sealed hierarchies in their own modules:
+**Platform SPI reality:** `TriageDecision.Retry` carries `Map<String, Object> modifications` — an untyped map. `TriageModification` does not exist in platform-api. The typed hierarchy lives entirely in the engine.
+
+**Convention:** `TriageHandler` implementations populate the map with well-known keys. The engine deserializes map entries into a sealed `PlaybookTriageModification` hierarchy:
 
 ```java
-// platform-api — non-sealed marker, no permits clause
-public interface TriageModification { }
-
 // engine-support-core — sealed within one compilation unit
-public sealed interface PlaybookTriageModification extends TriageModification
+public sealed interface PlaybookTriageModification
     permits SkipStep, ReplaceStepInput, UpdateParameter {
     record SkipStep(String stepId) implements PlaybookTriageModification {}
     record ReplaceStepInput(String stepId, Map<String, Object> newInput)
@@ -253,9 +265,29 @@ public sealed interface PlaybookTriageModification extends TriageModification
 }
 ```
 
-The engine casts to `PlaybookTriageModification` and does exhaustive pattern matching on the sealed sub-hierarchy. Future handler types add their own sealed sub-hierarchies without `platform-api` changes.
+**Map key convention:** `TriageHandler` implementations populate `modifications` with entries like:
+```
+"playbook.skipSteps" → ["step-3"]
+"playbook.replaceInput.step-2" → { "url": "/api/v2/contacts" }
+"playbook.updateParams.timeout" → 30000
+```
 
-**Modification history:** `BindingRecoveryState` tracks `List<List<TriageModification>> previousTriageModifications`. Each entry is the modification set applied in one triage attempt. `TriageContext` includes this history so the handler sees what was already tried and avoids repeating failed modifications.
+`PlaybookTriageModificationParser` (engine-support-core) converts map entries → `List<PlaybookTriageModification>` using the `playbook.*` namespace. Unknown keys are ignored (forward-compatible).
+
+**How modifications are applied during re-execution:** Modifications are written to a `triage` namespace in the case context's working layer (e.g., `triage.skipSteps`, `triage.replaceInput.*`). When `FlowWorkerFunctionHandler.execute()` runs, the `PlaybookExecutionListener` reads triage directives from the case context:
+- `SkipStep` — listener intercepts `onTaskStarted` for the matching step ID and marks it skipped (no execution)
+- `ReplaceStepInput` — handler modifies the workflow input data for the matching step before execution
+- `UpdateParameter` — handler modifies the workflow-level input data
+
+**Re-dispatch scope:** `CaseContextChangedEvent` triggers `evaluateAndDispatch()` for ALL bindings. For triage, only the binding under triage has modifications in its context. Other bindings evaluate normally — if their conditions aren't affected by the triage context changes, they won't re-dispatch. This is the same behavior as Level 3 recovery.
+
+**Modification history:** `BindingRecoveryState` tracks `List<Map<String, Object>> previousTriageModifications`. Each entry is the raw modification map from one triage attempt. `TriageContext.executionContext` includes this history so the handler sees what was already tried.
+
+### 3.7.1 Retry count partitioning
+
+**Problem:** `RetryOrchestrator.countFailedAttempts()` counts ALL `WORKER_EXECUTION_FAILED` event logs for the worker + inputDataHash. After triage modifies context and re-dispatches, the previous failure count carries over — the re-dispatched worker may immediately exhaust.
+
+**Solution:** Include a `triageRound` discriminator in event log metadata. The first execution round (pre-triage) is round 0. After each triage attempt, the round increments. `countFailedAttempts()` filters by the current triage round. `RetryOrchestrator` receives the current `triageRound` from `BindingRecoveryState` (accessed via `RecoveryContext`).
 
 ### 3.8 PlaybookOutcomeRecorder (yaml-cbr)
 
@@ -285,7 +317,8 @@ Generate Spring equivalents for new types in the existing Spring module pattern:
 | Type | Module | Rationale |
 |---|---|---|
 | `PlaybookExecutionResult`, `StepResult`, `StepStatus` | engine-api | Consumer-visible definition types |
-| `TriageModification` | platform-api | Non-sealed marker interface (platform change) |
+| `PlaybookExecutionException` | engine-support-core | Carries PlaybookExecutionResult on failure path |
+| `PlaybookTriageModificationParser` | engine-support-core | Converts Map entries to typed modifications |
 | `SWFWorkerFunction` | engine-support-core | Sealed interface for workflow-based functions (I2) |
 | `PlaybookWorkerFunction` | engine-support-core | Function type alongside FlowWorkerFunction |
 | `PlaybookWorkerFunctionProvider` | engine-support-core | Provider alongside FlowWorkerFunctionProvider |
@@ -308,7 +341,7 @@ See [decisions.md](decisions.md) for full decision records.
 3. **CDI WorkflowExecutionListener + FlowExecutionRegistry** for step capture — accumulates in engine-owned data structure, no SWF SDK coupling (D3, I1)
 4. **Triage inside DefaultRecoveryCoordinator** — after structural recovery levels exhaust, re-dispatch via CaseContextChangedEvent (D4)
 5. **maxTriageAttempts on RecoveryPolicy + per-binding overrides** — consistent with existing recovery config pattern (D5)
-6. **Typed TriageModification hierarchy** — non-sealed marker in platform-api, sealed PlaybookTriageModification in engine-support-core, with modification history tracking (D6)
+6. **Map-convention modifications with engine-side typed conversion** — platform SPI uses `Map<String, Object>`, engine deserializes to sealed `PlaybookTriageModification` hierarchy via `playbook.*` key namespace. Modification history tracked on `BindingRecoveryState` (D6)
 7. **Dual-granularity CBR recording** — per-action (StepExecutionCbrBridge) + per-execution (PlaybookOutcomeRecorder) (D7)
 8. **Sealed SWFWorkerFunction** — shared supertype for FlowWorkerFunction and PlaybookWorkerFunction (I2)
 
