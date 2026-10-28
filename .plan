@@ -16,5 +16,5 @@ flyway-next-v:
   - [x] Batch 1: DataModel
     - [x] Task 1: SubCaseGroup bindingName + findAllByParentCaseId
     - [x] Task 2: PlanItem capabilityName + PlanItemView extension
-  - [ ] Batch 2: Wiring
-    - [ ] Task 3: TargetType resolution + ungrouped registration + CaseService enrichment
+  - [x] Batch 2: Wiring
+    - [x] Task 3: TargetType resolution + ungrouped registration + CaseService enrichment
