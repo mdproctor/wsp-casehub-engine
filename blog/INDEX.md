@@ -24,3 +24,4 @@
 | [2026-10-07-mdp01-the-conductor-finds-its-audience.md](2026-10-07-mdp01-the-conductor-finds-its-audience.md) | 2026-10-07 | Devtown becomes the first evolution conductor consumer — 5 capability areas tracing the PR lifecycle, improvement categories that tune orchestration rather than code |
 | [2026-10-26-mdp01-ants-dont-need-a-manager.md](2026-10-26-mdp01-ants-dont-need-a-manager.md) | 2026-10-26 | Hive Mind epic near-complete — self-organizing agent coordination from stigmergy through swarm to autonomous evolution |
 | [2026-10-26-mdp02-the-loop-that-wasnt.md](2026-10-26-mdp02-the-loop-that-wasnt.md) | 2026-10-26 | Gap analysis of the evolution loop — components existed and passed tests but weren't wired in production CDI graph |
+| [2026-10-28-MP01-subcase-identity-in-planitemview.md](2026-10-28-MP01-subcase-identity-in-planitemview.md) | 2026-10-28 | Exposing sub-case identity in PlanItemView — dead TargetType, unified child case tracking, two new API fields |
