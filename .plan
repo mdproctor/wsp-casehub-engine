@@ -13,16 +13,16 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#1262 — Issue #1262 ← active
-  - [ ] Batch 1: PlaybookProvider
-    - [ ] Task 1: SWFWorkerFunction sealed interface
-    - [ ] Task 2: PlaybookWorkerFunction + Provider
-    - [ ] Task 3: Handler update for SWFWorkerFunction
-  - [ ] Batch 2: StructuredFailure
-    - [ ] Task 4: PlaybookExecutionResult types
-    - [ ] Task 5: FlowExecutionRegistry step data
-    - [ ] Task 6: PlaybookExecutionListener
-    - [ ] Task 7: PlaybookExecutionException + failure propagation
-    - [ ] Task 8: HandlerResult + RecoveryContext updates
+  - [x] Batch 1: PlaybookProvider
+    - [x] Task 1: SWFWorkerFunction sealed interface
+    - [x] Task 2: PlaybookWorkerFunction + Provider
+    - [x] Task 3: Handler update for SWFWorkerFunction
+  - [x] Batch 2: StructuredFailure
+    - [x] Task 4: PlaybookExecutionResult types
+    - [x] Task 5: FlowExecutionRegistry step data
+    - [x] Task 6: PlaybookExecutionListener
+    - [x] Task 7: PlaybookExecutionException + failure propagation
+    - [x] Task 8: HandlerResult + RecoveryContext updates
   - [ ] Batch 3: TriageWiring
     - [ ] Task 9: RecoveryPolicy + RecoveryOverride triage fields
     - [ ] Task 10: BindingRecoveryState triage tracking
