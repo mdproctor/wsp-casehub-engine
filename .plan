@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1262-playbook-failure-triage
-state: scaffolded
+state: active
 project-sha: 1dec22125
 date: 2026-10-28
 issue-repo: casehubio/engine
