@@ -1,31 +1,28 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-10-26)
+## Last Session (2026-10-28)
 
-Implemented continuous evolution loop for #1115 — all 7 batches, 11 tasks, 9 commits on `issue-1115-continuous-evolution-loop`.
+Designed and partially implemented #1262 (structured playbook failure output + triage wiring) with #1263 (PlaybookWorkerFunctionProvider) folded in as Batch 1. Full brainstorm → spec → decision review (standard, 3 rounds) → post-spec review (light) → implementation.
 
-**Batch 1 — TriggerLoop:** EvolutionTicker wired as single entry point in convergence handler. Timer backstop for periodic ticks.
+Batches 1-2 complete (8 of 14 tasks): SWFWorkerFunction sealed hierarchy, PlaybookWorkerFunction with CompilationResult, PlaybookWorkerFunctionProvider, PlaybookExecutionResult/StepResult/StepStatus types, FlowExecutionRegistry step data + find(), PlaybookExecutionListener, PlaybookExecutionException with failure propagation, HandlerResult enrichment.
 
-**Batch 2 — FeedbackLoop:** ImprovementOutcomeEventCapture implements CaseOutcomeObserver. ImprovementOutcomeStore for CBR-informed goal formation (suppresses targets with >= 70% failure rate).
-
-**Batch 3 — RollbackWiring:** RollbackRequestedEvent fired at high-confidence auto-revert threshold. MonitoredImprovement tracks targetPaths.
-
-**Batch 4 — Robustness:** Circuit breaker hysteresis (sustained recovery). Lazy startup recovery from EventLog.
-
-**Batch 5 — Observability:** ProposalFilteringSummary wired through tick traces with CBR filter stage.
-
-**Batch 6 — IntegrationTests:** 3 new end-to-end tests (CBR feedback, outcome capture, timer backstop).
-
-**Batch 7 — Workers:** ImprovementOutcomeWorkerFunction writes `_improvement` context key. Case templates updated with outcome-recorder workers using DSL setResult.
+Key design decisions: step data in FlowExecutionRegistry (not SWF metadata), triage inside DefaultRecoveryCoordinator (not RetryOrchestrator), Map-convention modifications with engine-side sealed PlaybookTriageModification, retry count partitioning via triageRound discriminator.
 
 ## Immediate Next Step
 
-Branch ready for review and merge. This is the last child of epic #1104 (Hive Mind).
+Continue with Batch 3 (TriageWiring) — Task 9: add maxTriageAttempts to RecoveryPolicy + skipTriage/maxTriageAttempts to RecoveryOverride. Plan is at `plans/2026-10-28-playbook-failure-triage.md`.
+
+## Cross-Module
+
+Platform playbook compiler uses serverlessworkflow-types 7.35.3.Final — engine is on 7.25.1.Final. Binary compat verified at build time but a dedicated compat test is noted in the spec.
 
 ## References
 
 | Artifact | Path |
 |----------|------|
-| Design spec | `docs/specs/issue-1104-hive-mind/2026-09-20-continuous-evolution-loop-design.md` |
-| Epic | casehubio/engine#1104 |
-| Branch | `issue-1115-continuous-evolution-loop` |
+| Design spec | `specs/issue-1262-playbook-failure-triage/2026-10-28-playbook-failure-triage-design.md` |
+| Decisions | `specs/issue-1262-playbook-failure-triage/decisions.md` |
+| Implementation plan | `plans/2026-10-28-playbook-failure-triage.md` |
+| Blog entry | `blog/2026-10-28-mdp01-playbook-failure-recovery-chain.md` |
+| Branch | `issue-1262-playbook-failure-triage` |
+| Stashed changes | `git stash list` — pre-1262 rest changes stashed before branching |
