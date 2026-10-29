@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1262-playbook-failure-triage
-state: active
+state: closing:review
 project-sha: 1dec22125
 date: 2026-10-28
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo:
 design-section-hashes: 
 flyway-next-v: 
 
+evidence-era: true
 ## Queue
 - [x] casehubio/engine#1262 — Issue #1262 ← active
   - [x] Batch 1: PlaybookProvider
