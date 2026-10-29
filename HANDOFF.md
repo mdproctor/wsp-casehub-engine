@@ -1,16 +1,22 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-10-28)
+## Last Session (2026-10-29)
 
-Designed and partially implemented #1262 (structured playbook failure output + triage wiring) with #1263 (PlaybookWorkerFunctionProvider) folded in as Batch 1. Full brainstorm → spec → decision review (standard, 3 rounds) → post-spec review (light) → implementation.
+Completed all remaining tasks for #1262 (Batch 3: TriageWiring + Batch 4: CBRRecording), tasks 9-14. Full implementation of structured playbook failure output and triage wiring is now complete across all 4 batches (14 tasks).
 
-Batches 1-2 complete (8 of 14 tasks): SWFWorkerFunction sealed hierarchy, PlaybookWorkerFunction with CompilationResult, PlaybookWorkerFunctionProvider, PlaybookExecutionResult/StepResult/StepStatus types, FlowExecutionRegistry step data + find(), PlaybookExecutionListener, PlaybookExecutionException with failure propagation, HandlerResult enrichment.
+**Batch 3 (5 tasks):** RecoveryPolicy/RecoveryOverride triage fields, BindingRecoveryState triage tracking, DefaultRecoveryCoordinator triage integration (the big one — restructured handleFailure flow, added TriageHandler wiring, TriageContext building, Retry/Abandon handling), PlaybookTriageModification sealed hierarchy + parser, retry count partitioning by triage round.
 
-Key design decisions: step data in FlowExecutionRegistry (not SWF metadata), triage inside DefaultRecoveryCoordinator (not RetryOrchestrator), Map-convention modifications with engine-side sealed PlaybookTriageModification, retry count partitioning via triageRound discriminator.
+**Batch 4 (1 task):** PlaybookOutcomeRecorder for per-execution CBR recording with step trace and triage chain context.
+
+**Notable implementation decisions:**
+- `ExecutionResultCarrier` interface (api module) bridges `PlaybookExecutionException` across module boundary — `common-core` can't see `engine-support-core`, so the carrier interface provides a module-safe way to extract `PlaybookExecutionResult` from the `Throwable` in `RetryOrchestrator`.
+- `RetryOrchestrator` accepts `BiFunction<UUID, String, Integer>` for triage round lookup (not `CaseRecoveryStateRegistry` directly, due to module boundary — registry is in `runtime-core`, orchestrator in `common-core`). Wired via lambda in `RuntimeBeans`.
+- `RecoveryContext` gained `executionResult` (9th field) with backward-compatible 8-arg constructor — this was listed under Task 8 but wasn't implemented in the previous session.
+- `handleFailure()` restructured: `skipRecovery` now skips structural recovery but falls through to triage (unless `skipTriage` is also set).
 
 ## Immediate Next Step
 
-Continue with Batch 3 (TriageWiring) — Task 9: add maxTriageAttempts to RecoveryPolicy + skipTriage/maxTriageAttempts to RecoveryOverride. Plan is at `plans/2026-10-28-playbook-failure-triage.md`.
+Issue #1262 is implementation-complete. Next: `work end` to close the branch, or continue with #1263 (PlaybookWorkerFunctionProvider — already folded into Batch 1 and marked complete in the plan, but still listed as a separate queue item).
 
 ## Cross-Module
 

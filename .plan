@@ -3,7 +3,7 @@
 ## State
 branch: issue-1262-playbook-failure-triage
 state: scaffolded
-project-sha: 
+project-sha: 1dec22125
 date: 2026-10-28
 issue-repo: casehubio/engine
 covers: casehubio/engine#1262
@@ -12,7 +12,7 @@ design-section-hashes:
 flyway-next-v: 
 
 ## Queue
-- [ ] casehubio/engine#1262 — Issue #1262 ← active
+- [x] casehubio/engine#1262 — Issue #1262 ← active
   - [x] Batch 1: PlaybookProvider
     - [x] Task 1: SWFWorkerFunction sealed interface
     - [x] Task 2: PlaybookWorkerFunction + Provider
@@ -23,12 +23,12 @@ flyway-next-v:
     - [x] Task 6: PlaybookExecutionListener
     - [x] Task 7: PlaybookExecutionException + failure propagation
     - [x] Task 8: HandlerResult + RecoveryContext updates
-  - [ ] Batch 3: TriageWiring
-    - [ ] Task 9: RecoveryPolicy + RecoveryOverride triage fields
-    - [ ] Task 10: BindingRecoveryState triage tracking
-    - [ ] Task 11: DefaultRecoveryCoordinator triage integration
-    - [ ] Task 12: PlaybookTriageModification + Parser
-    - [ ] Task 13: Retry count partitioning
-  - [ ] Batch 4: CBRRecording
-    - [ ] Task 14: PlaybookOutcomeRecorder
+  - [x] Batch 3: TriageWiring
+    - [x] Task 9: RecoveryPolicy + RecoveryOverride triage fields
+    - [x] Task 10: BindingRecoveryState triage tracking
+    - [x] Task 11: DefaultRecoveryCoordinator triage integration
+    - [x] Task 12: PlaybookTriageModification + Parser
+    - [x] Task 13: Retry count partitioning
+  - [x] Batch 4: CBRRecording
+    - [x] Task 14: PlaybookOutcomeRecorder
 - [ ] casehubio/engine#1263 — PlaybookWorkerFunctionProvider — playbook YAML as worker function definition
