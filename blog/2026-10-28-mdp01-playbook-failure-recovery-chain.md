@@ -53,8 +53,16 @@ With `maxAttempts=3` and `maxTriageAttempts=2`, total possible executions are `3
 
 Retry counting partitions on a `triageRound` discriminator in event log metadata. Round 0 is pre-triage. Each triage attempt increments the round. `countFailedAttempts()` filters by the current round, so the re-dispatched worker starts with a clean count.
 
-## What's built, what's next
+## What landed
 
-Batch 1 (PlaybookWorkerFunctionProvider) and Batch 2 (structured failure output) are complete — `SWFWorkerFunction` hierarchy, `PlaybookExecutionListener`, `PlaybookExecutionException`, and the `HandlerResult` enrichment. The triage wiring in `DefaultRecoveryCoordinator` (Batch 3) and CBR recording (Batch 4) continue next session.
+All four batches are complete and on main — 14 tasks squashed into 5 commits.
 
-The triage wiring is the most architecturally interesting remaining work. `DefaultRecoveryCoordinator.handleFailure()` currently returns `false` immediately when `skipRecovery` is set — which exits before any triage code. The method needs restructuring: `skipRecovery` should skip structural recovery levels but fall through to triage. A binding with `skipRecovery=true, skipTriage=false` bypasses the classification-and-escalation dance and goes straight to semantic triage. That's a valid configuration for bindings where the error type is irrelevant but the playbook modification is everything.
+Batch 1 delivered the `SWFWorkerFunction` sealed hierarchy and `PlaybookWorkerFunctionProvider`. Batch 2 added structured step capture: `PlaybookExecutionListener` accumulates `StepResult` entries in `FlowExecutionRegistry`, and `PlaybookExecutionException` carries the full step trace through the existing exception propagation path.
+
+Batch 3 was the most architecturally interesting. `DefaultRecoveryCoordinator.handleFailure()` was restructured so that `skipRecovery` skips structural recovery levels but falls through to triage. A binding with `skipRecovery=true, skipTriage=false` bypasses the classification-and-escalation dance and goes straight to semantic triage — a valid configuration for bindings where the error type is irrelevant but the playbook modification is everything. The `TriageHandler` injection, `TriageContext` construction, retry/abandon dispatch, and `PlaybookTriageModification` parser all landed here, along with retry count partitioning by triage round.
+
+Batch 4 added `PlaybookOutcomeRecorder` for per-execution CBR recording alongside the existing per-step `StepExecutionCbrBridge`.
+
+Code review caught a race condition in `FlowWorkerFunctionHandler` — the `CompletableFuture.whenComplete` callback was removing step data from the registry before the error handler could read it, which would have produced empty step lists in every `PlaybookExecutionException`. Removed the callback; cleanup is handled explicitly in each code path.
+
+The platform-side triage infrastructure (platform#668) also landed in parallel — `TriageHandler` SPI, `LlmTriageHandler` implementation in the agency repo, and CBR execution chain linkage in neocortex. The remaining gap is engine#1264: applying the triage modifications to the playbook during re-execution, which closes the loop between "triage decides what to change" and "the change takes effect."
