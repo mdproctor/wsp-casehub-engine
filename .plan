@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1264-apply-triage-mods-to-playbook
-state: closing:review
+state: closing:verified
 project-sha: 
 date: 
 issue-repo: casehubio/engine
