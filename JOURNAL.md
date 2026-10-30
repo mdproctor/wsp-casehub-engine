@@ -1,1 +1,1 @@
-# Design Journal — issue-1264-apply-triage-mods-to-playbook
+# Design Journal — issue-1259-swarm-coordination-listener
