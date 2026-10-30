@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1264-apply-triage-mods-to-playbook
-state: scaffolded
+state: active
 project-sha: 
 date: 
 issue-repo: casehubio/engine
