@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 320" font-family="Inter, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="720" height="320" rx="8" fill="#fafafa" stroke="#e2e8f0"/>
+
+  <!-- Title -->
+  <text x="360" y="32" text-anchor="middle" font-size="14" font-weight="600" fill="#1e293b">Dependency Direction — SPI as the Bridge</text>
+
+  <!-- engine-api box (center) -->
+  <rect x="250" y="60" width="220" height="90" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="360" y="85" text-anchor="middle" font-size="13" font-weight="600" fill="#1e40af">engine-api</text>
+  <text x="360" y="105" text-anchor="middle" font-size="11" fill="#3b82f6">SwarmCoordinationListener</text>
+  <text x="360" y="120" text-anchor="middle" font-size="11" fill="#3b82f6">DetectedRole · DetectedTeam</text>
+  <text x="360" y="135" text-anchor="middle" font-size="11" fill="#3b82f6">SwarmProgress</text>
+
+  <!-- agency-core box (left) -->
+  <rect x="30" y="190" width="200" height="85" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="130" y="215" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">agency-core</text>
+  <text x="130" y="235" text-anchor="middle" font-size="11" fill="#b45309">SwarmEventSource</text>
+  <text x="130" y="250" text-anchor="middle" font-size="11" fill="#b45309">SwarmCoordinationEvent</text>
+  <text x="130" y="265" text-anchor="middle" font-size="10" fill="#92400e" font-style="italic">implements listener</text>
+
+  <!-- engine-runtime box (right) -->
+  <rect x="490" y="190" width="200" height="85" rx="6" fill="#d1fae5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="590" y="215" text-anchor="middle" font-size="13" font-weight="600" fill="#065f46">engine-runtime</text>
+  <text x="590" y="235" text-anchor="middle" font-size="11" fill="#059669">SwarmProvisioner</text>
+  <text x="590" y="250" text-anchor="middle" font-size="11" fill="#059669">RoleTracker · TeamDetector</text>
+  <text x="590" y="265" text-anchor="middle" font-size="10" fill="#065f46" font-style="italic">calls listener methods</text>
+
+  <!-- Arrows: both depend on engine-api -->
+  <line x1="170" y1="190" x2="290" y2="150" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="550" y1="190" x2="430" y2="150" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Labels on arrows -->
+  <text x="200" y="163" text-anchor="middle" font-size="10" fill="#64748b">depends on</text>
+  <text x="520" y="163" text-anchor="middle" font-size="10" fill="#64748b">depends on</text>
+
+  <!-- Forbidden direct arrow -->
+  <line x1="490" y1="232" x2="240" y2="232" stroke="#ef4444" stroke-width="1" stroke-dasharray="6,4" marker-end="url(#arrow-red)"/>
+  <text x="360" y="300" text-anchor="middle" font-size="10" fill="#ef4444">✗ No direct dependency — SPI breaks the coupling</text>
+</svg>
