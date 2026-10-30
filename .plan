@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1264-apply-triage-mods-to-playbook
-state: active
+state: closing:review
 project-sha: 
 date: 
 issue-repo: casehubio/engine
@@ -11,6 +11,7 @@ design-repo:
 design-section-hashes: 
 flyway-next-v: 
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/engine#1264 — Issue #1264 ← active
   - [x] Batch 1: SPI and merge
