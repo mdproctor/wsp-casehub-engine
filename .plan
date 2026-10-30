@@ -13,10 +13,10 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/engine#1264 — Issue #1264 ← active
-  - [ ] Batch 1: SPI and merge
-    - [ ] Task 1: TriageModificationProvider SPI + DefaultProvider
-    - [ ] Task 2: PlaybookTriageModificationParser.mergeAll
-  - [ ] Batch 2: Workflow applicator
-    - [ ] Task 3: PlaybookTriageModificationApplicator
-  - [ ] Batch 3: Handler integration
-    - [ ] Task 4: Wire FlowWorkerFunctionHandler
+  - [x] Batch 1: SPI and merge
+    - [x] Task 1: TriageModificationProvider SPI + DefaultProvider
+    - [x] Task 2: PlaybookTriageModificationParser.mergeAll
+  - [x] Batch 2: Workflow applicator
+    - [x] Task 3: PlaybookTriageModificationApplicator
+  - [x] Batch 3: Handler integration
+    - [x] Task 4: Wire FlowWorkerFunctionHandler
