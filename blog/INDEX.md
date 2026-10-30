@@ -26,3 +26,4 @@
 | [2026-10-26-mdp02-the-loop-that-wasnt.md](2026-10-26-mdp02-the-loop-that-wasnt.md) | 2026-10-26 | Gap analysis of the evolution loop — components existed and passed tests but weren't wired in production CDI graph |
 | [2026-10-28-MP01-subcase-identity-in-planitemview.md](2026-10-28-MP01-subcase-identity-in-planitemview.md) | 2026-10-28 | Exposing sub-case identity in PlanItemView — dead TargetType, unified child case tracking, two new API fields |
 | [2026-10-28-mdp01-playbook-failure-recovery-chain.md](2026-10-28-mdp01-playbook-failure-recovery-chain.md) | 2026-10-28 | Designing structured playbook failure output and triage wiring for the recovery coordinator |
+| [2026-10-30-mdp05-closing-the-triage-loop.md](2026-10-30-mdp05-closing-the-triage-loop.md) | 2026-10-30 | Closes the gap between triage decisions and playbook re-execution — handler-level modification with SPI, cumulative semantics, recursive workflow transformation |
