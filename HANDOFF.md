@@ -2,24 +2,23 @@
 
 ## Last Session (2026-10-31)
 
-Rebased and landed `issue-1044-watchdog-recovery-bridge` (2 commits survived: #1023 timeout fix, #1044 watchdog bridge). `issue-1049-engine-core-extraction` confirmed already on main — all 64 commits skipped, branch stamped. Synced local, origin, and fork main.
-
-Verified and closed the entire Hive Mind epic (#1104) across engine, agency, eidos, qhorus — all code confirmed on local main. Closed superseded #604, #605 from epic #595. Cross-repo review (wiring, consistency, robustness) revealed engine↔agency bridge gap and thread safety warnings. Created integration epic #1274 with 10 child issues across 3 repos. Revised "Ants Don't Need a Manager" blog entry into full advocacy article with SVG diagrams.
+Rebased and landed issue-1044 (watchdog bridge) and confirmed issue-1049 (engine-core extraction) already on main. Closed Hive Mind epic #1104 and superseded #604, #605. Cross-repo review created integration epic #1274. Agency bridge (agency#375) has since landed.
 
 ## Immediate Next Step
 
-Agency bridge implementation — `SwarmCoordinationListener` adapter connecting engine swarm events to agency's `SwarmEventSource` (agency#375). Critical path for hive mind integration.
+`work start 1274` — Hive Mind integration wiring. Plan is written and ready. Batch 1 (thread safety + SPI cleanup: #1275, #1276, #1277, #1278) is mechanical and independent. Batch 2 (eidos/qhorus wiring: #1279, #1280) needs brainstorming on dependency model.
 
 ## Cross-Module
 
-- engine#1274 parent epic: 10 integration issues across engine (6), agency (2), eidos (2)
-- agency#375 critical bridge — engine events → agency LLM coordination
-- eidos#213 enum alignment (`CollaborationRelation` → `NeighborRelation`)
+- agency#375 CLOSED — bridge landed, engine events now reach agency
+- agency#376 depends on engine#1278 (onMemberCompleted wiring)
+- eidos#213 (enum alignment) can land alongside engine#1279
 
 ## References
 
 | Artifact | Path |
 |----------|------|
-| Blog (revised) | `blog/2026-10-26-mdp01-ants-dont-need-a-manager.md` |
-| Stashed (project) | 4 modified recovery/runtime files (pre-existing, not from this session) |
+| Implementation plan | `plans/2026-10-31-hive-mind-integration-engine.md` |
+| Blog | `blog/2026-10-26-mdp01-ants-dont-need-a-manager.md` |
+| Stashed (project) | 4 modified recovery/runtime files (pre-existing) |
 | Stashed (workspace) | deleted `.plan` and stale progress files |
