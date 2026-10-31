@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 340" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5" fill="#94a3b8"/>
+    </marker>
+    <marker id="arr-amber" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <rect width="780" height="340" fill="#fafaf9" rx="8"/>
+
+  <!-- Left: Fixed Topology -->
+  <rect x="20" y="16" width="360" height="308" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="200" y="40" text-anchor="middle" font-size="14" font-weight="600" fill="#dc2626">Fixed Topology</text>
+  <text x="200" y="56" text-anchor="middle" font-size="10" fill="#94a3b8">CrewAI / AutoGen / LangGraph</text>
+
+  <!-- Fixed agents -->
+  <circle cx="200" cy="110" r="22" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="200" y="114" text-anchor="middle" font-size="9" font-weight="500" fill="#991b1b">Router</text>
+
+  <circle cx="100" cy="200" r="20" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="100" y="204" text-anchor="middle" font-size="9" fill="#7f1d1d">Agent A</text>
+
+  <circle cx="200" cy="220" r="20" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="200" y="224" text-anchor="middle" font-size="9" fill="#7f1d1d">Agent B</text>
+
+  <circle cx="300" cy="200" r="20" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="300" y="204" text-anchor="middle" font-size="9" fill="#7f1d1d">Agent C</text>
+
+  <!-- Fixed arrows -->
+  <line x1="185" y1="128" x2="112" y2="184" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="200" y1="132" x2="200" y2="198" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="215" y1="128" x2="288" y2="184" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- Problems -->
+  <text x="200" y="272" text-anchor="middle" font-size="10" fill="#dc2626">Roles predefined. Topology hardcoded.</text>
+  <text x="200" y="288" text-anchor="middle" font-size="10" fill="#dc2626">Add an agent? Rewrite the wiring.</text>
+  <text x="200" y="304" text-anchor="middle" font-size="10" fill="#dc2626">Agent fails? System breaks.</text>
+
+  <!-- Right: Emergent Coordination -->
+  <rect x="400" y="16" width="360" height="308" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="580" y="40" text-anchor="middle" font-size="14" font-weight="600" fill="#059669">Emergent Coordination</text>
+  <text x="580" y="56" text-anchor="middle" font-size="10" fill="#94a3b8">CaseHub Hive Mind</text>
+
+  <!-- Shared environment -->
+  <rect x="440" y="72" width="280" height="36" rx="4" fill="#fef3c7" stroke="#fbbf24" stroke-width="1"/>
+  <text x="580" y="94" text-anchor="middle" font-size="10" font-weight="500" fill="#92400e">Shared Signal Space (pheromone trails)</text>
+
+  <!-- Emergent agents -->
+  <circle cx="480" cy="160" r="20" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="480" y="164" text-anchor="middle" font-size="9" fill="#065f46">Agent</text>
+
+  <circle cx="580" cy="180" r="20" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="580" y="184" text-anchor="middle" font-size="9" fill="#065f46">Agent</text>
+
+  <circle cx="680" cy="160" r="20" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="680" y="164" text-anchor="middle" font-size="9" fill="#065f46">Agent</text>
+
+  <circle cx="530" cy="240" r="20" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="530" y="244" text-anchor="middle" font-size="9" fill="#065f46">Agent</text>
+
+  <circle cx="640" cy="240" r="20" fill="#d1fae5" stroke="#10b981" stroke-width="2"/>
+  <text x="640" y="236" text-anchor="middle" font-size="8" fill="#065f46">New</text>
+  <text x="640" y="248" text-anchor="middle" font-size="8" fill="#065f46">Agent</text>
+
+  <!-- Signal arrows (to/from shared space) -->
+  <line x1="480" y1="140" x2="500" y2="108" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-amber)"/>
+  <line x1="580" y1="160" x2="580" y2="108" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-amber)"/>
+  <line x1="680" y1="140" x2="660" y2="108" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-amber)"/>
+  <line x1="530" y1="220" x2="520" y2="108" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-amber)"/>
+  <line x1="640" y1="220" x2="640" y2="108" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-amber)"/>
+
+  <!-- Emergent team -->
+  <ellipse cx="530" cy="195" rx="80" ry="65" fill="none" stroke="#34d399" stroke-width="1" stroke-dasharray="6,4" opacity="0.5"/>
+  <text x="530" y="290" text-anchor="middle" font-size="8" fill="#059669" font-style="italic">emergent team</text>
+
+  <!-- Benefits -->
+  <text x="580" y="314" text-anchor="middle" font-size="10" fill="#059669">Roles emerge. Topology self-organizes. Self-heals.</text>
+</svg>

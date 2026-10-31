@@ -80,9 +80,9 @@
   <text x="380" y="376" text-anchor="middle" font-size="9" fill="#64748b">experience replay from CBR traces</text>
 
   <!-- Evolution -->
-  <rect x="500" y="340" width="160" height="52" rx="4" fill="#fff" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4,3"/>
-  <text x="580" y="360" text-anchor="middle" font-size="11" font-weight="500" fill="#9ca3af">Evolution Loop</text>
-  <text x="580" y="376" text-anchor="middle" font-size="9" fill="#9ca3af">remaining work</text>
+  <rect x="500" y="340" width="160" height="52" rx="4" fill="#fff" stroke="#fbbf24" stroke-width="1"/>
+  <text x="580" y="360" text-anchor="middle" font-size="11" font-weight="500" fill="#92400e">Evolution Loop</text>
+  <text x="580" y="376" text-anchor="middle" font-size="9" fill="#64748b">self-improvement + rollback</text>
 
   <!-- Connecting arrows between layers -->
   <line x1="125" y1="156" x2="125" y2="222" stroke="#64748b" stroke-width="1" marker-end="url(#arrow)"/>
@@ -110,8 +110,5 @@
   <!-- Legend -->
   <rect x="520" y="425" width="10" height="10" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
   <text x="536" y="434" font-size="9" fill="#64748b">Delivered</text>
-  <rect x="590" y="425" width="10" height="10" rx="2" fill="#fff" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,2"/>
-  <text x="606" y="434" font-size="9" fill="#9ca3af">Remaining</text>
-
-  <text x="360" y="470" text-anchor="middle" font-size="9" fill="#94a3b8">14 of 15 child issues delivered across engine, agency, eidos, qhorus</text>
+  <text x="360" y="470" text-anchor="middle" font-size="9" fill="#94a3b8">All 15 child issues delivered across engine, agency, eidos, qhorus</text>
 </svg>
