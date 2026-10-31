@@ -12,8 +12,9 @@ design-section-hashes:
 flyway-next-v: 
 
 ## Queue
-- [ ] casehubio/engine#1278 — onMemberCompleted — wire or remove from SPI
-- [ ] casehubio/engine#1276 — Swarm state visibility — volatile fields
-- [ ] casehubio/engine#1275 — SignalRegistry thread safety
-- [ ] casehubio/engine#1279 — Wire eidos proximity queries into swarm provisioning
+- [x] casehubio/engine#1277 — SwarmProvisioner listener exception propagation
+- [x] casehubio/engine#1278 — onMemberCompleted — wire or remove from SPI
+- [x] casehubio/engine#1276 — Swarm state visibility — volatile fields
+- [x] casehubio/engine#1275 — SignalRegistry thread safety
+- [ ] casehubio/engine#1279 — Wire eidos proximity queries into swarm provisioning ← active
 - [ ] casehubio/engine#1280 — Wire qhorus broadcast into swarm coordination lifecycle
