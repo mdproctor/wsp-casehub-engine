@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1274-hive-mind-integration-wiring
-state: scaffolded
+state: active
 project-sha: 
 date: 
 issue-repo: casehubio/engine
@@ -12,4 +12,8 @@ design-section-hashes:
 flyway-next-v: 
 
 ## Queue
-- [ ] casehubio/engine#1274 — Issue #1274 ← active
+- [ ] casehubio/engine#1278 — onMemberCompleted — wire or remove from SPI
+- [ ] casehubio/engine#1276 — Swarm state visibility — volatile fields
+- [ ] casehubio/engine#1275 — SignalRegistry thread safety
+- [ ] casehubio/engine#1279 — Wire eidos proximity queries into swarm provisioning
+- [ ] casehubio/engine#1280 — Wire qhorus broadcast into swarm coordination lifecycle
