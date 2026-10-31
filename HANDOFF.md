@@ -1,34 +1,25 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-10-29)
+## Last Session (2026-10-31)
 
-Completed all remaining tasks for #1262 (Batch 3: TriageWiring + Batch 4: CBRRecording), tasks 9-14. Full implementation of structured playbook failure output and triage wiring is now complete across all 4 batches (14 tasks).
+Rebased and landed `issue-1044-watchdog-recovery-bridge` (2 commits survived: #1023 timeout fix, #1044 watchdog bridge). `issue-1049-engine-core-extraction` confirmed already on main — all 64 commits skipped, branch stamped. Synced local, origin, and fork main.
 
-**Batch 3 (5 tasks):** RecoveryPolicy/RecoveryOverride triage fields, BindingRecoveryState triage tracking, DefaultRecoveryCoordinator triage integration (the big one — restructured handleFailure flow, added TriageHandler wiring, TriageContext building, Retry/Abandon handling), PlaybookTriageModification sealed hierarchy + parser, retry count partitioning by triage round.
-
-**Batch 4 (1 task):** PlaybookOutcomeRecorder for per-execution CBR recording with step trace and triage chain context.
-
-**Notable implementation decisions:**
-- `ExecutionResultCarrier` interface (api module) bridges `PlaybookExecutionException` across module boundary — `common-core` can't see `engine-support-core`, so the carrier interface provides a module-safe way to extract `PlaybookExecutionResult` from the `Throwable` in `RetryOrchestrator`.
-- `RetryOrchestrator` accepts `BiFunction<UUID, String, Integer>` for triage round lookup (not `CaseRecoveryStateRegistry` directly, due to module boundary — registry is in `runtime-core`, orchestrator in `common-core`). Wired via lambda in `RuntimeBeans`.
-- `RecoveryContext` gained `executionResult` (9th field) with backward-compatible 8-arg constructor — this was listed under Task 8 but wasn't implemented in the previous session.
-- `handleFailure()` restructured: `skipRecovery` now skips structural recovery but falls through to triage (unless `skipTriage` is also set).
+Verified and closed the entire Hive Mind epic (#1104) across engine, agency, eidos, qhorus — all code confirmed on local main. Closed superseded #604, #605 from epic #595. Cross-repo review (wiring, consistency, robustness) revealed engine↔agency bridge gap and thread safety warnings. Created integration epic #1274 with 10 child issues across 3 repos. Revised "Ants Don't Need a Manager" blog entry into full advocacy article with SVG diagrams.
 
 ## Immediate Next Step
 
-Issue #1262 is implementation-complete. Next: `work end` to close the branch, or continue with #1263 (PlaybookWorkerFunctionProvider — already folded into Batch 1 and marked complete in the plan, but still listed as a separate queue item).
+Agency bridge implementation — `SwarmCoordinationListener` adapter connecting engine swarm events to agency's `SwarmEventSource` (agency#375). Critical path for hive mind integration.
 
 ## Cross-Module
 
-Platform playbook compiler uses serverlessworkflow-types 7.35.3.Final — engine is on 7.25.1.Final. Binary compat verified at build time but a dedicated compat test is noted in the spec.
+- engine#1274 parent epic: 10 integration issues across engine (6), agency (2), eidos (2)
+- agency#375 critical bridge — engine events → agency LLM coordination
+- eidos#213 enum alignment (`CollaborationRelation` → `NeighborRelation`)
 
 ## References
 
 | Artifact | Path |
 |----------|------|
-| Design spec | `specs/issue-1262-playbook-failure-triage/2026-10-28-playbook-failure-triage-design.md` |
-| Decisions | `specs/issue-1262-playbook-failure-triage/decisions.md` |
-| Implementation plan | `plans/2026-10-28-playbook-failure-triage.md` |
-| Blog entry | `blog/2026-10-28-mdp01-playbook-failure-recovery-chain.md` |
-| Branch | `issue-1262-playbook-failure-triage` |
-| Stashed changes | `git stash list` — pre-1262 rest changes stashed before branching |
+| Blog (revised) | `blog/2026-10-26-mdp01-ants-dont-need-a-manager.md` |
+| Stashed (project) | 4 modified recovery/runtime files (pre-existing, not from this session) |
+| Stashed (workspace) | deleted `.plan` and stale progress files |
