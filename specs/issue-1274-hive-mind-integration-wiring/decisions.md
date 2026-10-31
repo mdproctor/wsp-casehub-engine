@@ -9,3 +9,16 @@
 **Sources:** engine/api/pom.xml (existing eidos-api/qhorus-api deps), eidos-routing module (precedent), AgentGraphQuery.java, RuntimeCollaborationQuery.java, MessageDispatcher.java
 **Exploration:** quick
 **Status:** captured
+
+## D2: Eidos integration points (#1279)
+
+**Choice:** Wire all three: SwarmProvisioner + coActiveAgents/topAgentsByOutcome, StigmergyCoordinator + coActiveAgents for neighbor awareness, TeamDetector + RuntimeCollaborationQuery.collaborators()
+**Alternatives:**
+- SwarmProvisioner only — highest-value single point, YAGNI for the others
+- SwarmProvisioner + StigmergyCoordinator — skip TeamDetector enrichment
+**Rationale:** User wants full integration. All three are independent call sites — no cascading complexity. Pre-release platform, wire it all now.
+**Trade-offs:** More injection points to maintain. TeamDetector enrichment may prove low-value in practice — can be removed later if unused.
+**Sources:** AgentGraphQuery (coActiveAgents, topAgentsByOutcome), RuntimeCollaborationQuery (collaborators), SwarmProvisioner.java, StigmergyCoordinator.java, TeamDetector.java
+**Exploration:** quick
+**Depends on:** D1 (dependency model)
+**Status:** captured
