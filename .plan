@@ -10,7 +10,7 @@ covers: 1259
 design-repo: 
 design-section-hashes: 
 flyway-next-v: 
-
 evidence-era: true
+
 ## Queue
-- [ ] casehubio/engine#1259 — Issue #1259 ← active
+- [x] casehubio/engine#1259 — Issue #1259
