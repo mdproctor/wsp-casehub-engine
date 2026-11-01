@@ -65,7 +65,17 @@ Categorises agent actions for scope enforcement. The AgentCapabilityGuard checks
 | `PROVISIONING` | Requesting new agents or resources |
 | `CONTEXT_MUTATION` | Writing to CaseContext keys that affect other agents' observations |
 
-**Permission matrix invariant** (enforced by #1283): The permission matrix is a total function from (DecisionScope × DecisionType) → {PERMIT, DENY}. Every (scope, type) pair has a defined outcome. FULL_AUTONOMY permits all DecisionTypes. STIMULUS_DRIVEN permits SIGNALING only as a response within a signal handler (not spontaneous emission). No DecisionType is universally denied across all scopes.
+**Permission matrix invariant** (enforced by #1283): The permission matrix is a total function from (DecisionScope × DecisionType) → {PERMIT, DENY}. Every (scope, type) pair has a defined outcome — a static 2D lookup with no runtime context dependency. FULL_AUTONOMY permits all DecisionTypes. No DecisionType is universally denied across all scopes.
+
+**Reference matrix** (definitive mapping for #1283):
+
+| | TASK_SELECTION | COLLABORATION | SIGNALING | PROVISIONING | CONTEXT_MUTATION |
+|---|---|---|---|---|---|
+| **STIMULUS_DRIVEN** | DENY | DENY | PERMIT | DENY | DENY |
+| **TASK_ADAPTATION** | DENY | PERMIT | PERMIT | DENY | PERMIT |
+| **FULL_AUTONOMY** | PERMIT | PERMIT | PERMIT | PERMIT | PERMIT |
+
+STIMULUS_DRIVEN + SIGNALING is unconditionally PERMIT. The "cannot initiate" constraint in STIMULUS_DRIVEN's semantics is enforced by the guard at the *invocation* level: STIMULUS_DRIVEN agents are only activated by incoming signals, so their signaling actions are inherently responsive. The vocabulary matrix does not encode execution context — it defines what action *categories* are permitted for each scope. Whether an action is spontaneous or reactive is determined by how the agent was invoked, not by the (scope × type) pair.
 
 ### RoleArchetype (enum)
 
@@ -173,7 +183,30 @@ Enforcement group (consumed by AgentCapabilityGuard, #1283):
 
 The structure group describes the coordination arrangement. The enforcement group constrains what agents may do within that arrangement. DecisionScope and DecisionType are per-agent configuration — independent of topology.
 
-Decision authority (LOCAL / COORDINATED / CENTRAL) is derivable from TopologyType + RoleArchetype: CENTRALISED + INITIATOR → CENTRAL, CENTRALISED + RESPONDENT → LOCAL, DISTRIBUTED + PEER → COORDINATED. The AgentCapabilityGuard (#1283) should derive this rather than maintaining a separate enum — this prevents invalid combinations (e.g., CENTRAL authority on a RESPONDENT in a DISTRIBUTED topology).
+Decision authority (LOCAL / COORDINATED / CENTRAL) is derivable from TopologyType + RoleArchetype. The AgentCapabilityGuard (#1283) should derive this rather than maintaining a separate enum — this prevents invalid combinations.
+
+**Complete derivation mapping** (total function — every cell defined):
+
+| TopologyType | INITIATOR | PEER | RESPONDENT |
+|---|---|---|---|
+| **CENTRALISED** | CENTRAL | *invalid* | LOCAL |
+| **DISTRIBUTED** | *invalid* | COORDINATED | *invalid* |
+| **HYBRID** | CENTRAL | COORDINATED | LOCAL |
+
+**Valid combinations (6):**
+- CENTRALISED + INITIATOR → CENTRAL: the single coordinator; decisions affect the entire swarm
+- CENTRALISED + RESPONDENT → LOCAL: subordinates follow the coordinator; their own decisions are local
+- DISTRIBUTED + PEER → COORDINATED: all agents coordinate as equals; no unilateral authority
+- HYBRID + INITIATOR → CENTRAL: coordinator for global decisions
+- HYBRID + PEER → COORDINATED: participate in coordination for shared concerns
+- HYBRID + RESPONDENT → LOCAL: subordinates with local-only decision scope
+
+**Invalid combinations (3):** These are structurally incoherent — the topology and role contradict each other:
+- CENTRALISED + PEER: CENTRALISED has a coordinator and subordinates; PEER ("equal-status, no coordinator relationship") contradicts the centralised structure
+- DISTRIBUTED + INITIATOR: INITIATOR ("delegates to others — structural authority") contradicts DISTRIBUTED ("peer-to-peer, no central coordinator")
+- DISTRIBUTED + RESPONDENT: RESPONDENT ("receives delegation — structural subordinate") contradicts DISTRIBUTED (no delegation hierarchy)
+
+The derivation function in #1283 should throw `IllegalArgumentException` for invalid combinations. These are configuration errors — an agent cannot be a PEER in a CENTRALISED topology, because CENTRALISED by definition has a coordinator/subordinate structure.
 
 **TopologyDescriptor** (runtime state: current topology + agent→role assignments) is deferred to #1283+ where the SPIs that construct and consume it are defined. This issue establishes the vocabulary enums and AgentRole record only.
 
