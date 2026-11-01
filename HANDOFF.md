@@ -23,6 +23,17 @@ Engine#1283 (AgentCapabilityGuard) — the first consumer of the vocabulary type
 Read the updated spec at `specs/issue-1282-coordination-vocabulary-types/SPEC.md`
 for the permission matrix, derivation mapping, and deferral decomposition table.
 
+## Open question — investigate before #1283
+
+**RoleArchetype vs eidos archetypes:** `RoleArchetype` (INITIATOR/PEER/CONTRACTOR)
+describes structural position in a coordination topology. Eidos has `CasehubSlotTerm`
+and `BelbinTerm` vocabulary enums for capability/personality archetypes, plus
+`AgentDescriptor` with a 4-layer identity model. These are conceptually orthogonal
+(structural position vs capability profile), but both use the word "archetype."
+Investigate: does eidos use `archetype` in any type name? Is there naming tension?
+Does `RoleArchetype` need renaming to avoid confusion, or is the distinction clear
+enough? Check `casehub-eidos-api` and `casehub-eidos-vocab` types.
+
 ## References
 
 | Artifact | Path |
