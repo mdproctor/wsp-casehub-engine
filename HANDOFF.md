@@ -2,36 +2,27 @@
 
 ## Last Session (2026-11-01)
 
-### Epic #1274 — Hive Mind integration wiring — COMPLETE
+### Branch `issue-1268-runtime-enhancements` — 3 issues COMPLETE
 
-Implemented all 6 child issues, squashed to 6 clean commits, landed on main:
+Completed all 3 queued issues in a single session:
 
-1. `6ed53ad64` — #1277: SwarmCoordinationListener exception propagation
-2. `81432671b` — #1278: onMemberCompleted wired into departure flow
-3. `9a7d3df04` — #1276: volatile fields for swarm state visibility
-4. `2b94e181d` — #1275: SignalRegistry thread safety (compute + purge)
-5. `d6f197fab` — #1279: eidos proximity queries (3 integration points)
-6. `0ebf4ce7f` — #1280: qhorus broadcast (9 event types, CDI + Spring producers)
+1. `d51326d6d` — **#1268** (S/Low): FlowWorkerFunctionHandler now checks for StepStatus.FAILED after workflow completion and throws PlaybookExecutionException wrapping PartialSuccess instead of returning Success. Routes mixed results through RetryOrchestrator/RecoveryCoordinator.
 
-Branch audit caught a real gap: StigmergyCoordinator had no CDI/Spring bean producer — pattern detection events would silently not post in production. Fixed by adding `@Produces`/`@Bean` methods in RuntimeBeans and RuntimeManualConfig.
+2. `af1111a54` — **#1234** (S/Med): EngineAwareAgentSelector tries OrgAwareDispatch.escalate() when primary selection returns Unresolvable or Escalated. Walks the org supervision chain to find a capable agent. Falls back to current behavior when eidos-org is absent (Optional.empty).
 
-### Issue triage
+3. `983c185ad`..`50f81457a` — **#1269** (M/Med): Gallery API projections.
+   - Extended CoordinationStepView/PhaseItemView with drillDown, icon, iconColor, routing fields
+   - Added MatchRoutingView/MatchCaseView view records
+   - Added AgentDescriptorProjection (enriches worker metadata with eidos AgentDescriptor from AgentRegistry)
+   - Added GalleryMcpAdapter (@McpDomain engine/gallery) with @PlatformQuery endpoints
 
-Closed stale issues this session:
-- #1237, #1243, #1236 — langchain4j removal (already done via #1245/#1252)
-- #1027 — DSL audit epic (all 9 children already closed)
-- #1099, platform#324, ras#65 — CBR ensemble / shared algorithms (superseded by simulated responses, eidos routing, neocortex BJT)
+### Previous session — Epic #1274 (Hive Mind integration) — already on main
 
-### Next work — branch `issue-1268-runtime-enhancements`
-
-.plan queued with 3 issues:
-1. **#1268** (S/Low) — FlowWorkerFunctionHandler PartialSuccess for mixed step results ← active
-2. **#1234** (S/Med) — org-aware escalation in AgentRoutingStrategy
-3. **#1269** (M/Med) — API projections for gallery (AgentDescriptor + CoordinationPipeline)
+6 commits landed on main prior to this session's work.
 
 ## Immediate Next Step
 
-`work continue` → brainstorm + implement #1268.
+`work end` → squash, land on main, close branch.
 
 ## Cross-Module
 
