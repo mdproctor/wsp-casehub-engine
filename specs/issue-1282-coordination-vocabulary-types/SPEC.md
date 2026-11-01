@@ -65,7 +65,7 @@ Categorises agent actions for scope enforcement. The AgentCapabilityGuard checks
 | `PROVISIONING` | Requesting new agents or resources |
 | `CONTEXT_MUTATION` | Writing to CaseContext keys that affect other agents' observations |
 
-**Permission matrix invariant** (enforced by #1283): The permission matrix is a total function from (DecisionScope × DecisionType) → {PERMIT, DENY}. Every (scope, type) pair has a defined outcome — a static 2D lookup with no runtime context dependency. FULL_AUTONOMY permits all DecisionTypes. No DecisionType is universally denied across all scopes.
+**Permission matrix invariant** (enforced by #1283): The permission matrix is a total function from (DecisionScope × DecisionType) → {PERMIT, DENY}. Every (scope, type) pair has a defined outcome — a static 2D lookup. The matrix is one layer of a multi-layer enforcement stack. It determines which action *categories* are permissible for a given scope. FULL_AUTONOMY permits all DecisionTypes. No DecisionType is universally denied across all scopes.
 
 **Reference matrix** (definitive mapping for #1283):
 
@@ -75,7 +75,9 @@ Categorises agent actions for scope enforcement. The AgentCapabilityGuard checks
 | **TASK_ADAPTATION** | DENY | PERMIT | PERMIT | DENY | PERMIT |
 | **FULL_AUTONOMY** | PERMIT | PERMIT | PERMIT | PERMIT | PERMIT |
 
-STIMULUS_DRIVEN + SIGNALING is unconditionally PERMIT. The "cannot initiate" constraint in STIMULUS_DRIVEN's semantics is enforced by the guard at the *invocation* level: STIMULUS_DRIVEN agents are only activated by incoming signals, so their signaling actions are inherently responsive. The vocabulary matrix does not encode execution context — it defines what action *categories* are permitted for each scope. Whether an action is spontaneous or reactive is determined by how the agent was invoked, not by the (scope × type) pair.
+**Two-layer enforcement for STIMULUS_DRIVEN:** STIMULUS_DRIVEN + SIGNALING is PERMIT in the matrix. The "cannot initiate" constraint in STIMULUS_DRIVEN's semantics is enforced at a separate layer — the *activation guard*: STIMULUS_DRIVEN agents are only activated by incoming signals, so their signaling actions are inherently responsive. The matrix determines *what action categories are permitted* (static, context-free). The activation guard determines *when the agent may execute at all* (requires incoming signal as trigger). Both layers must pass for an action to proceed.
+
+**Relationship to MeshParticipation.REACTIVE:** `MeshParticipation.REACTIVE` (in `spi.mesh`) controls mesh channel registration — "do not register; only engage when directly addressed." STIMULUS_DRIVEN controls decision scope — what categories of action an agent may perform. These are orthogonal: a STIMULUS_DRIVEN agent might be ACTIVE in the mesh (registered, posting status) but restricted to responding to incoming signals for its *decisions*. The activation guard enforcement mechanism is deferred to #1283 (AgentCapabilityGuard).
 
 ### RoleArchetype (enum)
 
@@ -95,14 +97,18 @@ Grounded in MAS literature consensus: FIPA Contract Net Protocol, Moore's HMAS t
 
 Intrinsic behavioral contract — the platform implements specific behavior for these roles. Patterns dispatch against these values. Grows over time as the platform adds new behavioral patterns.
 
-| Value | Platform behavior | Intended consumers |
-|-------|-------------------|--------------------|
-| `COORDINATOR` | Orchestrates, delegates, allocates tasks, aggregates results | Pattern builders (#1284 TopologyLifecycle), future orchestration SPIs |
-| `SUPERVISOR` | Oversees, approves/rejects, gates progression | OversightGateService, ActionRiskClassifier (existing in `api/spi/`) |
-| `JUDGE` | Evaluates, scores, renders decisions | Voting/scoring patterns (#1286 VotingProtocol) |
-| `MODERATOR` | Enforces protocol, manages turn-taking | Protocol enforcement patterns (#1286 VotingProtocol) |
+| Value | Platform behavior | Required archetype | Intended consumers |
+|-------|-------------------|--------------------|--------------------|
+| `COORDINATOR` | Orchestrates, delegates, allocates tasks, aggregates results | `INITIATOR` | Pattern builders (#1284 TopologyLifecycle), future orchestration SPIs |
+| `SUPERVISOR` | Oversees, approves/rejects, gates progression | `INITIATOR` | OversightGateService, ActionRiskClassifier (existing in `api/spi/`) |
+| `JUDGE` | Evaluates, scores, renders decisions | `PEER` | Voting/scoring patterns (#1286 VotingProtocol) |
+| `MODERATOR` | Enforces protocol, manages turn-taking | `PEER` | Protocol enforcement patterns (#1286 VotingProtocol) |
+
+Each PlatformRole carries a `requiredArchetype()` — the structural position that its behavioral contract implies. COORDINATOR and SUPERVISOR delegate to others (→ INITIATOR). JUDGE and MODERATOR participate as equals in decision processes (→ PEER). This mapping is enforced by AgentRole's compact constructor — incoherent pairings like `COORDINATOR + RESPONDENT` are rejected at construction time.
 
 Only `SUPERVISOR` is wired to existing code today. The other values are forward-looking — downstream specs (#1283–#1288) will define their behavioral SPIs and reference these values.
+
+**Relationship to conductor infrastructure:** The existing conductor pattern (`ConductorInboxEntry`, `ConductorDecision`, `ConductorInboxManager` in `model.stigmergy` / `runtime.improvement`) implements an approval/rejection workflow with `Status.APPROVED`, `REJECTED`, `REDIRECTED`, `TIMED_OUT`, `AUTO_APPROVED`. This is the same behavioral pattern that `SUPERVISOR` describes at the vocabulary level — oversight and gating. When downstream specs (#1283–#1288) implement SUPERVISOR behavioral contracts, they must decide whether SUPERVISOR builds on, replaces, or coexists with the conductor infrastructure. This reconciliation is deferred to a new GitHub issue filed against #1288 (Agent Behavioral SPI).
 
 ### AgentRole (record)
 
@@ -116,15 +122,33 @@ public record AgentRole(
 ) {
   public AgentRole {
     Objects.requireNonNull(name, "name must not be null");
+    for (String segment : name.segments()) {
+      if (segment.contains("/")) {
+        throw new IllegalArgumentException(
+            "AgentRole name must be constructed via Path.parse() — "
+            + "segment contains unresolved delimiter: \"" + segment + "\"");
+      }
+    }
     if (platformRole != null && archetype == null) {
       throw new IllegalArgumentException(
           "platformRole requires archetype — a behavioral contract implies structural position");
+    }
+    if (platformRole != null && archetype != platformRole.requiredArchetype()) {
+      throw new IllegalArgumentException(
+          platformRole + " requires archetype " + platformRole.requiredArchetype()
+          + ", got " + archetype);
     }
   }
 }
 ```
 
-**Compact constructor invariant:** if `platformRole` is non-null, `archetype` must also be non-null. A platform behavioral contract (e.g. COORDINATOR orchestrates) always implies a structural position (e.g. INITIATOR delegates). The converse is not required — task-oriented roles have archetype without platformRole.
+**Compact constructor invariants:**
+
+1. **Path segment integrity:** No segment may contain the `/` delimiter. This rejects Paths created via `Path.of("reviewer/code")` (one segment containing `/`) while accepting those from `Path.parse("reviewer/code")` (two segments `["reviewer", "code"]`). The canonical constructor is public by Java record specification — this validation ensures hierarchy matching (`isKindOf`) works correctly regardless of how the Path was created.
+
+2. **PlatformRole requires archetype:** if `platformRole` is non-null, `archetype` must also be non-null. A platform behavioral contract (e.g. COORDINATOR orchestrates) always implies a structural position (e.g. INITIATOR delegates). The converse is not required — task-oriented roles have archetype without platformRole.
+
+3. **PlatformRole → RoleArchetype pairing:** if `platformRole` is non-null, `archetype` must match the platform role's required archetype. Each PlatformRole has exactly one valid RoleArchetype — this is a closed, fixed mapping owned by the PlatformRole enum itself (see below).
 
 **Factory methods:** `AgentRole.of(String name, ...)` uses `Path.parse(name)` internally, not `Path.of(name)`. This is critical for hierarchy matching — `Path.of("reviewer/code")` creates one segment `"reviewer/code"` (the `/` is just a character), while `Path.parse("reviewer/code")` splits on the delimiter into segments `["reviewer", "code"]`. Only `Path.parse` produces the segment structure that `Path.isAncestorOf()` requires.
 
@@ -185,13 +209,13 @@ The structure group describes the coordination arrangement. The enforcement grou
 
 Decision authority (LOCAL / COORDINATED / CENTRAL) is derivable from TopologyType + RoleArchetype. The AgentCapabilityGuard (#1283) should derive this rather than maintaining a separate enum — this prevents invalid combinations.
 
-**Complete derivation mapping** (total function — every cell defined):
+**Complete derivation mapping** (total function — every cell defined, including null archetype):
 
-| TopologyType | INITIATOR | PEER | RESPONDENT |
-|---|---|---|---|
-| **CENTRALISED** | CENTRAL | *invalid* | LOCAL |
-| **DISTRIBUTED** | *invalid* | COORDINATED | *invalid* |
-| **HYBRID** | CENTRAL | COORDINATED | LOCAL |
+| TopologyType | INITIATOR | PEER | RESPONDENT | null (symbolic) |
+|---|---|---|---|---|
+| **CENTRALISED** | CENTRAL | *invalid* | LOCAL | *invalid* |
+| **DISTRIBUTED** | *invalid* | COORDINATED | *invalid* | *invalid* |
+| **HYBRID** | CENTRAL | COORDINATED | LOCAL | *invalid* |
 
 **Valid combinations (6):**
 - CENTRALISED + INITIATOR → CENTRAL: the single coordinator; decisions affect the entire swarm
@@ -201,14 +225,22 @@ Decision authority (LOCAL / COORDINATED / CENTRAL) is derivable from TopologyTyp
 - HYBRID + PEER → COORDINATED: participate in coordination for shared concerns
 - HYBRID + RESPONDENT → LOCAL: subordinates with local-only decision scope
 
-**Invalid combinations (3):** These are structurally incoherent — the topology and role contradict each other:
+**Invalid combinations (6):** These are structurally incoherent — the topology and role contradict each other:
 - CENTRALISED + PEER: CENTRALISED has a coordinator and subordinates; PEER ("equal-status, no coordinator relationship") contradicts the centralised structure
 - DISTRIBUTED + INITIATOR: INITIATOR ("delegates to others — structural authority") contradicts DISTRIBUTED ("peer-to-peer, no central coordinator")
 - DISTRIBUTED + RESPONDENT: RESPONDENT ("receives delegation — structural subordinate") contradicts DISTRIBUTED (no delegation hierarchy)
+- Any topology + null archetype: Symbolic roles (null archetype) are labels for rendering/grouping — they have no structural position and cannot participate in decision authority derivation. An agent with a symbolic role appearing in a topology's agent-role assignments is a configuration error.
 
-The derivation function in #1283 should throw `IllegalArgumentException` for invalid combinations. These are configuration errors — an agent cannot be a PEER in a CENTRALISED topology, because CENTRALISED by definition has a coordinator/subordinate structure.
+The derivation function in #1283 should throw `IllegalArgumentException` for invalid combinations. These are configuration errors — an agent cannot be a PEER in a CENTRALISED topology, because CENTRALISED by definition has a coordinator/subordinate structure. Similarly, a symbolic role cannot appear in a topology context that requires authority derivation.
 
 **TopologyDescriptor** (runtime state: current topology + agent→role assignments) is deferred to #1283+ where the SPIs that construct and consume it are defined. This issue establishes the vocabulary enums and AgentRole record only.
+
+**DecisionScope independence from topology:** DecisionScope and DecisionType are per-agent configuration — intentionally independent of topology. This means any combination of (TopologyType × RoleArchetype × DecisionScope) is valid. Seemingly contradictory combinations are intentional:
+
+- CENTRALISED + RESPONDENT + FULL_AUTONOMY: The agent is structurally subordinate (receives delegation from the coordinator) but has full autonomy in *how* it executes — it can decide sub-tasks, collaborations, and timing. The coordinator decides *what* is delegated; the agent decides *how* to do it.
+- DISTRIBUTED + PEER + STIMULUS_DRIVEN: A specialist peer that contributes only when prompted. In a peer network, this is a service-like agent that provides expertise on demand without proactively initiating work.
+
+TopologyType × RoleArchetype constrains *structural position* (who delegates to whom). DecisionScope constrains *operational freedom* (what categories of action the agent may perform). These dimensions are orthogonal by design.
 
 ## What This Issue Does NOT Include
 
@@ -221,6 +253,23 @@ The derivation function in #1283 should throw `IllegalArgumentException` for inv
 - **Observation strategy** — event/tick/demand-driven triggers are a separate dimension.
 - **Invocation budget** — cost control is agency-owned (#382).
 - **Task coordination primitives** — `io.casehub.platform.compiler.CoordinationSpec` defines workflow-level coordination primitives (barriers, semaphores, signals, channels, quorums, state machines, sagas) for Serverless Workflow task synchronization. That is a different layer: task coordination within a workflow, not agent coordination within a topology.
+
+**Deferral decomposition — #1283 scope partitioning:** Three independent dimension reviews pushed concerns to #1283 (AgentCapabilityGuard), accumulating scope beyond what one issue should address. The following partitioning clarifies ownership:
+
+| Concern | Owner |
+|---------|-------|
+| AgentCapabilityGuard implementation (matrix enforcement + activation guard) | #1283 |
+| DecisionAuthority derivation function | #1283 |
+| Permission matrix enforcement | #1283 |
+| Invalid TopologyType × RoleArchetype rejection | #1283 |
+| Agent identity type (String vs typed wrapper) | #1283 |
+| TopologyDescriptor definition (type, constraints, construction) | #1284 |
+| TopologyDescriptor robustness (invalid states, mutable Map, version/epoch) | #1284 |
+| TopologyDescriptor coordinatorAgentId, agentRoles key type | #1284 |
+| Topology transition policy (graduation, lifecycle) | #1284 |
+| Conductor ↔ SUPERVISOR reconciliation | New issue (against #1288) |
+
+#1283 should be further decomposed before implementation if needed — but the vocabulary spec's role is to clarify which deferred concerns belong where, not to dictate the decomposition of downstream issues.
 
 ## Resolved Questions
 
