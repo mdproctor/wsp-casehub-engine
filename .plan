@@ -1,8 +1,8 @@
 # Work Plan — issue-1259-swarm-coordination-listener
 
 ## State
-branch: issue-1268-runtime-enhancements
-state: active
+branch: 
+state: closing:review
 project-sha: 
 date: 
 issue-repo: casehubio/engine
@@ -13,6 +13,6 @@ flyway-next-v:
 evidence-era: true
 
 ## Queue
-- [ ] casehubio/engine#1268 — FlowWorkerFunctionHandler — produce PartialSuccess for mixed step results ← active
-- [ ] casehubio/engine#1234 — org-aware escalation in AgentRoutingStrategy
-- [ ] casehubio/engine#1269 — API projections for gallery — AgentDescriptor + CoordinationPipeline
+- [x] casehubio/engine#1268 — FlowWorkerFunctionHandler — produce PartialSuccess for mixed step results
+- [x] casehubio/engine#1234 — org-aware escalation in AgentRoutingStrategy
+- [x] casehubio/engine#1269 — API projections for gallery — AgentDescriptor + CoordinationPipeline
