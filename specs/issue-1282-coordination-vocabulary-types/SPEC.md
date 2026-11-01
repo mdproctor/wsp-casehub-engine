@@ -17,6 +17,8 @@ Add shared vocabulary types to `io.casehub.api.model.coordination` in engine-api
 
 4. **Platform roles have behavioral meaning.** The platform implements specific behavior for intrinsic roles (coordinator, supervisor, judge, moderator). These are first-class concepts, not just labels.
 
+5. **Coordination overlays the Worker layer, not parallel to it.** The platform already has a Worker concept hierarchy (Worker → FlowWorker, PlaybookWorker, CamelWorker, AgentWorkerFunction). An agent participating in a coordination topology IS an AgentWorker — it ties into the existing Work infrastructure (WorkItem, WorkerFunction, WorkOrchestrator, AgentWorkState). The coordination vocabulary describes *how agents relate to each other structurally*, not *what they are* — the Worker layer already answers "what."
+
 ## Package
 
 `io.casehub.api.model.coordination` — new package in the `api` module.
@@ -87,11 +89,14 @@ Structural position of an agent within the topology. Describes how the role rela
 |-------|-----------|-------------------|
 | `INITIATOR` | Delegates to others — structural authority | FIPA CNP (Manager/Initiator), Moore taxonomy |
 | `PEER` | Equal-status coordination — no coordinator relationship | Moore taxonomy, DoF paper (Active Agent) |
-| `RESPONDENT` | Receives delegation — structural subordinate | FIPA CNP (Participant/Contractor) |
+| `CONTRACTOR` | Receives delegation — contracted to perform specific work | FIPA CNP (Contractor), Smith 1980 (original Contract Net) |
 
-Named `RESPONDENT` rather than `PARTICIPANT` to avoid collision with `io.casehub.api.model.Participation.PARTICIPANT` (which describes mesh participation level, not structural position). Both enums live under `io.casehub.api.model.*`; the rename eliminates static-import ambiguity and cognitive overload from the same word meaning different things.
+Named `CONTRACTOR` (the FIPA Contract Net Protocol's original term for the agent that bids on and executes announced tasks) rather than `PARTICIPANT` or `WORKER`:
+- **Not PARTICIPANT:** collides with `io.casehub.api.model.Participation.PARTICIPANT` (which describes compound completion semantics, not structural position). Both enums live under `io.casehub.api.model.*`.
+- **Not WORKER:** the platform already has Worker as a first-class concept hierarchy (Worker → FlowWorker, PlaybookWorker, CamelWorker, AgentWorkerFunction). An agent in a coordination topology IS an AgentWorker at the Work layer. Adding `RoleArchetype.WORKER` would conflate the structural coordination role with the execution identity.
+- **CONTRACTOR** sits at the coordination protocol level — the same register as INITIATOR. Both describe the contractual relationship between agents: one initiates the contract, one contracts to perform it.
 
-Grounded in MAS literature consensus: FIPA Contract Net Protocol, Moore's HMAS taxonomy (arXiv 2508.12683), the Degrees of Freedom framework (arXiv 2610.17751).
+Grounded in MAS literature: FIPA Contract Net Protocol (Smith 1980, IEEE FIPA00029), Moore's HMAS taxonomy (arXiv 2508.12683), the Degrees of Freedom framework (arXiv 2610.17751).
 
 ### PlatformRole (enum)
 
@@ -104,7 +109,7 @@ Intrinsic behavioral contract — the platform implements specific behavior for 
 | `JUDGE` | Evaluates, scores, renders decisions | `PEER` | Voting/scoring patterns (#1286 VotingProtocol) |
 | `MODERATOR` | Enforces protocol, manages turn-taking | `PEER` | Protocol enforcement patterns (#1286 VotingProtocol) |
 
-Each PlatformRole carries a `requiredArchetype()` — the structural position that its behavioral contract implies. COORDINATOR and SUPERVISOR delegate to others (→ INITIATOR). JUDGE and MODERATOR participate as equals in decision processes (→ PEER). This mapping is enforced by AgentRole's compact constructor — incoherent pairings like `COORDINATOR + RESPONDENT` are rejected at construction time.
+Each PlatformRole carries a `requiredArchetype()` — the structural position that its behavioral contract implies. COORDINATOR and SUPERVISOR delegate to others (→ INITIATOR). JUDGE and MODERATOR participate as equals in decision processes (→ PEER). This mapping is enforced by AgentRole's compact constructor — incoherent pairings like `COORDINATOR + CONTRACTOR` are rejected at construction time.
 
 Only `SUPERVISOR` is wired to existing code today. The other values are forward-looking — downstream specs (#1283–#1288) will define their behavioral SPIs and reference these values.
 
@@ -161,8 +166,8 @@ public record AgentRole(
    - `AgentRole.MODERATOR` = ("moderator", PEER, MODERATOR)
 
 2. **Task-oriented / domain** — name + archetype, no platform behavior. Applications create these.
-   - `AgentRole.of("reviewer/code", RESPONDENT)` — domain role with structural position
-   - `AgentRole.of("reviewer/prose", RESPONDENT)` — sibling specialisation
+   - `AgentRole.of("reviewer/code", CONTRACTOR)` — domain role with structural position
+   - `AgentRole.of("reviewer/prose", CONTRACTOR)` — sibling specialisation
 
 3. **Symbolic** — name only. Just a label for rendering/grouping.
    - `AgentRole.of("medic")` — no structural or behavioral binding
@@ -211,7 +216,7 @@ Decision authority (LOCAL / COORDINATED / CENTRAL) is derivable from TopologyTyp
 
 **Complete derivation mapping** (total function — every cell defined, including null archetype):
 
-| TopologyType | INITIATOR | PEER | RESPONDENT | null (symbolic) |
+| TopologyType | INITIATOR | PEER | CONTRACTOR | null (symbolic) |
 |---|---|---|---|---|
 | **CENTRALISED** | CENTRAL | *invalid* | LOCAL | *invalid* |
 | **DISTRIBUTED** | *invalid* | COORDINATED | *invalid* | *invalid* |
@@ -219,16 +224,16 @@ Decision authority (LOCAL / COORDINATED / CENTRAL) is derivable from TopologyTyp
 
 **Valid combinations (6):**
 - CENTRALISED + INITIATOR → CENTRAL: the single coordinator; decisions affect the entire swarm
-- CENTRALISED + RESPONDENT → LOCAL: subordinates follow the coordinator; their own decisions are local
+- CENTRALISED + CONTRACTOR → LOCAL: subordinates follow the coordinator; their own decisions are local
 - DISTRIBUTED + PEER → COORDINATED: all agents coordinate as equals; no unilateral authority
 - HYBRID + INITIATOR → CENTRAL: coordinator for global decisions
 - HYBRID + PEER → COORDINATED: participate in coordination for shared concerns
-- HYBRID + RESPONDENT → LOCAL: subordinates with local-only decision scope
+- HYBRID + CONTRACTOR → LOCAL: subordinates with local-only decision scope
 
 **Invalid combinations (6):** These are structurally incoherent — the topology and role contradict each other:
 - CENTRALISED + PEER: CENTRALISED has a coordinator and subordinates; PEER ("equal-status, no coordinator relationship") contradicts the centralised structure
 - DISTRIBUTED + INITIATOR: INITIATOR ("delegates to others — structural authority") contradicts DISTRIBUTED ("peer-to-peer, no central coordinator")
-- DISTRIBUTED + RESPONDENT: RESPONDENT ("receives delegation — structural subordinate") contradicts DISTRIBUTED (no delegation hierarchy)
+- DISTRIBUTED + CONTRACTOR: CONTRACTOR ("receives delegation — structural subordinate") contradicts DISTRIBUTED (no delegation hierarchy)
 - Any topology + null archetype: Symbolic roles (null archetype) are labels for rendering/grouping — they have no structural position and cannot participate in decision authority derivation. An agent with a symbolic role appearing in a topology's agent-role assignments is a configuration error.
 
 The derivation function in #1283 should throw `IllegalArgumentException` for invalid combinations. These are configuration errors — an agent cannot be a PEER in a CENTRALISED topology, because CENTRALISED by definition has a coordinator/subordinate structure. Similarly, a symbolic role cannot appear in a topology context that requires authority derivation.
@@ -237,7 +242,7 @@ The derivation function in #1283 should throw `IllegalArgumentException` for inv
 
 **DecisionScope independence from topology:** DecisionScope and DecisionType are per-agent configuration — intentionally independent of topology. This means any combination of (TopologyType × RoleArchetype × DecisionScope) is valid. Seemingly contradictory combinations are intentional:
 
-- CENTRALISED + RESPONDENT + FULL_AUTONOMY: The agent is structurally subordinate (receives delegation from the coordinator) but has full autonomy in *how* it executes — it can decide sub-tasks, collaborations, and timing. The coordinator decides *what* is delegated; the agent decides *how* to do it.
+- CENTRALISED + CONTRACTOR + FULL_AUTONOMY: The agent is structurally subordinate (receives delegation from the coordinator) but has full autonomy in *how* it executes — it can decide sub-tasks, collaborations, and timing. The coordinator decides *what* is delegated; the agent decides *how* to do it.
 - DISTRIBUTED + PEER + STIMULUS_DRIVEN: A specialist peer that contributes only when prompted. In a peer network, this is a service-like agent that provides expertise on demand without proactively initiating work.
 
 TopologyType × RoleArchetype constrains *structural position* (who delegates to whom). DecisionScope constrains *operational freedom* (what categories of action the agent may perform). These dimensions are orthogonal by design.
