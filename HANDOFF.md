@@ -1,24 +1,38 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-10-31)
+## Last Session (2026-11-01)
 
-Rebased and landed issue-1044 (watchdog bridge) and confirmed issue-1049 (engine-core extraction) already on main. Closed Hive Mind epic #1104 and superseded #604, #605. Cross-repo review created integration epic #1274. Agency bridge (agency#375) has since landed.
+### Epic #1274 — Hive Mind integration wiring — COMPLETE
+
+Implemented all 6 child issues, squashed to 6 clean commits, landed on main:
+
+1. `6ed53ad64` — #1277: SwarmCoordinationListener exception propagation
+2. `81432671b` — #1278: onMemberCompleted wired into departure flow
+3. `9a7d3df04` — #1276: volatile fields for swarm state visibility
+4. `2b94e181d` — #1275: SignalRegistry thread safety (compute + purge)
+5. `d6f197fab` — #1279: eidos proximity queries (3 integration points)
+6. `0ebf4ce7f` — #1280: qhorus broadcast (9 event types, CDI + Spring producers)
+
+Branch audit caught a real gap: StigmergyCoordinator had no CDI/Spring bean producer — pattern detection events would silently not post in production. Fixed by adding `@Produces`/`@Bean` methods in RuntimeBeans and RuntimeManualConfig.
+
+### Issue triage
+
+Closed stale issues this session:
+- #1237, #1243, #1236 — langchain4j removal (already done via #1245/#1252)
+- #1027 — DSL audit epic (all 9 children already closed)
+- #1099, platform#324, ras#65 — CBR ensemble / shared algorithms (superseded by simulated responses, eidos routing, neocortex BJT)
+
+### Next work — branch `issue-1268-runtime-enhancements`
+
+.plan queued with 3 issues:
+1. **#1268** (S/Low) — FlowWorkerFunctionHandler PartialSuccess for mixed step results ← active
+2. **#1234** (S/Med) — org-aware escalation in AgentRoutingStrategy
+3. **#1269** (M/Med) — API projections for gallery (AgentDescriptor + CoordinationPipeline)
 
 ## Immediate Next Step
 
-`work start 1274` — Hive Mind integration wiring. Plan is written and ready. Batch 1 (thread safety + SPI cleanup: #1275, #1276, #1277, #1278) is mechanical and independent. Batch 2 (eidos/qhorus wiring: #1279, #1280) needs brainstorming on dependency model.
+`work continue` → brainstorm + implement #1268.
 
 ## Cross-Module
 
-- agency#375 CLOSED — bridge landed, engine events now reach agency
-- agency#376 depends on engine#1278 (onMemberCompleted wiring)
-- eidos#213 (enum alignment) can land alongside engine#1279
-
-## References
-
-| Artifact | Path |
-|----------|------|
-| Implementation plan | `plans/2026-10-31-hive-mind-integration-engine.md` |
-| Blog | `blog/2026-10-26-mdp01-ants-dont-need-a-manager.md` |
-| Stashed (project) | 4 modified recovery/runtime files (pre-existing) |
-| Stashed (workspace) | deleted `.plan` and stale progress files |
+- GITHUB_TOKEN env var is invalid — blocks `gh` and `git push` unless prefixed with `env -u GITHUB_TOKEN`. Keyring auth (mdproctor) works when GITHUB_TOKEN is unset.
