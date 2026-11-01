@@ -6,14 +6,13 @@ state: active
 project-sha: 
 date: 
 issue-repo: casehubio/engine
-covers: 1259
+covers: 1268
 design-repo: 
 design-section-hashes: 
 flyway-next-v: 
 evidence-era: true
 
 ## Queue
-- [x] casehubio/engine#1259 — Issue #1259
-- [ ] casehubio/engine#1268 — FlowWorkerFunctionHandler — produce PartialSuccess for mixed step results
+- [ ] casehubio/engine#1268 — FlowWorkerFunctionHandler — produce PartialSuccess for mixed step results ← active
 - [ ] casehubio/engine#1234 — org-aware escalation in AgentRoutingStrategy
 - [ ] casehubio/engine#1269 — API projections for gallery — AgentDescriptor + CoordinationPipeline
