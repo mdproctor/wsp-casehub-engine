@@ -31,11 +31,11 @@ The interesting design problem was `AgentRole`. The issue spec said: "put these 
 
 **Name** — a hierarchical `Path`, open and application-defined. `reviewer/code`, `reviewer/prose`, `medic`, whatever the domain needs. Hierarchy matching via `isKindOf()` lets you ask "is this agent a reviewer of any kind?" without enumerating subtypes.
 
-**RoleArchetype** — structural position in the topology. Three values: `INITIATOR` (delegates to others), `PEER` (equal-status coordination), `CONTRACTOR` (receives delegation). Closed enum — the engine switches on these.
+**StructuralRole** — structural position in the topology. Three values: `INITIATOR` (delegates to others), `PEER` (equal-status coordination), `CONTRACTOR` (receives delegation). Closed enum — the engine switches on these.
 
-**PlatformRole** — behavioral contract the platform implements. `COORDINATOR`, `SUPERVISOR`, `JUDGE`, `MODERATOR`. Each carries a `requiredArchetype()` that the compact constructor enforces — you cannot create a COORDINATOR with CONTRACTOR archetype.
+**PlatformRole** — behavioral contract the platform implements. `COORDINATOR`, `SUPERVISOR`, `JUDGE`, `MODERATOR`. Each carries a `requiredStructuralRole()` that the compact constructor enforces — you cannot create a COORDINATOR with CONTRACTOR structural role.
 
-The three facets are independent. A platform role implies an archetype, but not vice versa. A symbolic role (just a label for rendering) has name only — null archetype, null platform role. The compact constructor enforces the invariants:
+The three facets are independent. A platform role implies a structural role, but not vice versa. A symbolic role (just a label for rendering) has name only — null structural role, null platform role. The compact constructor enforces the invariants:
 
 ```java
 public AgentRole {
@@ -57,7 +57,7 @@ The code is six lines. The reasoning behind it took hours.
 
 FIPA's Contract Net Protocol calls the third archetype role "Participant." We couldn't use that — the platform already has `Participation.PARTICIPANT` (compound completion semantics, 129+ references). So we searched for the modern consensus.
 
-Every major agentic framework — LangGraph, Microsoft Agent Framework, Kubernetes — calls it "Worker." Clean, unambiguous, widely understood. We almost went with it. Then the obvious landed: CaseHub already has Worker as a first-class concept hierarchy. `Worker` → `FlowWorker`, `PlaybookWorker`, `CamelWorker`, `AgentWorkerFunction`. An agent in a coordination topology IS an AgentWorker at the execution layer. Using `RoleArchetype.WORKER` would conflate the coordination relationship with the execution identity.
+Every major agentic framework — LangGraph, Microsoft Agent Framework, Kubernetes — calls it "Worker." Clean, unambiguous, widely understood. We almost went with it. Then the obvious landed: CaseHub already has Worker as a first-class concept hierarchy. `Worker` → `FlowWorker`, `PlaybookWorker`, `CamelWorker`, `AgentWorkerFunction`. An agent in a coordination topology IS an AgentWorker at the execution layer. Using `StructuralRole.WORKER` would conflate the coordination relationship with the execution identity.
 
 ![Coordination Overlays the Worker Layer](images/coordination-layer-stack.svg)
 
@@ -67,7 +67,7 @@ The deeper insight: coordination vocabulary overlays the Worker layer. It descri
 
 ## What the review found that I missed
 
-The adversarial review ran four dimensions (coherence, structure, robustness, cross-cutting) and caught real problems. `GRADUATED` was removed from `TopologyType` — it describes how the topology changes, not what it is. `DecisionAuthority` was removed entirely — it's derivable from `TopologyType` x `RoleArchetype` as a total function, and storing it separately creates stale-data risk. `TopologyDescriptor` was deferred out — it's runtime state, not vocabulary, and belongs with the SPIs that construct it.
+The adversarial review ran four dimensions (coherence, structure, robustness, cross-cutting) and caught real problems. `GRADUATED` was removed from `TopologyType` — it describes how the topology changes, not what it is. `DecisionAuthority` was removed entirely — it's derivable from `TopologyType` x `StructuralRole` as a total function, and storing it separately creates stale-data risk. `TopologyDescriptor` was deferred out — it's runtime state, not vocabulary, and belongs with the SPIs that construct it.
 
 But the review also missed something. It caught naming collisions with sibling types — horizontal scanning, same package level. It did not catch that the spec was modelling "the agent that receives and executes delegated work" as a new concept when the platform already owns that concept at a different abstraction layer. That gap only surfaced when I recognised the Worker hierarchy. Coherence reviews need to zoom out to platform-level concept maps, not just immediate neighbours.
 

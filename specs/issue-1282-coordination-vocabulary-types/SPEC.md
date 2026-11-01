@@ -81,7 +81,7 @@ Categorises agent actions for scope enforcement. The AgentCapabilityGuard checks
 
 **Relationship to MeshParticipation.REACTIVE:** `MeshParticipation.REACTIVE` (in `spi.mesh`) controls mesh channel registration — "do not register; only engage when directly addressed." STIMULUS_DRIVEN controls decision scope — what categories of action an agent may perform. These are orthogonal: a STIMULUS_DRIVEN agent might be ACTIVE in the mesh (registered, posting status) but restricted to responding to incoming signals for its *decisions*. The activation guard enforcement mechanism is deferred to #1283 (AgentCapabilityGuard).
 
-### RoleArchetype (enum)
+### StructuralRole (enum, renamed from RoleArchetype)
 
 Structural position of an agent within the topology. Describes how the role relates to others. Small, stable set — engine derives structural relationships from this without hardcoding role names.
 
@@ -93,7 +93,7 @@ Structural position of an agent within the topology. Describes how the role rela
 
 Named `CONTRACTOR` (the FIPA Contract Net Protocol's original term for the agent that bids on and executes announced tasks) rather than `PARTICIPANT` or `WORKER`:
 - **Not PARTICIPANT:** collides with `io.casehub.api.model.Participation.PARTICIPANT` (which describes compound completion semantics, not structural position). Both enums live under `io.casehub.api.model.*`.
-- **Not WORKER:** the platform already has Worker as a first-class concept hierarchy (Worker → FlowWorker, PlaybookWorker, CamelWorker, AgentWorkerFunction). An agent in a coordination topology IS an AgentWorker at the Work layer. Adding `RoleArchetype.WORKER` would conflate the structural coordination role with the execution identity.
+- **Not WORKER:** the platform already has Worker as a first-class concept hierarchy (Worker → FlowWorker, PlaybookWorker, CamelWorker, AgentWorkerFunction). An agent in a coordination topology IS an AgentWorker at the Work layer. Adding `StructuralRole.WORKER` would conflate the structural coordination role with the execution identity.
 - **CONTRACTOR** sits at the coordination protocol level — the same register as INITIATOR. Both describe the contractual relationship between agents: one initiates the contract, one contracts to perform it.
 
 Grounded in MAS literature: FIPA Contract Net Protocol (Smith 1980, IEEE FIPA00029), Moore's HMAS taxonomy (arXiv 2508.12683), the Degrees of Freedom framework (arXiv 2610.17751).
@@ -109,7 +109,7 @@ Intrinsic behavioral contract — the platform implements specific behavior for 
 | `JUDGE` | Evaluates, scores, renders decisions | `PEER` | Voting/scoring patterns (#1286 VotingProtocol) |
 | `MODERATOR` | Enforces protocol, manages turn-taking | `PEER` | Protocol enforcement patterns (#1286 VotingProtocol) |
 
-Each PlatformRole carries a `requiredArchetype()` — the structural position that its behavioral contract implies. COORDINATOR and SUPERVISOR delegate to others (→ INITIATOR). JUDGE and MODERATOR participate as equals in decision processes (→ PEER). This mapping is enforced by AgentRole's compact constructor — incoherent pairings like `COORDINATOR + CONTRACTOR` are rejected at construction time.
+Each PlatformRole carries a `requiredStructuralRole()` — the structural position that its behavioral contract implies. COORDINATOR and SUPERVISOR delegate to others (→ INITIATOR). JUDGE and MODERATOR participate as equals in decision processes (→ PEER). This mapping is enforced by AgentRole's compact constructor — incoherent pairings like `COORDINATOR + CONTRACTOR` are rejected at construction time.
 
 Only `SUPERVISOR` is wired to existing code today. The other values are forward-looking — downstream specs (#1283–#1288) will define their behavioral SPIs and reference these values.
 
@@ -122,7 +122,7 @@ An agent's role within a coordination topology. Carries three independent facets
 ```java
 public record AgentRole(
     Path name,                         // always: hierarchical identity + display label
-    @Nullable RoleArchetype archetype, // structural position (null for symbolic roles)
+    @Nullable StructuralRole structuralRole, // structural position (null for symbolic roles)
     @Nullable PlatformRole platformRole // behavioral contract (null for domain/symbolic roles)
 ) {
   public AgentRole {
@@ -134,14 +134,14 @@ public record AgentRole(
             + "segment contains unresolved delimiter: \"" + segment + "\"");
       }
     }
-    if (platformRole != null && archetype == null) {
+    if (platformRole != null && structuralRole == null) {
       throw new IllegalArgumentException(
-          "platformRole requires archetype — a behavioral contract implies structural position");
+          "platformRole requires structuralRole — a behavioral contract implies structural position");
     }
-    if (platformRole != null && archetype != platformRole.requiredArchetype()) {
+    if (platformRole != null && structuralRole != platformRole.requiredStructuralRole()) {
       throw new IllegalArgumentException(
-          platformRole + " requires archetype " + platformRole.requiredArchetype()
-          + ", got " + archetype);
+          platformRole + " requires structuralRole " + platformRole.requiredStructuralRole()
+          + ", got " + structuralRole);
     }
   }
 }
@@ -151,9 +151,9 @@ public record AgentRole(
 
 1. **Path segment integrity:** No segment may contain the `/` delimiter. This rejects Paths created via `Path.of("reviewer/code")` (one segment containing `/`) while accepting those from `Path.parse("reviewer/code")` (two segments `["reviewer", "code"]`). The canonical constructor is public by Java record specification — this validation ensures hierarchy matching (`isKindOf`) works correctly regardless of how the Path was created.
 
-2. **PlatformRole requires archetype:** if `platformRole` is non-null, `archetype` must also be non-null. A platform behavioral contract (e.g. COORDINATOR orchestrates) always implies a structural position (e.g. INITIATOR delegates). The converse is not required — task-oriented roles have archetype without platformRole.
+2. **PlatformRole requires structuralRole:** if `platformRole` is non-null, `structuralRole` must also be non-null. A platform behavioral contract (e.g. COORDINATOR orchestrates) always implies a structural position (e.g. INITIATOR delegates). The converse is not required — task-oriented roles have structuralRole without platformRole.
 
-3. **PlatformRole → RoleArchetype pairing:** if `platformRole` is non-null, `archetype` must match the platform role's required archetype. Each PlatformRole has exactly one valid RoleArchetype — this is a closed, fixed mapping owned by the PlatformRole enum itself (see below).
+3. **PlatformRole → StructuralRole pairing:** if `platformRole` is non-null, `structuralRole` must match the platform role's required structural role. Each PlatformRole has exactly one valid StructuralRole — this is a closed, fixed mapping owned by the PlatformRole enum itself (see below).
 
 **Factory methods:** `AgentRole.of(String name, ...)` uses `Path.parse(name)` internally, not `Path.of(name)`. This is critical for hierarchy matching — `Path.of("reviewer/code")` creates one segment `"reviewer/code"` (the `/` is just a character), while `Path.parse("reviewer/code")` splits on the delimiter into segments `["reviewer", "code"]`. Only `Path.parse` produces the segment structure that `Path.isAncestorOf()` requires.
 
@@ -202,7 +202,7 @@ Structure group:
   TopologyType               (which topology)
   AgentRole                  (who plays what)
        ├── Path name            (identity + display)
-       ├── RoleArchetype        (structural position)
+       ├── StructuralRole        (structural position)
        └── PlatformRole         (behavioral contract)
 
 Enforcement group (consumed by AgentCapabilityGuard, #1283):
@@ -212,7 +212,7 @@ Enforcement group (consumed by AgentCapabilityGuard, #1283):
 
 The structure group describes the coordination arrangement. The enforcement group constrains what agents may do within that arrangement. DecisionScope and DecisionType are per-agent configuration — independent of topology.
 
-Decision authority (LOCAL / COORDINATED / CENTRAL) is derivable from TopologyType + RoleArchetype. The AgentCapabilityGuard (#1283) should derive this rather than maintaining a separate enum — this prevents invalid combinations.
+Decision authority (LOCAL / COORDINATED / CENTRAL) is derivable from TopologyType + StructuralRole. The AgentCapabilityGuard (#1283) should derive this rather than maintaining a separate enum — this prevents invalid combinations.
 
 **Complete derivation mapping** (total function — every cell defined, including null archetype):
 
@@ -240,12 +240,12 @@ The derivation function in #1283 should throw `IllegalArgumentException` for inv
 
 **TopologyDescriptor** (runtime state: current topology + agent→role assignments) is deferred to #1283+ where the SPIs that construct and consume it are defined. This issue establishes the vocabulary enums and AgentRole record only.
 
-**DecisionScope independence from topology:** DecisionScope and DecisionType are per-agent configuration — intentionally independent of topology. This means any combination of (TopologyType × RoleArchetype × DecisionScope) is valid. Seemingly contradictory combinations are intentional:
+**DecisionScope independence from topology:** DecisionScope and DecisionType are per-agent configuration — intentionally independent of topology. This means any combination of (TopologyType × StructuralRole × DecisionScope) is valid. Seemingly contradictory combinations are intentional:
 
 - CENTRALISED + CONTRACTOR + FULL_AUTONOMY: The agent is structurally subordinate (receives delegation from the coordinator) but has full autonomy in *how* it executes — it can decide sub-tasks, collaborations, and timing. The coordinator decides *what* is delegated; the agent decides *how* to do it.
 - DISTRIBUTED + PEER + STIMULUS_DRIVEN: A specialist peer that contributes only when prompted. In a peer network, this is a service-like agent that provides expertise on demand without proactively initiating work.
 
-TopologyType × RoleArchetype constrains *structural position* (who delegates to whom). DecisionScope constrains *operational freedom* (what categories of action the agent may perform). These dimensions are orthogonal by design.
+TopologyType × StructuralRole constrains *structural position* (who delegates to whom). DecisionScope constrains *operational freedom* (what categories of action the agent may perform). These dimensions are orthogonal by design.
 
 ## What This Issue Does NOT Include
 
@@ -266,7 +266,7 @@ TopologyType × RoleArchetype constrains *structural position* (who delegates to
 | AgentCapabilityGuard implementation (matrix enforcement + activation guard) | #1283 |
 | DecisionAuthority derivation function | #1283 |
 | Permission matrix enforcement | #1283 |
-| Invalid TopologyType × RoleArchetype rejection | #1283 |
+| Invalid TopologyType × StructuralRole rejection | #1283 |
 | Agent identity type (String vs typed wrapper) | #1283 |
 | TopologyDescriptor definition (type, constraints, construction) | #1284 |
 | TopologyDescriptor robustness (invalid states, mutable Map, version/epoch) | #1284 |
@@ -280,6 +280,6 @@ TopologyType × RoleArchetype constrains *structural position* (who delegates to
 
 1. **`PlatformRole` lives in `model.coordination`.** It is a vocabulary enum consumed by `AgentRole` in this package. The SPI interfaces that implement platform role behavior (#1283–#1288) will depend on this package — the dependency direction is correct. Moving `PlatformRole` to `spi.coordination` would create a circular dependency between the vocabulary records and their enum facets.
 
-2. **`DecisionAuthority` is derivable from `TopologyType + RoleArchetype`.** Removed as a standalone enum. The `AgentCapabilityGuard` (#1283) derives authority from the topology and role assignment, preventing invalid combinations.
+2. **`DecisionAuthority` is derivable from `TopologyType + StructuralRole`.** Removed as a standalone enum. The `AgentCapabilityGuard` (#1283) derives authority from the topology and role assignment, preventing invalid combinations.
 
 3. **`GRADUATED` is a transition policy, not a topology value.** Removed from `TopologyType`. A graduated transition changes the active `TopologyType` value on the descriptor. The transition policy (when/how to graduate) is owned by #1284 SwarmTopologyProvider.

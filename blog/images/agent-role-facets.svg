@@ -35,7 +35,7 @@
 
   <!-- Archetype facet (middle) -->
   <rect x="260" y="60" width="200" height="280" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
-  <text x="360" y="86" text-anchor="middle" font-size="14" font-weight="bold" fill="#78350f">RoleArchetype</text>
+  <text x="360" y="86" text-anchor="middle" font-size="14" font-weight="bold" fill="#78350f">StructuralRole</text>
   <text x="360" y="108" text-anchor="middle" font-size="11" fill="#475569">Structural position</text>
   <text x="360" y="122" text-anchor="middle" font-size="11" fill="#475569">in the topology</text>
 
@@ -78,5 +78,5 @@
   <text x="360" y="370" text-anchor="middle" font-size="11" fill="#64748b">Nullable (symbolic roles)</text>
   <text x="590" y="370" text-anchor="middle" font-size="11" fill="#64748b">Nullable (domain roles)</text>
 
-  <text x="360" y="394" text-anchor="middle" font-size="10" fill="#94a3b8">If PlatformRole is set, RoleArchetype must match its requiredArchetype()</text>
+  <text x="360" y="394" text-anchor="middle" font-size="10" fill="#94a3b8">If PlatformRole is set, StructuralRole must match its requiredStructuralRole()</text>
 </svg>
