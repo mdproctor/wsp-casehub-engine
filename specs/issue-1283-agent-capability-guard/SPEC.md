@@ -204,7 +204,7 @@ The guard is checked at these enforcement boundaries. Each is a pre-check — if
 | `DecisionAuthority` | api | `io.casehub.api.model.coordination` |
 | `DecisionScope` (enriched) | api | `io.casehub.api.model.coordination` |
 | `TopologyType` (enriched) | api | `io.casehub.api.model.coordination` |
-| `NoOpAgentCapabilityGuard` | runtime-core | `io.casehub.engine.internal.worker` |
+| `NoOpAgentCapabilityGuard` | runtime-core | `io.casehub.engine.internal.coordination` |
 
 ## Testing Strategy
 
