@@ -11,14 +11,14 @@ date: 2026-11-01
 ## Queue
 - [x] casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
 - [ ] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity ← active
-  - [ ] Batch 1: API Surface
-    - [ ] Task 1: AgentWorkState enum + AgentState extension
-    - [ ] Task 2: AgentWorkLifecycleListener + AgentWorkStateNotifier SPIs
-  - [ ] Batch 2: State Machine + Default Wiring
-    - [ ] Task 3: StigmergyCoordinator implements AgentWorkStateNotifier
-    - [ ] Task 4: NoOpAgentWorkStateNotifier + SpiDefaultBeans
-  - [ ] Batch 3: Orchestrator Integration
-    - [ ] Task 5: WorkerExecutionOrchestrator + RuntimeBeans wiring
+  - [x] Batch 1: API Surface
+    - [x] Task 1: AgentWorkState enum + AgentState extension
+    - [x] Task 2: AgentWorkLifecycleListener + AgentWorkStateNotifier SPIs
+  - [x] Batch 2: State Machine + Default Wiring
+    - [x] Task 3: StigmergyCoordinator implements AgentWorkStateNotifier
+    - [x] Task 4: NoOpAgentWorkStateNotifier + SpiDefaultBeans
+  - [x] Batch 3: Orchestrator Integration
+    - [x] Task 5: WorkerExecutionOrchestrator + RuntimeBeans wiring
 - [ ] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive
 - [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations
 - [ ] casehubio/agency#381 — refactor: LlmSwarmCoordinator → CentralisedTopology
