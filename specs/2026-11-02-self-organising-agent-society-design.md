@@ -470,7 +470,7 @@ constraints. An agent can hold multiple roles, so the sum of `maxAgents` across
 roles can exceed `MAX_MEMBERS` (50) — roles overlap. Validation rules:
 - At formation: each role with `minAgents > 0` must have enough members assigned
 - At dissolution/leave: if a member departure would leave a role below `minAgents`,
-  the group enters RESTRUCTURING to recruit a replacement before allowing the departure
+  the group enters REORGANISING to recruit a replacement before allowing the departure
 - `MAX_MEMBERS` is a hard cap on distinct agents; role cardinality is orthogonal
 
 **FormationRules** — new record:
@@ -606,14 +606,16 @@ Engine consumes eidos org events through new SPIs defined as part of this spec:
 
 ```java
 public interface TopologyProvider {
-    Optional<CoordinationPattern> topologyFor(String agentId, String tenancyId);
+    Optional<String> topologyFor(String agentId, String tenancyId);
     double effectiveSelfDetermination(String agentId, String tenancyId);
 }
 ```
 
 Queries eidos OrgRegistry for the agent's group membership. Returns the group's
-topology and resolves selfDetermination precedence (group value wins over
-`IntegrationPolicy` default when the agent is in a group).
+topology (open-string vocabulary term) and resolves selfDetermination precedence
+(group value wins over `IntegrationPolicy` default when the agent is in a group).
+The engine maps well-known topology values (`swarm`, `hive`, `mesh`, `many`) to
+coordination primitives; unknown values receive default behaviour.
 
 **AgentWorkLifecycleListener** (engine#1285) — new SPI in `casehub-engine-api`:
 
