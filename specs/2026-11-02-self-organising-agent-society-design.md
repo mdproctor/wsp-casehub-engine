@@ -318,7 +318,9 @@ Current Runtime Org → DesiredStateOrgAdapter → Actual Graph
 
 **Plan approval mapping:** `PlanApprovalPolicy` (desiredstate SPI) evaluates
 whether a transition plan needs approval. The org-specific implementation
-(`OrgPlanApprovalPolicy`) delegates to selfDetermination:
+(`OrgPlanApprovalPolicy`) delegates to the group's **current** selfDetermination
+value (the value on the existing `OrganizationalUnit`, not the proposed value
+in the transition plan):
 - selfDetermination ≥ 0.7 → `PlanApprovalDecision.AUTO_APPROVED`
 - selfDetermination 0.3–0.7 → topology-change-only plans auto-approved;
   membership-changing plans require approval
