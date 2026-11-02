@@ -10,16 +10,8 @@ date: 2026-11-01
 
 ## Queue
 - [x] casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
-- [ ] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity ← active
-  - [x] Batch 1: Value Objects
-    - [x] Task 1: Foundation types
-    - [x] Task 2: DecisionOutcome sealed interface
-  - [x] Batch 2: Infrastructure
-    - [x] Task 3: AgentBudgetTracker
-    - [x] Task 4: PromptSectionRegistry + SectionAwareContentSummariser
-  - [x] Batch 3: Runtime
-    - [x] Task 5: DecisionLoopFactory + AgentDecisionLoop + integration tests
-- [ ] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive
+- [x] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity
+- [ ] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive ← active
 - [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations
 - [ ] casehubio/agency#381 — refactor: LlmSwarmCoordinator → CentralisedTopology
 - [ ] casehubio/agency#382 — feat: HierarchicalInvocationTracker — LLM budget management
