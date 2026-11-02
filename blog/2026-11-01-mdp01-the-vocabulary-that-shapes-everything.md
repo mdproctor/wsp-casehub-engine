@@ -40,13 +40,13 @@ The three facets are independent. A platform role implies a structural role, but
 ```java
 public AgentRole {
     Objects.requireNonNull(name, "name must not be null");
-    if (platformRole != null && archetype == null) {
+    if (platformRole != null && structuralRole == null) {
       throw new IllegalArgumentException(
-          "platformRole requires archetype");
+          "platformRole requires structuralRole");
     }
-    if (platformRole != null && archetype != platformRole.requiredArchetype()) {
+    if (platformRole != null && structuralRole != platformRole.requiredStructuralRole()) {
       throw new IllegalArgumentException(
-          platformRole + " requires " + platformRole.requiredArchetype());
+          platformRole + " requires " + platformRole.requiredStructuralRole());
     }
 }
 ```
@@ -55,7 +55,7 @@ The code is six lines. The reasoning behind it took hours.
 
 ## The naming that nearly went wrong three times
 
-FIPA's Contract Net Protocol calls the third archetype role "Participant." We couldn't use that — the platform already has `Participation.PARTICIPANT` (compound completion semantics, 129+ references). So we searched for the modern consensus.
+FIPA's Contract Net Protocol calls the third structural role "Participant." We couldn't use that — the platform already has `Participation.PARTICIPANT` (compound completion semantics, 129+ references). So we searched for the modern consensus.
 
 Every major agentic framework — LangGraph, Microsoft Agent Framework, Kubernetes — calls it "Worker." Clean, unambiguous, widely understood. We almost went with it. Then the obvious landed: CaseHub already has Worker as a first-class concept hierarchy. `Worker` → `FlowWorker`, `PlaybookWorker`, `CamelWorker`, `AgentWorkerFunction`. An agent in a coordination topology IS an AgentWorker at the execution layer. Using `StructuralRole.WORKER` would conflate the coordination relationship with the execution identity.
 
@@ -73,7 +73,7 @@ But the review also missed something. It caught naming collisions with sibling t
 
 ## What this opens up
 
-Six types. A coordination vocabulary that both engine and agency share. Every downstream issue — the capability guard, the topology provider, the convergence evaluator, the telemetry layer — now has a shared language. When #1283 builds `AgentCapabilityGuard`, it switches on `DecisionScope` and `DecisionType` against a static permission matrix. When #1284 builds `SwarmTopologyProvider`, it creates `TopologyDescriptor` records using `TopologyType` and `AgentRole`. No ambiguity about what "coordinator" means, because `PlatformRole.COORDINATOR` has a `requiredArchetype()` of `INITIATOR` and the constructor won't let you create a contradictory one.
+Six types. A coordination vocabulary that both engine and agency share. Every downstream issue — the capability guard, the topology provider, the convergence evaluator, the telemetry layer — now has a shared language. The `AgentCapabilityGuard` switches on `DecisionScope` and `DecisionType` against a static permission matrix — a compiler-enforced total function where adding a new action category breaks the build until every scope handles it. When #1284 builds `SwarmTopologyProvider`, it creates `TopologyDescriptor` records using `TopologyType` and `AgentRole`. No ambiguity about what "coordinator" means, because `PlatformRole.COORDINATOR` has a `requiredArchetype()` of `INITIATOR` and the constructor won't let you create a contradictory one.
 
 The five-dimension coordination model from the parent epic now has three dimensions with engine types (topology, scope, roles) and two more tracked as issues (communication mode, observation strategy). The PlatformRole behavioral SPIs — coordinator, judge, moderator — each have their own issue under a new epic. Nothing is floating unnamed in someone's head.
 
