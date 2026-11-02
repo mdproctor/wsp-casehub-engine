@@ -156,8 +156,25 @@ society runtime wraps each obligation/permission in a `NormDecision<String>` wit
 - `source`: `"{groupId}:{roleName}"` (identifies the originating group and role)
 - `priority`: from `GroupPolicy.normativePriority` (lower wins in
   `PriorityResolution` — sorted ascending, first wins)
-- `specificity`: derived from the group's context (TENANT or CASE_TYPE)
+- `specificity`: derived from the group's context via defined derivation rules
+  (see below)
 - `establishedAt`: the role adoption timestamp (`RoleAdoption.adoptedAt`)
+
+**NormSpecificity derivation:** `NormSpecificity` has five levels (UNIVERSAL,
+DOMAIN, TENANT, CASE_TYPE, INSTANCE). A group's specificity is derived as:
+
+| Condition | Specificity | Rationale |
+|---|---|---|
+| `GroupPolicy.normSpecificity` is set | explicit value | operator override |
+| Group's `kindVocabulary` matches a case type vocabulary | CASE_TYPE | group is scoped to a specific case type |
+| Default | TENANT | groups are tenancy-scoped |
+
+`GroupPolicy` gains an optional `NormSpecificity normSpecificity` field
+(default: null, meaning auto-derive). This allows operators to explicitly set
+DOMAIN or UNIVERSAL for cross-tenant policy groups. The derivation ensures
+that a fraud-claims team (CASE_TYPE) naturally overrides a tenant-wide
+compliance group (TENANT) for fraud-related obligations, without requiring
+explicit normativePriority tuning.
 
 When obligations from different groups conflict for the same agent,
 `ConflictResolutionStrategy<String>` resolves them using the standard resolution
@@ -248,20 +265,42 @@ it to a Group:
 3. Inherit policy defaults from parent group
 4. Emit formation event
 
-Re-detection suppression: after promotion, SocietyLifecycleManager registers
-the promoted agents' group membership. TeamDetector's next detection cycle
-excludes agents that already belong to a promoted group — preventing duplicate
-promotion of the same cluster. If the promoted group later dissolves, those
-agents become eligible for detection again.
+**Scope bridging — case to org:** `TeamDetector.detect(UUID caseId, SwarmConfig
+config)` operates per-case: `CaseTeamState` is keyed by caseId, and
+`DetectedTeam` represents agents collaborating within a single case execution.
+Promotion intentionally crosses from case scope to org scope — that is the
+purpose of emergence. The bridge works as follows:
+
+- **tenancyId derivation:** The case execution context carries a tenancyId
+  (every case runs under a tenancy). SocietyLifecycleManager obtains the
+  tenancyId from the case context when processing a promotion, and the
+  promoted group is created under that tenancy's society.
+- **Cross-case applicability:** A promoted group is org-scoped. Once agents A
+  and B are promoted from case X into group G, group G applies when those
+  agents work on any case under the same tenancy — not just case X. The
+  group's coordination topology and policy govern their collaboration
+  regardless of which case they are executing.
+- **Global re-detection suppression:** After promotion, suppression is org-wide,
+  not per-case. `TeamDetector` checks group membership via
+  `OrgRegistry.unitsFor(agentId, tenancyId)` before including an agent in
+  detection. If agents A and B are already in a promoted group, detecting
+  them working together in case Y does NOT trigger a new promotion. This
+  prevents duplicate group creation across cases. When the promoted group
+  dissolves, suppression lifts and those agents become eligible for detection
+  in any case.
 
 ### 3.3 Bottom-Up Proposal
 
 Agents use agency-core's CoalitionProposal to propose a group:
 1. Agent creates CoalitionProposal (task + required capabilities + proposed members)
-2. CoalitionEvaluator scores capability coverage (note: `coveredCapabilities()`
-   currently returns member names as a proxy — this spec's scope includes
-   completing the implementation to delegate to actual `AgentCapability` metadata
-   from eidos `AgentRegistry`)
+2. CoalitionEvaluator scores capability coverage via `CoalitionContext`, which
+   provides capability resolution. `CoalitionProposal.coveredCapabilities()` is
+   removed — it currently returns member names as a proxy and creates a false
+   cross-module dependency. Instead, `CoalitionContext` carries a
+   `CapabilityResolver` that maps `AgentRef` names to `AgentCapability` records
+   from eidos `AgentRegistry`. The evaluator implementation (which lives in a
+   module that depends on both agency-core and eidos-api) injects the resolver.
+   This keeps `CoalitionProposal` (agency-core) decoupled from eidos-api.
 3. If viable, SocietyLifecycleManager creates a temporary Qhorus negotiation
    channel and attaches `NegotiationProtocol` (a `ChannelProtocol` implementation
    that evaluates dispatch advisories asynchronously via channel message
@@ -305,10 +344,18 @@ in-flight:
   members; busy members are drained and migrated as work completes. The
   ReconciliationLoop tracks convergence. PENDING_DRAIN has a configurable
   timeout (default: 30 minutes, configurable via `GroupPolicy`). After timeout,
-  OrgFaultPolicy evaluates the stuck item: force-reassign work to the parent
-  group's coordinator, escalate to a human review node (via `addReviewNode`),
-  or force-dissolve with orphaned work items logged as fault events. The
-  specific action is CBR-informed.
+  `SocietyLifecycleManager` handles the stuck item directly — this is a
+  lifecycle-level concern, not a desired-state graph concern.
+  `SocietyLifecycleManager` can: force-reassign work to the parent group's
+  coordinator (imperative action via engine work dispatch), escalate to a
+  human review node (desired-state mutation via `addReviewNode`), or
+  force-dissolve with orphaned work items logged as fault events. The
+  specific action is CBR-informed. `OrgFaultPolicy` handles graph-level
+  faults (group failed to provision, agent migration failed) where the
+  remediation is expressible as `List<GraphMutation<DesiredNode>>`.
+  PENDING_DRAIN timeout is distinct: it requires imperative runtime actions
+  (work reassignment, lifecycle state change) that only
+  `SocietyLifecycleManager` can perform.
 - **Natural dissolution** (all members depart): the group enters DISSOLVING
   immediately — departing agents already handled their own work lifecycle.
 - **Top-down dissolution**: the dissolving parent's desired-state plan handles
@@ -357,6 +404,21 @@ in the transition plan):
 - selfDetermination 0.3–0.7 → topology-change-only plans auto-approved;
   membership-changing plans require approval
 - selfDetermination < 0.3 → all plans require approval
+
+**Plan-level aggregation:** `PlanApprovalPolicy.evaluate(TransitionPlan plan,
+String tenancyId, PlanContext context)` receives the entire plan, which may
+affect multiple groups. `OrgPlanApprovalPolicy` evaluates per-group (each
+affected group's current selfDetermination) and returns the **most
+restrictive** result. If any affected group requires approval, the entire plan
+requires approval — plans are atomic and cannot be partially approved.
+
+**Circularity prevention:** Using the **current** (pre-transition) value
+prevents self-referential evaluation. If a plan changes Group A's
+selfDetermination from 0.8 to 0.2, the evaluation uses 0.8 (auto-approve).
+The plan executes, and future plans affecting A will see 0.2 (require
+approval). If the same plan also changes Group B from 0.2 to 0.8, B's
+current 0.2 triggers approval for the entire plan. This is the correct
+conservative behaviour — the most restricted group gates the transition.
 
 When approval is required, `PlanApprovalHandler` manages the lifecycle: submit
 the plan for review, poll via `check()`, cancel if superseded.
@@ -418,13 +480,23 @@ SituationRecompiler triggers recompilation of the target org when situations ari
 The recompiled target is diffed against current state and transitions through the
 same PlanApprovalPolicy → PlanApprovalHandler → Execute → Reconcile flow.
 
-**Stabilization window:** After a recompilation is applied, the org-specific
-SituationRecompiler suppresses further recompilations for a configurable
-stabilization period (default: 5 minutes). This prevents cascade storms where
-a restructure triggers new situations that trigger more restructuring. The
-window is per-society, not per-group — a society-wide restructure needs global
-stabilization. Situations that fire during the window are queued and evaluated
-after stabilization completes.
+**Stabilization window:** After a recompilation is applied,
+`SocietyLifecycleManager` enforces a per-society stabilization period
+(default: 5 minutes, configurable). This prevents cascade storms where a
+restructure triggers new situations that trigger more restructuring. The
+window is per-society, not per-group — a society-wide restructure needs
+global stabilization. Situations that fire during the window are queued by
+`SocietyLifecycleManager` and evaluated after stabilization completes.
+
+**Ownership:** `SocietyLifecycleManager` owns the stabilization state (last
+recompilation timestamp, queued situations) as part of its per-society
+in-memory state — alongside the per-society lock and membership version
+counters. The `SituationRecompiler` SPI remains stateless. When a situation
+triggers, `SocietyLifecycleManager` checks the window before delegating to
+the recompiler. On restart, stabilization state is lost (in-memory), which
+is safe: the desired-state graph prevents re-applying already-applied
+recompilations (the diff would be empty), so an early-firing recompilation
+after restart produces a no-op transition plan.
 
 ## 6. Implementation — Evolve Eidos Org
 
@@ -509,6 +581,18 @@ provides the desired state, `OrgRegistry` is empty (no actual state), and
 `ReconciliationLoop` re-provisions all groups from the desired-state graph —
 the same path used for initial deployment (§7 unified boot path).
 
+**Timestamp recovery semantics:** On restart, `ActualMembership.joinedAt`
+and `RoleAdoption.adoptedAt` are set to the re-provisioning time (current
+time). This is semantically correct — the agent joined the runtime group
+instance at restart time. For normative conflict resolution,
+`NormDecision.establishedAt` resets accordingly. This has minimal impact:
+recency (`RecencyResolution`) is the last strategy in the conflict resolution
+chain — priority and specificity handle the common cases. If two obligations
+have equal priority and equal specificity post-restart, they will have equal
+recency (both re-provisioned simultaneously), and resolution falls through to
+escalation — the correct conservative behaviour when the system cannot
+distinguish temporal ordering after a restart.
+
 **Universal desired-state-first rule:** Every `GroupLifecycleService` mutation
 updates the desired-state graph before updating `GroupInstance`. This applies
 to all operations without exception: top-down formation, emergence promotion,
@@ -518,6 +602,17 @@ mutates the desired-state graph first, calls
 `ReconciliationLoop.requestReconciliation()`, then updates `GroupInstance`.
 This ensures the desired-state graph is always ahead of or in sync with
 runtime state — restart recovery reconstructs from the authoritative graph.
+
+**Single entry point for OrgRegistry mutations:** All writes to `OrgRegistry`
+(both `OrganizationalUnit` and `GroupInstance`) go through
+`SocietyLifecycleManager`. This includes reconciliation-driven provisioning:
+`OrgNodeProvisioner.provision()` delegates to `SocietyLifecycleManager` for
+group creation, membership updates, and role assignments — it does NOT write
+to `OrgRegistry` directly. This ensures the per-society lock in
+`SocietyLifecycleManager` protects all mutation paths. Without this, a
+concurrent formation request (direct path) and reconciliation cycle
+(reconciliation path) could write to `OrgRegistry` without shared mutual
+exclusion.
 
 Note: `OrgRegistry` currently has only an in-memory implementation
 (`InMemoryOrgRegistry`). JPA persistence for `OrganizationalUnit` is future
@@ -533,7 +628,8 @@ public record GroupPolicy(
     Map<String, RolePolicy> roles,
     FormationRules formationRules,
     double topologyChangeThreshold,
-    int normativePriority            // lower wins in PriorityResolution; default: hierarchy depth
+    int normativePriority,           // lower wins in PriorityResolution; default: hierarchy depth
+    NormSpecificity normSpecificity   // nullable — null means auto-derive (§2.2)
 ) {}
 
 public record RolePolicy(
@@ -736,6 +832,24 @@ fail because Qhorus is unavailable. If channel creation fails, the group forms
 without a channel and a drift record is created. ReconciliationLoop retries
 channel creation on subsequent cycles until successful.
 
+**Degraded coordination without channel:** When a group forms without a channel,
+coordination behaviour is topology-dependent:
+- `swarm`: uses stigmergy (group-scoped signal filtering), not channels.
+  Unaffected by channel failure — fully operational.
+- `hive`: coordinator dispatches work via engine work dispatch (not channel-
+  dependent). The channel provides coordination communication (status reports,
+  plan discussions). Without channel: work dispatch is functional, coordination
+  communication is deferred. Degraded but operational.
+- `mesh`: uses Qhorus peer messaging as its coordination mechanism. Without
+  channel: mesh coordination is inert. The group is structurally valid (members,
+  roles, policy all apply) but peer messaging is deferred.
+- `many`: no coordination primitives. Unaffected.
+
+When `ReconciliationLoop` successfully creates a deferred channel, it emits a
+channel-ready event via `AgentWorkLifecycleListener`. Topology-specific
+coordination mechanisms that were deferred (mesh peer messaging) activate upon
+observing this event.
+
 Coordinator changes trigger a Qhorus MODERATOR role transfer. If the transfer
 fails, the old agent retains MODERATOR temporarily — the next reconciliation
 cycle detects the divergence and retries. Membership sync uses the same
@@ -795,7 +909,18 @@ a breaking schema change. The existing `organization:` schema does not support
 topology, policy, or selfDetermination. Since eidos is pre-release (all
 consumers are internal), the migration is a clean replacement — update all
 `META-INF/eidos/organization.yaml` files to the new `society:` schema.
-`ClasspathYamlOrgRegistrar` is updated to parse the new schema.
+
+**Types replaced:** Three existing types require coordinated replacement:
+1. `ClasspathYamlOrgRegistrar` — updated: new root key (`society:` replaces
+   `organization:`), new resource path, new schema parser.
+2. `YamlOrganization` — replaced: currently produces flat
+   `List<OrganizationalUnit>`. New schema model handles nested `groups:` with
+   inline `topology:`, `policy:`, `roles:`, and `members:`.
+3. `OrgBootstrap` — superseded: currently calls `registry::registerUnit`
+   imperatively for each unit. Replaced by the unified boot path:
+   `ClasspathYamlOrgRegistrar` → `OrgGoalCompiler` → `ReconciliationLoop`
+   → `OrgNodeProvisioner`. The imperative bootstrap is eliminated in favour
+   of desired-state reconciliation for all org mutations.
 
 This YAML is both the eidos seed (loaded at boot by ClasspathYamlOrgRegistrar)
 and a desired-state goal specification (compiled by OrgGoalCompiler for
