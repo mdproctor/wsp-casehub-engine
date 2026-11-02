@@ -130,6 +130,98 @@ The mapping is direct:
 - [Stochastic Self-Organization in Multi-Agent Systems (arXiv 2025)](https://arxiv.org/abs/2510.00685)
 - [Multi-Agent Oriented Reorganisation within JaCaMo (Sorici et al. 2012)](https://www.researchgate.net/publication/281328187_Multi-Agent_Oriented_Reorganisation_within_the_JaCaMo_infrastructure)
 
+## Concrete Scenario: Cyber-Insurance Product Launch
+
+Exercises all desired-state capabilities: graph diffing, dependency ordering,
+staged rollout, approval gates, drift detection, fault recovery, adaptive recompilation.
+
+### Before-State
+
+```
+Society: ClaimsOps
+├── Group: AutoClaims (topology: Hive, selfDetermination: 0.3)
+│   ├── Triage → [T1, T2]
+│   ├── Assessor → [A1, A2, A3]
+│   └── Coordinator → [C1]
+├── Group: HomeClaims (topology: Hive, selfDetermination: 0.3)
+│   ├── Triage → [T3, T4]
+│   ├── Assessor → [A4, A5]
+│   └── Coordinator → [C2]
+└── Group: FraudWatch (topology: Swarm, selfDetermination: 0.7)
+    ├── Analyst → [F1, F2, F3]
+    └── Investigator → [F4]
+```
+
+### Trigger
+
+New cyber-insurance product launches. 400% claim volume spike in 48 hours.
+No CyberClaims group exists. AutoClaims volume drops 30%.
+
+### GoalCompiler → Desired State
+
+```
+Society: ClaimsOps
+├── AutoClaims — SHRINK (release T2, A3)
+├── HomeClaims — UNCHANGED
+├── CyberClaims — NEW (topology: Swarm → Hive)
+│   ├── Triage → [T2, T5-new]
+│   ├── Assessor → [A3, A6-new, A7-new]
+│   ├── Specialist → [S1-new]      ← cyber-specific role
+│   └── Coordinator → [C3-new]
+└── FraudWatch — EXPAND (add F5-new for cyber fraud patterns)
+```
+
+### TransitionPlanner — Dependency-Ordered Phases
+
+**Phase 1 — Form & Provision** (no dependencies):
+Create empty CyberClaims group (starts as Swarm). Provision new agents T5, A6, A7, S1, C3, F5.
+
+**Phase 2 — Migrate** (depends on Phase 1):
+Move T2 from AutoClaims.Triage → CyberClaims.Triage.
+Move A3 from AutoClaims.Assessor → CyberClaims.Assessor.
+Add F5 to FraudWatch.Analyst.
+
+**Phase 3 — Stabilise** (depends on Phase 2):
+CyberClaims topology Swarm → Hive (assign coordinator C3, enforce role policy).
+Verify all roles filled, cardinality constraints met.
+
+### PlanApprovalGate — selfDetermination in Action
+
+- **AutoClaims** (0.3) → requires supervisor approval to shrink. Plan pauses.
+- **FraudWatch** (0.7) → auto-approves expansion. F5 joins immediately.
+- **CyberClaims** (0.5, inherited) → auto-approves formation, requires approval for topology shift.
+
+### Complication — Drift Detection
+
+Phase 2 executes. T2 migrates. But A3 is mid-case — actively processing claim #8847.
+Migration stalls. ReconciliationLoop detects **drift**: desired says A3 is in CyberClaims,
+actual shows A3 still in AutoClaims with open workload.
+
+### Fault Policy — CBR-Informed Recovery
+
+CBR matches: *"agent with active workload — delay migration, provision substitute."*
+- Provision A8-new into CyberClaims as temporary assessor
+- Mark A3 migration as `PENDING_DRAIN` — executes when claim #8847 completes
+- ReconciliationLoop keeps checking each cycle
+
+### SituationRecompiler — Adaptive Re-planning
+
+72 hours in. FraudWatch's swarm detects `SIGNAL_CONSENSUS` — cyber claims have
+3x fraud rate. `COORDINATION_STORM` fires.
+
+SituationRecompiler triggers **recompilation of the desired org**:
+- FraudWatch spawns sub-group: `CyberFraudCell` (topology: Hive, selfDetermination: 0.8)
+- F3, F5 move in with dedicated Investigator role
+- Mesh connection to CyberClaims for direct signal relay
+
+New transition plan generated, diffed, fed through PlanApprovalGate.
+CyberFraudCell's high selfDetermination means it self-governs from formation —
+can recruit, shift topology, dissolve without supervisor approval.
+
+## Issue
+
+**casehubio/eidos#216** — Self-organising agent society — dynamic group lifecycle with MOISE+ alignment
+
 ## Topology Taxonomy
 
 From agentic engineering practice — each topology defines how the group thinks:
