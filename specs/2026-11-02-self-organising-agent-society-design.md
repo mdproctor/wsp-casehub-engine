@@ -152,11 +152,29 @@ requirements can adopt it.
 **Normative framework integration:** Obligation and permission strings in role
 policy are norm identifiers — references into agency-core's normative reasoning
 framework (`io.casehub.agency.deliberation.normative`). At enforcement time, the
-society runtime wraps each obligation/permission in a `NormDecision<String>` with
-the group's `NormSpecificity` level (TENANT or CASE_TYPE, derived from the group's
-context). When obligations from different groups conflict for the same agent,
+society runtime wraps each obligation/permission in a `NormDecision<String>` with:
+- `source`: `"{groupId}:{roleName}"` (identifies the originating group and role)
+- `priority`: from `GroupPolicy.normativePriority` (lower wins in
+  `PriorityResolution` — sorted ascending, first wins)
+- `specificity`: derived from the group's context (TENANT or CASE_TYPE)
+- `establishedAt`: the role adoption timestamp (`RoleAdoption.adoptedAt`)
+
+When obligations from different groups conflict for the same agent,
 `ConflictResolutionStrategy<String>` resolves them using the standard resolution
 strategies (priority, specificity, recency, escalation, most-restrictive).
+
+**Priority derivation:** `GroupPolicy.normativePriority` is an explicit int field
+(default: hierarchy depth — root = 0, leaf = N). Lower values win in
+`PriorityResolution`. The default derivation means parent-level obligations
+take precedence over child-level obligations: a society-wide norm like
+"comply-with-regulations" overrides a team-level "process-fast" when they
+conflict for the same agent's capacity. Operators can override by setting
+`normativePriority` explicitly in the YAML.
+
+If two groups at the same NormSpecificity level have the same normativePriority,
+resolution falls through to the next strategy in the chain (recency, then
+escalation). A diagnostic warning is logged when this happens, since equal-
+priority ties indicate the operator should assign explicit priorities.
 
 ### 2.3 Inter-Group Communication
 
@@ -187,12 +205,21 @@ which paths are available:
 
 **Formation serialization:** All formation paths funnel through
 SocietyLifecycleManager, which serializes formation requests per-society.
-Formation uses compare-and-swap on agent membership: an agent cannot be added
-to a new group if their membership state has changed since the formation request
-was initiated. If a CAS check fails (agent already claimed by a concurrent
-formation), the conflicting formation request fails with a membership-conflict
-event. This prevents overlapping membership from concurrent proposals, emergence
-promotions, and desired-state transitions.
+
+SocietyLifecycleManager maintains a per-agent membership version counter
+(monotonic long, incremented on every membership change — join, leave,
+group dissolution). When a formation request is initiated, it captures the
+current version for each proposed agent. At commit time, `formGroup()` acquires
+a per-society lock, validates that all captured versions are still current
+(no agent's membership has changed since the request was created), performs
+the membership update (incrementing each agent's version), and releases the
+lock. If any version has changed, the entire formation fails atomically with
+a membership-conflict event.
+
+The per-society lock ensures atomicity across all proposed members within a
+single formation request — no concurrent formation can modify membership while
+the lock is held. This prevents the TOCTOU race where per-agent checks could
+pass individually but see stale state collectively.
 
 ### 3.1 Top-Down Spawning
 
@@ -276,7 +303,12 @@ in-flight:
 - **Desired-state dissolution** (restructuring): the agent's work item is
   marked PENDING_DRAIN in the transition plan. Dissolution proceeds for idle
   members; busy members are drained and migrated as work completes. The
-  ReconciliationLoop tracks convergence.
+  ReconciliationLoop tracks convergence. PENDING_DRAIN has a configurable
+  timeout (default: 30 minutes, configurable via `GroupPolicy`). After timeout,
+  OrgFaultPolicy evaluates the stuck item: force-reassign work to the parent
+  group's coordinator, escalate to a human review node (via `addReviewNode`),
+  or force-dissolve with orphaned work items logged as fault events. The
+  specific action is CBR-informed.
 - **Natural dissolution** (all members depart): the group enters DISSOLVING
   immediately — departing agents already handled their own work lifecycle.
 - **Top-down dissolution**: the dissolving parent's desired-state plan handles
@@ -470,13 +502,33 @@ transitions, or in `many`-topology groups where roles are optional).
 compiles `OrganizationalUnit` as desired state. The diff between them drives
 reconciliation.
 
+**Persistence:** `GroupInstance` is transient (in-memory via `OrgRegistry`).
+The desired-state graph (persisted via `DesiredStateHistoryStore`) is the
+authoritative recovery layer. On restart: the `DesiredStateHistoryStore`
+provides the desired state, `OrgRegistry` is empty (no actual state), and
+`ReconciliationLoop` re-provisions all groups from the desired-state graph —
+the same path used for initial deployment (§7 unified boot path). Dynamic
+changes (role adoption, topology transition) update the desired-state graph
+first (via `SocietyLifecycleManager` → desired-state graph mutation →
+`ReconciliationLoop.requestReconciliation()`), then update `GroupInstance`.
+This ensures the desired-state graph is always ahead of or in sync with
+runtime state — restart recovery reconstructs from the authoritative graph.
+
+Note: `OrgRegistry` currently has only an in-memory implementation
+(`InMemoryOrgRegistry`). JPA persistence for `OrganizationalUnit` is future
+work tracked under eidos#216. When implemented, the JPA-persisted
+`OrganizationalUnit` records would provide a warm-start optimisation
+(skip re-provisioning units that already exist), but correctness does not
+depend on it — the desired-state reconciliation path is always available.
+
 **GroupPolicy** — new record:
 
 ```java
 public record GroupPolicy(
     Map<String, RolePolicy> roles,
     FormationRules formationRules,
-    double topologyChangeThreshold
+    double topologyChangeThreshold,
+    int normativePriority            // lower wins in PriorityResolution; default: hierarchy depth
 ) {}
 
 public record RolePolicy(
@@ -534,6 +586,20 @@ All three formation paths (§3) produce a `GroupFormationRequest` and submit it
 to `GroupLifecycleService.formGroup()`. The request carries the formation path
 for auditing and policy enforcement — `FormationRules.allowedPaths` is checked
 before the group is created.
+
+**Topology-policy validation:** At formation and topology transition,
+`GroupLifecycleService` validates consistency between topology and policy:
+- `hive` activates coordinator-routed work dispatch. If no role in
+  `GroupPolicy.roles` carries coordinator-class permissions (`change-topology`
+  or `provision-agent`), a diagnostic warning is emitted: work dispatch will
+  be inert until a coordinator-class role is defined and adopted. Formation
+  proceeds — the group is valid but its coordination mechanism is inactive.
+- `many` has no coordination primitives. Role definitions remain valid (they
+  carry normative obligations even without coordination). No warning needed.
+- `mesh` uses peer messaging. No specific role requirement — all members are
+  peers.
+- Unknown topology values: no validation (custom topologies define their own
+  coordination semantics via TopologyProvider).
 
 **GroupLifecycleState** — new enum with defined transitions:
 
