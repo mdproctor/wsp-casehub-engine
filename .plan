@@ -10,11 +10,11 @@ date: 2026-11-01
 
 ## Queue
 - [ ] casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent ← active
-  - [ ] Batch 1: Foundation
-    - [ ] Task 1: TopologyDescriptor record
-    - [ ] Task 2: SwarmTopologyProvider SPI + CentralisedTopologyProvider + DefaultBean
-  - [ ] Batch 2: Integration
-    - [ ] Task 3: SwarmProvisioner topology gate
+  - [x] Batch 1: Foundation
+    - [x] Task 1: TopologyDescriptor record
+    - [x] Task 2: SwarmTopologyProvider SPI + CentralisedTopologyProvider + DefaultBean
+  - [x] Batch 2: Integration
+    - [x] Task 3: SwarmProvisioner topology gate
 - [ ] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity
 - [ ] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive
 - [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations
