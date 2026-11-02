@@ -1,7 +1,21 @@
 # Work Plan — issue-377-distributed-per-agent-coordination
 
+## State
+branch: issue-377-distributed-per-agent-coordination
+state: active
+issue-repo: casehubio/agency
+covers: casehubio/agency#377
+Current: casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
+date: 2026-11-01
+
 ## Queue
 - [ ] casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent ← active
+  - [ ] Batch 1: Vocabulary
+    - [ ] Task 1: DecisionScope.isPermitted matrix
+    - [ ] Task 2: DecisionAuthority + TopologyType.deriveAuthority
+  - [ ] Batch 2: Guard SPI
+    - [ ] Task 3: AgentAction + GuardDecision + AgentCapabilityGuard
+    - [ ] Task 4: NoOpAgentCapabilityGuard + SpiDefaultBeans producer
 - [ ] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity
 - [ ] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive
 - [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations
@@ -10,11 +24,3 @@
 - [ ] casehubio/agency#383 — feat: Per-agent degradation + topology-owned cascade policy
 - [ ] casehubio/agency#384 — feat: DecisionLoopEvent — per-agent loop observability
 - [ ] casehubio/agency#385 — feat: YAML parity — TopologySpec, DecisionScopeSpec, CommunicationModeSpec
-
-## State
-branch: issue-377-distributed-per-agent-coordination
-state: active
-issue-repo: casehubio/agency
-covers: casehubio/agency#377
-Current: casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
-date: 2026-11-01
