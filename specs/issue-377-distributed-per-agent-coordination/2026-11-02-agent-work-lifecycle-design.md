@@ -37,6 +37,7 @@ Valid transitions:
 |------|----|---------|
 | IDLE | ASSIGNED | Task accepted by orchestrator |
 | ASSIGNED | EXECUTING | Worker function invocation begins |
+| ASSIGNED | IDLE | Assignment failed (resolution error before execution) |
 | EXECUTING | IDLE | Task completion (success or failure) |
 | EXECUTING | ADAPTING | Mid-execution adaptation (future) |
 | ADAPTING | EXECUTING | Adaptation complete, resume execution |
