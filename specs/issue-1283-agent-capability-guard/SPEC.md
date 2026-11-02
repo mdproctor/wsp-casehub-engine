@@ -20,23 +20,31 @@ Five concerns (all deferred from #1282):
 
 ### DecisionScope — permission matrix method
 
-Add `isPermitted(DecisionType)` to the `DecisionScope` enum. This is the reference matrix from the #1282 spec, encoded as a total function:
+Add `isPermitted(DecisionType)` to the `DecisionScope` enum. Encoded as exhaustive switch expressions — adding a `DecisionType` value forces every `DecisionScope` override to handle it or the build breaks. This compiler-enforces the #1282 spec's total-function invariant.
 
 ```java
 public enum DecisionScope {
   STIMULUS_DRIVEN {
     @Override public boolean isPermitted(DecisionType type) {
-      return type == DecisionType.SIGNALING;
+      return switch (type) {
+        case SIGNALING -> true;
+        case TASK_SELECTION, COLLABORATION, PROVISIONING, CONTEXT_MUTATION -> false;
+      };
     }
   },
   TASK_ADAPTATION {
     @Override public boolean isPermitted(DecisionType type) {
-      return type != DecisionType.TASK_SELECTION && type != DecisionType.PROVISIONING;
+      return switch (type) {
+        case COLLABORATION, SIGNALING, CONTEXT_MUTATION -> true;
+        case TASK_SELECTION, PROVISIONING -> false;
+      };
     }
   },
   FULL_AUTONOMY {
     @Override public boolean isPermitted(DecisionType type) {
-      return true;
+      return switch (type) {
+        case TASK_SELECTION, COLLABORATION, SIGNALING, PROVISIONING, CONTEXT_MUTATION -> true;
+      };
     }
   };
 
@@ -44,7 +52,7 @@ public enum DecisionScope {
 }
 ```
 
-**Matrix (for reference — encoded in the overrides above):**
+**Matrix (for reference — encoded in the switch expressions above):**
 
 | | TASK_SELECTION | COLLABORATION | SIGNALING | PROVISIONING | CONTEXT_MUTATION |
 |---|---|---|---|---|---|
@@ -69,6 +77,8 @@ public enum DecisionAuthority {
 - **CENTRAL** — agent decisions affect the entire swarm (initiator in centralised/hybrid)
 
 This is a *derived* type — never directly configured. Always produced by `TopologyType.deriveAuthority(StructuralRole)`.
+
+**Intended consumers:** `DecisionAuthority` is consumed by #1284 (TopologyDescriptor) where the topology lifecycle needs authority levels to determine which agent can make swarm-wide decisions vs local-only decisions. The `AgentCapabilityGuard` itself does not use `DecisionAuthority` — it works with `DecisionScope` and `DecisionType`, which are independent of topology. Authority and scope are orthogonal enforcement dimensions: authority constrains *structural reach* (who delegates to whom), scope constrains *operational freedom* (what categories of action).
 
 ### TopologyType — authority derivation and validation
 
@@ -157,39 +167,49 @@ public sealed interface AgentAction {
 ## AgentCapabilityGuard SPI
 
 ```java
+public sealed interface GuardDecision {
+  record Permitted() implements GuardDecision {}
+  record Denied(DecisionScope agentScope, DecisionType attemptedType) implements GuardDecision {}
+}
+
 public interface AgentCapabilityGuard {
-  boolean isPermitted(UUID caseId, String agentId, AgentAction action);
+  GuardDecision check(UUID caseId, String agentId, AgentAction action);
 }
 ```
 
-**Package:** `io.casehub.api.spi`
+**Package:** `io.casehub.api.spi` (both `AgentCapabilityGuard` and `GuardDecision`)
 
-**Semantics:** Returns `true` if the agent is permitted to perform the action, `false` otherwise. The guard resolves the agent's current `DecisionScope` internally — callers pass identifiers only.
+**Semantics:** Returns `Permitted` if the agent may perform the action, or `Denied` with the agent's scope and the attempted decision type for structured logging. The guard resolves the agent's current `DecisionScope` internally — callers pass identifiers only.
 
-**NoOp default:** `NoOpAgentCapabilityGuard` in `runtime-core/internal/` — permits everything (`return true`). Annotated `@DefaultBean @ApplicationScoped`. Agency displaces with a scope-aware implementation via `@Alternative @Priority(1)`.
+**Why `GuardDecision` instead of `boolean`:** Follows the `ActionRiskClassifier` → `RiskDecision` precedent. The guard is the only component that knows the agent's scope — making callers separately look up scope to produce a log message is redundant computation and couples callers to enforcement internals. `Denied` carries the context needed for structured denial logging.
+
+**Agent identity at integration points:** The SPI uses `agentId` because the guard enforces agent-level coordination constraints. At integration points (signal deposit, context mutation, provisioning), the available identity is `workerName`. Callers pass `workerName` as the `agentId` parameter — in coordination topologies, agent identity and worker identity are the same value. This mapping is intentional: the guard's purpose is agent-level enforcement, but the underlying identity infrastructure uses worker names.
+
+**NoOp default:** `NoOpAgentCapabilityGuard` — a plain POJO in `runtime-core` (no CDI annotations). Returns `new GuardDecision.Permitted()` for all inputs. Wired via a `@Produces @DefaultBean @ApplicationScoped` method in `SpiDefaultBeans` (the `runtime` Quarkus-binding module). Agency displaces by providing a normal `@ApplicationScoped` bean — `@DefaultBean` yields automatically to any non-default qualifying bean, no `@Alternative` annotation needed.
 
 **Call-site pattern:**
 
 ```java
 @Inject AgentCapabilityGuard capabilityGuard;
 
-if (!capabilityGuard.isPermitted(caseId, agentId, new AgentAction.DepositSignal(signalName))) {
-  // log denial and skip
+GuardDecision decision = capabilityGuard.check(caseId, agentId, new AgentAction.DepositSignal(signalName));
+if (decision instanceof GuardDecision.Denied denied) {
+  log.warn("Agent {} denied: scope {} does not permit {}", agentId, denied.agentScope(), denied.attemptedType());
   return;
 }
 ```
 
 ## Integration Points
 
-The guard is checked at these enforcement boundaries. Each is a pre-check — if denied, the operation is skipped with a log message. No exceptions thrown on denial (soft enforcement — the caller decides the consequence).
+The guard is checked at these enforcement boundaries. Each is a pre-check — if denied, the operation is skipped with a structured log message. No exceptions thrown on denial (soft enforcement — the caller decides the consequence).
 
-| Operation | Call site | AgentAction |
-|-----------|----------|-------------|
-| Signal deposit | `SignalSpace.deposit()` | `DepositSignal(signalName)` |
-| Message send | `CaseChannelProvider` dispatch | `InitiateMessage(targetAgentId)` |
-| Task self-assignment | Worker scheduling pipeline | `SelectTask(taskId)` |
-| Provisioning request | `WorkerProvisioner` | `RequestProvisioning()` |
-| Context write | `CaseContext` mutation | `MutateContext(contextKey)` |
+| Operation | Call site | AgentAction | workerName → agentId |
+|-----------|----------|-------------|---------------------|
+| Signal deposit | `SignalSpace.deposit()` | `DepositSignal(signalName)` | `workerName` field |
+| Message send | `CaseChannelProvider` dispatch | `InitiateMessage(targetAgentId)` | sender `workerName` |
+| Task self-assignment | Worker scheduling pipeline | `SelectTask(taskId)` | scheduled `workerId` |
+| Provisioning request | `WorkerProvisioner` | `RequestProvisioning()` | requesting `workerName` |
+| Context write | `CaseContext` mutation | `MutateContext(contextKey)` | mutating `workerName` |
 
 **Integration is deferred to downstream issues.** This issue defines the SPI, types, and NoOp default. Wiring the guard into each call site requires understanding the specific mechanics of each integration point — that work belongs in #1284+ where the topology lifecycle is defined.
 
@@ -200,11 +220,13 @@ The guard is checked at these enforcement boundaries. Each is a pre-check — if
 | Artifact | Module | Package |
 |----------|--------|---------|
 | `AgentCapabilityGuard` | api | `io.casehub.api.spi` |
+| `GuardDecision` | api | `io.casehub.api.spi` |
 | `AgentAction` | api | `io.casehub.api.spi` |
 | `DecisionAuthority` | api | `io.casehub.api.model.coordination` |
 | `DecisionScope` (enriched) | api | `io.casehub.api.model.coordination` |
 | `TopologyType` (enriched) | api | `io.casehub.api.model.coordination` |
-| `NoOpAgentCapabilityGuard` | runtime-core | `io.casehub.engine.internal.coordination` |
+| `NoOpAgentCapabilityGuard` | runtime-core | `io.casehub.engine.runtime.coordination` |
+| Producer method | runtime | `SpiDefaultBeans` |
 
 ## Testing Strategy
 
@@ -216,12 +238,16 @@ The guard is checked at these enforcement boundaries. Each is a pre-check — if
 
 ### SPI contract test (api module)
 
-- `NoOpAgentCapabilityGuard` always returns `true` for any (caseId, agentId, action) triple
+- `NoOpAgentCapabilityGuard` always returns `Permitted()` for any (caseId, agentId, action) triple
 
 ### Guard integration test (runtime-core module, @QuarkusTest)
 
 - Verify `NoOpAgentCapabilityGuard` is injectable and active by default
-- Verify it can be displaced by an `@Alternative @Priority(1)` test implementation
+- Verify it can be displaced by a normal `@ApplicationScoped` test implementation (no `@Alternative` needed)
+
+## Resolved Questions
+
+1. **Agent identity type → String.** Consistent with existing `workerName`/`workerId` usage throughout the engine. A typed wrapper adds no value when the underlying identity is always a worker name string. If String confusion becomes a real problem in the coordination layer, a typed wrapper can be introduced later without breaking the SPI contract (the wrapper would implement `toString()` → same wire value).
 
 ## What This Issue Does NOT Include
 
@@ -233,10 +259,11 @@ The guard is checked at these enforcement boundaries. Each is a pre-check — if
 ## References
 
 - `specs/issue-1282-coordination-vocabulary-types/SPEC.md` — vocabulary definitions, permission matrix, derivation mapping, deferral decomposition
-- `api/src/main/java/io/casehub/api/spi/WorkerExecutionGuard.java` — precedent guard SPI pattern
-- `runtime-core/src/main/java/io/casehub/engine/internal/worker/AllowAllWorkerExecutionGuard.java` — precedent NoOp default
-- `api/src/main/java/io/casehub/api/spi/ActionRiskClassifier.java` — related action-level gating pattern
+- `api/src/main/java/io/casehub/api/spi/ActionRiskClassifier.java` — `RiskDecision` sealed interface precedent for guard return types
+- `runtime/src/main/java/io/casehub/engine/runtime/quarkus/SpiDefaultBeans.java` — `@Produces @DefaultBean` producer pattern for NoOp defaults
+- `runtime-core/src/main/java/io/casehub/engine/runtime/worker/NoOpCaseChannelProvider.java` — plain POJO NoOp default precedent
 - PP-20260921-b7c277 — `@DefaultBean` for 1:1 SPI replacement
+- PP-20260514-engine-spi-noops-defaultbean — engine SPI no-op defaults must use `@DefaultBean`
 - PP-20260727-5267d2 — placement rules: plan-definition types in api, execution types in common
 - casehubio/engine#1283 — parent issue
 - casehubio/agency#377 — parent epic
