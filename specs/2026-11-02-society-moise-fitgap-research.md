@@ -119,6 +119,7 @@ The mapping is direct:
 | D6 | All three formation paths: bottom-up proposal, emergence promotion, top-down spawning | selfDetermination controls which paths are available |
 | D7 | Dynamic society runtime lives in eidos | Eidos already owns identity, org structure, relationships. Engine depends on it directly. Agency is downstream |
 | D8 | Reorganisation protocol via casehub-desiredstate | Desired-state already handles graph-based state reconciliation with approval gates, drift detection, and staged rollouts. Agent topology is a declared use case |
+| D9 | Eidos org diagrams ARE desired-state goal specifications | Org diagrams are declarative, idempotent, git-versioned. You never imperatively restructure — you declare the target state and desired-state transitions to it. Initial deployment = no state → diagram A. Restructuring = diagram A → B. Recovery = drift → reconcile back. Emergent formation (DetectedTeam promotion, coalition proposals) = runtime editing the desired-state graph when selfDetermination permits, triggering a new reconciliation cycle |
 
 ## Academic References
 
