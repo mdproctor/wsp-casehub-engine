@@ -18,35 +18,106 @@ One concept: **Group**. A group can contain agents and/or sub-groups (N-level
 recursive). The root group is the Society. Leaf groups are teams. Depth is
 unconstrained.
 
-A group has four facets:
+The root Society group is either declared in the YAML seed (§7, the `society:`
+root element) or auto-created with default policy on first group formation if
+no seed exists. Every group must have a parent except the root.
 
-| Facet | What it defines | Runtime behaviour |
+**Spec vs runtime (D9):** `OrganizationalUnit` is the immutable declarative
+specification — the desired state. `GroupInstance` is the mutable runtime
+entity — the actual state. The org diagram declares what SHOULD exist;
+GroupInstance records what DOES exist. This mirrors MOISE+'s OS/OE distinction.
+
+A group's specification has four facets:
+
+| Facet | What it defines | Spec type |
 |---|---|---|
-| **Identity** | ID, name, kind (vocabulary-grounded), parent, members | Addressable, queryable, registered in OrgRegistry |
-| **Topology** | CoordinationPattern (SWARM/HIVE/MESH/MANY) + AuthorityModel | Mutable at runtime, governed by selfDetermination |
-| **Policy** | Role obligations/permissions, selfDetermination, formation rules | Enforced by normative reasoning (deontic dimension) |
-| **Roles** | Named roles with adoption/release lifecycle | Agents adopt/release roles dynamically, events emitted |
+| **Identity** | ID, name, kind (vocabulary-grounded), parent, members | `OrganizationalUnit` fields |
+| **Topology** | Coordination topology (open-string vocabulary, D20) + AuthorityModel | `topology` / `topologyVocabulary` |
+| **Policy** | Role obligations/permissions, selfDetermination, formation rules | `GroupPolicy` |
+| **Roles** | Named roles with cardinality and capability expectations | `RolePolicy` |
+
+Runtime behaviour is tracked on `GroupInstance`:
+
+| Runtime concern | Tracked on | Examples |
+|---|---|---|
+| Lifecycle state | `GroupInstance.state` | PROPOSED, FORMING, ACTIVE, REORGANISING, DISSOLVING, DISSOLVED |
+| Current topology | `GroupInstance.effectiveTopology` | May differ from spec during transitions |
+| Role adoptions | `GroupInstance.roleAdoptions` | Which agents currently hold which roles |
 
 ### 2.1 Topology
 
-Each CoordinationPattern implies a default AuthorityModel but can be overridden:
+Topology is an open-string vocabulary term (D20), consistent with eidos's
+`slot`/`slotVocabulary` pattern on `AgentDescriptor`. Each well-known topology
+value implies a default AuthorityModel but can be overridden:
 
-| Pattern | Default Authority | Characteristics | Runtime Primitive |
+| Value | Default Authority | Characteristics | Runtime Primitive |
 |---|---|---|---|
-| SWARM | DISTRIBUTED | Decentralised, stigmergy signals, self-organising | Engine stigmergy |
-| HIVE | CENTRALISED | Role-assigned, supervised orchestration, scoped memory | Agency-core orchestration patterns |
-| MESH | DISTRIBUTED | Message relay, consensus, federation, inter-group | Qhorus channels |
-| MANY | — | Isolated parallel, no coordination | None |
+| `swarm` | DISTRIBUTED | Decentralised, stigmergy signals, self-organising | Engine stigmergy — group-scoped signal filtering |
+| `hive` | CENTRALISED | Role-assigned, supervised orchestration, scoped memory | Agency-core orchestration — coordinator routes work items, members report via group channel |
+| `mesh` | DISTRIBUTED | Message relay, consensus, federation, inter-group | Qhorus channels — all-to-all messaging within the group, coordinator-to-coordinator across groups |
+| `many` | — | Isolated parallel, no coordination | No runtime primitives activated — members work independently |
+
+Domain applications can define custom topology values via vocabulary registrars.
+The engine selects runtime behaviour based on topology value: `swarm` activates
+group-scoped stigmergy signal filtering, `hive` activates coordinator-routed
+work dispatch, `mesh` activates Qhorus peer messaging. Unknown topology values
+receive default behaviour (group identity and membership only, no coordination
+primitives). The activation mechanism is the proposed TopologyProvider SPI
+(engine#1284).
+
+`many` is an organizational abstraction, not a coordination one. It differs from
+ungrouped agents in three ways: (1) policy application — agents share group
+policy (formation rules, role constraints) without coordination overhead;
+(2) organizational identity — the group is queryable via OrgRegistry and
+participates in desired-state reconciliation; (3) topology transition — the
+group can later transition to `swarm`/`hive`/`mesh` as coordination needs emerge.
 
 Hive is not a separate construct — it is a group configured with roles, policy,
-orchestration patterns, and a private Qhorus channel. The topology enum selects
+orchestration patterns, and a private Qhorus channel. The topology value selects
 which coordination mechanisms are active, not a different implementation.
 
-Topology transitions (e.g. SWARM → HIVE when a detected cluster stabilises and
-adopts roles) are governed by selfDetermination:
+Topology transitions (e.g. `swarm` → `hive` when a detected cluster stabilises
+and adopts roles) are governed by selfDetermination:
 - Low (< 0.3): topology changes require external approval
-- Medium (0.3–0.7): auto-approve within pattern family, approval across
+- Medium (0.3–0.7): auto-approve within topology family, approval across
 - High (> 0.7): group self-governs topology changes
+
+**Precedence with IntegrationPolicy.selfDetermination:** Engine's
+`IntegrationPolicy.selfDetermination` (per-case stigmergy config) governs
+individual agent autonomy in swarm coordination. `OrganizationalUnit.selfDetermination`
+governs group-level structural decisions — topology changes, formation path
+availability, dissolution voting. When an agent is in a group, the group's
+selfDetermination is authoritative for structural decisions. IntegrationPolicy's
+value remains the default for ungrouped agents and for non-structural stigmergy
+behaviour (signal weighting, bootstrap richness). TopologyProvider (engine#1284)
+resolves the effective value based on group membership.
+
+**Topology transitions** use the REORGANISING lifecycle state (on GroupInstance):
+1. GroupInstance enters REORGANISING — blocks concurrent formation, dissolution,
+   and further topology changes for this group
+2. Execute transition steps (update coordination pattern, activate/deactivate
+   coordination mechanisms, adjust role requirements, sync channels)
+3. On success → ACTIVE with new topology
+4. On failure → rollback to previous topology, enter ACTIVE, emit fault event
+
+If the system crashes mid-transition, ReconciliationLoop detects drift (partial
+topology state) and re-drives the transition from the desired-state graph.
+
+### 2.1.1 selfDetermination Semantics
+
+selfDetermination is an independent property per group — it is neither inherited
+from nor capped by a parent group's value.
+
+- **Scope:** governs the group's own structural decisions (topology changes,
+  role additions, membership changes, sub-group creation)
+- **Default:** 0.0 if unspecified (all changes require external approval —
+  safe default for declarative-only groups)
+- **Parent independence:** a parent's selfDetermination governs parent-level
+  restructuring (adding/removing child groups). A child's selfDetermination
+  governs the child's internal restructuring. A highly autonomous child (0.7)
+  under a controlled parent (0.3) can restructure itself internally, but the
+  parent cannot restructure without approval
+- **Validation:** [0.0, 1.0] range enforced at record construction
 
 ### 2.2 Roles
 
@@ -67,11 +138,25 @@ policy:
 
 Role lifecycle events (`onRoleAdopted`, `onRoleReleased` in
 AgentWorkLifecycleListener — engine#1285) make role transitions observable.
-An agent can hold roles in multiple groups simultaneously.
+An agent can hold roles in multiple groups simultaneously. When an agent holds
+roles in multiple groups, normative reasoning (agency-core's conflict resolution
+strategies) operates on the union of obligations across all groups. Cross-group
+conflicts are resolved using the same strategies (priority, specificity, recency,
+escalation, most-restrictive) — the group's policy priority determines which
+group's obligations take precedence when capacity conflicts arise.
 
 The coordinator is a policy-designated role — it has specific obligations and
 permissions but is not architecturally special. Any agent meeting the role's
 requirements can adopt it.
+
+**Normative framework integration:** Obligation and permission strings in role
+policy are norm identifiers — references into agency-core's normative reasoning
+framework (`io.casehub.agency.deliberation.normative`). At enforcement time, the
+society runtime wraps each obligation/permission in a `NormDecision<String>` with
+the group's `NormSpecificity` level (TENANT or CASE_TYPE, derived from the group's
+context). When obligations from different groups conflict for the same agent,
+`ConflictResolutionStrategy<String>` resolves them using the standard resolution
+strategies (priority, specificity, recency, escalation, most-restrictive).
 
 ### 2.3 Inter-Group Communication
 
@@ -79,19 +164,35 @@ requirements can adopt it.
 space, consistent with how individual agents coordinate in the swarm. Groups
 discover each other through signal patterns.
 
-**Optional: shared context space.** For simple use cases where groups need ambient
-awareness without signal protocol overhead.
-
 **Sustained collaboration: Qhorus channels.** When groups need direct communication:
 - Group internal comms → Qhorus PRIVATE channel (qhorus#509)
 - Agent-to-agent DM → Qhorus DIRECT channel
 - Inter-group collaboration → PRIVATE channel between coordinators
 - Society broadcast → PUBLIC channel with BROADCAST semantic
 
+**Relationship to normative 3-channel layout:** Group channels are orthogonal to
+the case-level work/observe/oversight layout defined in `CaseChannelLayout`.
+Case channels serve task execution within a case context; group channels serve
+organisational communication across cases. An agent participates in both: it uses
+case channels for work dispatch and group channels for coordination with its
+organisational peers. The PRIVATE/DIRECT/PUBLIC/BROADCAST types from qhorus#509
+are channel visibility scopes — they do not replace the case-level
+`ChannelSemantic` (APPEND) or the normative 3-channel purpose structure.
+Group channels use `ChannelSemantic.APPEND` and permit all speech act types.
+
 ## 3. Formation
 
 Three paths, all producing the same runtime structure. selfDetermination controls
 which paths are available:
+
+**Formation serialization:** All formation paths funnel through
+SocietyLifecycleManager, which serializes formation requests per-society.
+Formation uses compare-and-swap on agent membership: an agent cannot be added
+to a new group if their membership state has changed since the formation request
+was initiated. If a CAS check fails (agent already claimed by a concurrent
+formation), the conflicting formation request fails with a membership-conflict
+event. This prevents overlapping membership from concurrent proposals, emergence
+promotions, and desired-state transitions.
 
 ### 3.1 Top-Down Spawning
 
@@ -104,19 +205,62 @@ Engine's TeamDetector observes agent affinity clusters. When a DetectedTeam's
 `stabilityCount` exceeds a configurable threshold, the society runtime promotes
 it to a Group:
 1. Create Group with members from DetectedTeam
-2. Assign initial topology based on detected relations (COACTIVE → SWARM,
-   COMPLEMENTARY → HIVE candidate)
+2. Assign initial topology from `DetectedTeam.dominantRelations` (a
+   `Set<NeighborRelation>`). When multiple relations are present, the
+   highest-priority relation wins:
+
+   | Relation (priority order) | Default Topology | Rationale |
+   |---|---|---|
+   | COMPLEMENTARY (highest) | HIVE | Different skills combining — needs role assignment |
+   | SHARED_INTEREST | MESH | Common topic, independent approaches — consensus |
+   | COACTIVE | SWARM | Parallel peers doing similar work — stigmergy |
+   | SHARED_SIGNAL (lowest) | SWARM | Responding to same signals — stigmergy fit |
+
+   The topology is always a default — the group can transition later via
+   selfDetermination governance.
 3. Inherit policy defaults from parent group
 4. Emit formation event
+
+Re-detection suppression: after promotion, SocietyLifecycleManager registers
+the promoted agents' group membership. TeamDetector's next detection cycle
+excludes agents that already belong to a promoted group — preventing duplicate
+promotion of the same cluster. If the promoted group later dissolves, those
+agents become eligible for detection again.
 
 ### 3.3 Bottom-Up Proposal
 
 Agents use agency-core's CoalitionProposal to propose a group:
 1. Agent creates CoalitionProposal (task + required capabilities + proposed members)
-2. CoalitionEvaluator scores capability coverage
-3. If viable, proposed members negotiate via NegotiationProtocol
-4. On acceptance, society runtime creates the Group
-5. Members adopt roles via JointIntention commitment
+2. CoalitionEvaluator scores capability coverage (note: `coveredCapabilities()`
+   currently returns member names as a proxy — this spec's scope includes
+   completing the implementation to delegate to actual `AgentCapability` metadata
+   from eidos `AgentRegistry`)
+3. If viable, SocietyLifecycleManager creates a temporary Qhorus negotiation
+   channel and attaches `NegotiationProtocol` (a `ChannelProtocol` implementation
+   that evaluates dispatch advisories asynchronously via channel message
+   projection). Proposed members exchange messages on this channel; the protocol
+   evaluates consensus state after each message. SocietyLifecycleManager observes
+   the channel for the negotiation outcome.
+4. On acceptance (negotiation protocol reaches consensus), society runtime creates
+   the Group
+5. Members adopt roles via JointIntention commitment (FORMED → ACTIVE)
+
+**Failure modes:**
+- **Negotiation timeout:** NegotiationProtocol has a configurable deadline.
+  If consensus is not reached, the proposal fails and a formation-failed event
+  is emitted. No group is created.
+- **Partial acceptance:** Formation requires all proposed members to accept
+  (quorum = 100% by default, configurable in FormationRules). If fewer accept,
+  the proposal fails — CoalitionEvaluator's capability score was computed for
+  the full membership and may be invalid for a subset.
+- **Member claimed during negotiation:** Between proposal acceptance and group
+  creation, a proposed member may join another group via emergence promotion or
+  a concurrent proposal. The formation serialization mechanism (CAS check on
+  membership) catches this — the creation step fails for the conflicting
+  member, failing the entire formation.
+- **selfDetermination gating:** Bottom-up proposal requires selfDetermination
+  ≥ 0.5 on the parent group. Below 0.5, agents cannot initiate formation —
+  only top-down spawning and emergence promotion (with approval) are available.
 
 ## 4. Dissolution
 
@@ -125,6 +269,20 @@ Groups dissolve when:
 - Parent group or operator explicitly dissolves (top-down)
 - JointIntention reaches DROPPED state (mission abandoned)
 - selfDetermination permits and members vote to dissolve
+
+**Work-aware dissolution:** Before entering DISSOLVING state, SocietyLifecycleManager
+checks for in-flight work (active case assignments, pending tasks). If work is
+in-flight:
+- **Desired-state dissolution** (restructuring): the agent's work item is
+  marked PENDING_DRAIN in the transition plan. Dissolution proceeds for idle
+  members; busy members are drained and migrated as work completes. The
+  ReconciliationLoop tracks convergence.
+- **Natural dissolution** (all members depart): the group enters DISSOLVING
+  immediately — departing agents already handled their own work lifecycle.
+- **Top-down dissolution**: the dissolving parent's desired-state plan handles
+  work reassignment to sibling or replacement groups before dissolution.
+- **Vote/JointIntention dissolution**: enters DISSOLVING, work items are
+  orphaned to the parent group's coordinator for reassignment.
 
 Dissolution is dependency-ordered: sub-groups dissolve before parent. Members
 release all roles (emitting onRoleReleased events). Group channel closes but
@@ -138,23 +296,36 @@ Organisational transitions use `casehub-desiredstate`:
 ### 5.1 Flow
 
 ```
-Org Diagram (YAML) → GoalCompiler → Node Graph
-                                        ↓
-Current Runtime Org → ActualStateAdapter → Actual Graph
-                                        ↓
-                                   TransitionPlanner
-                                        ↓
-                                   TransitionPlan
-                                   (removals → suspensions → additions)
-                                        ↓
-                                   PlanApprovalGate
-                                   (selfDetermination controls approval)
-                                        ↓
-                                   Execute (staged phases)
-                                        ↓
-                                   ReconciliationLoop
-                                   (drift detection, fault recovery)
+Org Diagram (YAML) → OrgGoalCompiler → Node Graph
+                                           ↓
+Current Runtime Org → DesiredStateOrgAdapter → Actual Graph
+                                           ↓
+                                      TransitionPlanner
+                                           ↓
+                                      TransitionPlan
+                                      (removals → suspensions → additions)
+                                           ↓
+                                      PlanApprovalPolicy.evaluate()
+                                      (selfDetermination controls approval decision)
+                                           ↓ (if REQUIRES_APPROVAL)
+                                      PlanApprovalHandler.submit() → check() loop
+                                           ↓
+                                      Execute (staged phases)
+                                           ↓
+                                      ReconciliationLoop
+                                      (drift detection, fault recovery)
 ```
+
+**Plan approval mapping:** `PlanApprovalPolicy` (desiredstate SPI) evaluates
+whether a transition plan needs approval. The org-specific implementation
+(`OrgPlanApprovalPolicy`) delegates to selfDetermination:
+- selfDetermination ≥ 0.7 → `PlanApprovalDecision.AUTO_APPROVED`
+- selfDetermination 0.3–0.7 → topology-change-only plans auto-approved;
+  membership-changing plans require approval
+- selfDetermination < 0.3 → all plans require approval
+
+When approval is required, `PlanApprovalHandler` manages the lifecycle: submit
+the plan for review, poll via `check()`, cancel if superseded.
 
 ### 5.2 Operations
 
@@ -167,40 +338,115 @@ Current Runtime Org → ActualStateAdapter → Actual Graph
 | Rollback | Diagram B failing → reapply diagram A |
 | Emergent restructuring | Runtime edits desired-state graph (selfDetermination permits) → new reconciliation cycle |
 
-### 5.3 Adaptive Reorganisation
+### 5.3 Org-Specific Desired-State Types
+
+**NodeType:** `ORG_GROUP` — groups are the primary desired-state nodes. Agent
+membership, roles, and topology are properties of the group node's NodeSpec,
+not separate nodes. This keeps the graph shallow and avoids per-agent node
+overhead.
+
+**Provisioning** (`OrgNodeProvisioner implements NodeProvisioner`):
+- `provision()` → register OrganizationalUnit (spec) + create GroupInstance (FORMING), create Qhorus
+  PRIVATE channel, assign initial roles, add members, transition to ACTIVE.
+  Returns `ProvisionResult.Success` when ACTIVE, `ProvisionResult.Failed` if
+  any step fails irreversibly (e.g. no agents meet role requirements).
+  `ProvisionResult.PendingApproval` when selfDetermination < 0.3 and the
+  formation requires external approval.
+- `deprovision()` → dissolve group (work-aware, see §4), close channel.
+
+**Drift detection** (`OrgDriftPolicy implements DriftPolicy`):
+- Agent departure from a group (membership count drops below minimum)
+- Role released with no replacement (obligation gap)
+- Autonomous topology change (selfDetermination-permitted, but diverges from
+  desired-state target)
+- Group dissolved by natural causes (all members left)
+
+Drift decisions: RECONCILE (re-provision missing agent or role), IGNORE
+(tolerate within policy bounds), ESCALATE (human review via addReviewNode).
+
+**Fault recovery** (`OrgFaultPolicy implements FaultPolicy`):
+- Group formation failure → re-attempt with substitute agents (CBR-informed),
+  or escalate to human review node
+- Agent migration failure (mid-work) → mark PENDING_DRAIN, provision substitute
+- Channel creation failure → retry on next reconciliation cycle
+
+### 5.4 Adaptive Reorganisation
 
 SituationRecompiler triggers recompilation of the target org when situations arise
 (coordination storm, performance drop, signal consensus on structural change).
 The recompiled target is diffed against current state and transitions through the
-same PlanApprovalGate → Execute → Reconcile flow.
+same PlanApprovalPolicy → PlanApprovalHandler → Execute → Reconcile flow.
+
+**Stabilization window:** After a recompilation is applied, the org-specific
+SituationRecompiler suppresses further recompilations for a configurable
+stabilization period (default: 5 minutes). This prevents cascade storms where
+a restructure triggers new situations that trigger more restructuring. The
+window is per-society, not per-group — a society-wide restructure needs global
+stabilization. Situations that fire during the window are queued and evaluated
+after stabilization completes.
 
 ## 6. Implementation — Evolve Eidos Org
 
-Extend existing eidos-org modules. No new modules.
+Extend existing eidos-org modules (no new eidos modules). Cross-repo changes
+in `casehub-desiredstate/eidos` (existing bridge module) and `casehub-engine-api`
+(new SPIs).
 
 ### 6.1 API Changes (eidos-org-api)
 
-**OrganizationalUnit** — add fields:
+**OrganizationalUnit** — the declarative specification (desired state, D9). Add
+fields for topology, policy, and selfDetermination. No runtime state here:
 
 ```java
 public record OrganizationalUnit(
     String unitId,
     String name,
-    String kind,                    // existing
-    String kindVocabulary,          // existing
-    String parentUnitId,            // existing
-    List<Membership> members,       // existing
-    List<String> capabilities,      // existing
-    List<String> goals,             // existing
-    List<String> constraints,       // existing
-    // NEW
-    CoordinationPattern topology,
+    String kind,                           // existing
+    String kindVocabulary,                 // existing
+    String tenancyId,                      // existing — required, non-null
+    String parentUnitId,                   // existing
+    List<Membership> members,              // existing
+    List<AgentCapability> capabilities,    // existing — typed records
+    List<AgentGoal> goals,                 // existing — typed records
+    List<AgentConstraint> constraints,     // existing — typed records
+    // NEW — declarative spec fields only
+    String topology,                       // open-string vocabulary term (D20)
+    String topologyVocabulary,             // vocabulary URI for topology grounding
     AuthorityModel authorityModel,
     GroupPolicy policy,
-    double selfDetermination,       // 0.0–1.0
-    GroupLifecycleState state       // FORMING, ACTIVE, RESTRUCTURING, DISSOLVING
+    double selfDetermination              // 0.0–1.0
 ) {}
 ```
+
+Existing fields retain their types — `AgentCapability`, `AgentGoal`, and
+`AgentConstraint` are typed domain records from `eidos-api`, not plain strings.
+`tenancyId` remains required (compact constructor `Objects.requireNonNull`);
+every registry query requires it for tenancy isolation.
+
+**GroupInstance** — the mutable runtime entity (actual state, D9). Tracks
+lifecycle, current effective topology, and role adoptions:
+
+```java
+public record GroupInstance(
+    String unitId,                         // references OrganizationalUnit.unitId
+    String tenancyId,                      // required — tenancy isolation
+    GroupLifecycleState state,             // PROPOSED, FORMING, ACTIVE, REORGANISING, DISSOLVING, DISSOLVED
+    String effectiveTopology,              // may differ from spec during transitions
+    AuthorityModel effectiveAuthority,
+    List<RoleAdoption> roleAdoptions,      // which agents currently hold which roles
+    Instant stateChangedAt                 // timestamp of last state transition
+) {}
+
+public record RoleAdoption(
+    String agentId,
+    String role,
+    String roleVocabulary,
+    Instant adoptedAt
+) {}
+```
+
+`DesiredStateOrgAdapter` reads `GroupInstance` as actual state; `OrgGoalCompiler`
+compiles `OrganizationalUnit` as desired state. The diff between them drives
+reconciliation.
 
 **GroupPolicy** — new record:
 
@@ -219,53 +465,187 @@ public record RolePolicy(
 ) {}
 ```
 
-**GroupLifecycleState** — new enum:
+**RolePolicy cardinality vs MAX_MEMBERS:** `minAgents`/`maxAgents` are per-role
+constraints. An agent can hold multiple roles, so the sum of `maxAgents` across
+roles can exceed `MAX_MEMBERS` (50) — roles overlap. Validation rules:
+- At formation: each role with `minAgents > 0` must have enough members assigned
+- At dissolution/leave: if a member departure would leave a role below `minAgents`,
+  the group enters RESTRUCTURING to recruit a replacement before allowing the departure
+- `MAX_MEMBERS` is a hard cap on distinct agents; role cardinality is orthogonal
+
+**FormationRules** — new record:
 
 ```java
-public enum GroupLifecycleState {
-    FORMING, ACTIVE, RESTRUCTURING, DISSOLVING, DISSOLVED
+public record FormationRules(
+    Set<FormationPath> allowedPaths,     // TOP_DOWN, EMERGENCE, BOTTOM_UP
+    int minGroupSize,                    // minimum members to form (default: 2)
+    int maxGroupSize,                    // max members at formation (≤ MAX_MEMBERS)
+    boolean allowSubGroups,              // can this group contain sub-groups
+    double proposalQuorum               // fraction of proposed members that must accept (default: 1.0)
+) {}
+
+public enum FormationPath {
+    TOP_DOWN, EMERGENCE, BOTTOM_UP
 }
 ```
 
-**OrgRegistry** — add lifecycle operations:
+**GroupFormationRequest** — new record:
 
 ```java
-// Existing: register, removeUnit, query methods
-// NEW
-OrganizationalUnit formGroup(GroupFormationRequest request);
-void dissolveGroup(String unitId);
-void joinGroup(String unitId, String agentId, String role);
-void leaveGroup(String unitId, String agentId);
-void adoptRole(String unitId, String agentId, String role);
-void releaseRole(String unitId, String agentId, String role);
-void changeTopology(String unitId, CoordinationPattern pattern, AuthorityModel authority);
+public record GroupFormationRequest(
+    String parentUnitId,
+    String tenancyId,
+    String name,
+    String kind,
+    String kindVocabulary,
+    String topology,                     // open-string vocabulary term (D20)
+    String topologyVocabulary,
+    AuthorityModel authorityModel,
+    GroupPolicy policy,
+    double selfDetermination,
+    List<Membership> initialMembers,
+    FormationPath formationPath          // which path created this request
+) {}
 ```
 
-### 6.2 Runtime Changes (eidos-org-runtime)
+All three formation paths (§3) produce a `GroupFormationRequest` and submit it
+to `GroupLifecycleService.formGroup()`. The request carries the formation path
+for auditing and policy enforcement — `FormationRules.allowedPaths` is checked
+before the group is created.
 
-**SocietyLifecycleManager** — orchestrates group formation, dissolution, membership
-changes. Emits events consumed by engine (role lifecycle, topology changes) and
-desired-state (actual state updates).
+**GroupLifecycleState** — new enum with defined transitions:
 
-**DesiredStateOrgAdapter** — implements desired-state's ActualStateAdapter SPI.
-Reads current org structure from OrgRegistry, presents it as a node graph for
-diffing.
+```java
+public enum GroupLifecycleState {
+    PROPOSED, FORMING, ACTIVE, REORGANISING, DISSOLVING, DISSOLVED
+}
+```
 
-**OrgGoalCompiler** — implements desired-state's GoalCompiler SPI. Compiles an
-eidos org diagram (YAML) into a desired-state node graph.
+Valid state transitions:
+```
+PROPOSED → FORMING       (proposal accepted, begin formation)
+PROPOSED → DISSOLVED     (proposal rejected or CAS conflict)
+FORMING → ACTIVE         (formation complete: all members joined, roles assigned)
+FORMING → DISSOLVED      (formation aborted: timeout, evaluation failure, CAS conflict)
+ACTIVE → REORGANISING    (topology change or desired-state transition initiated)
+ACTIVE → DISSOLVING      (dissolution triggered by any path in §4)
+REORGANISING → ACTIVE    (transition completed successfully)
+REORGANISING → DISSOLVING (transition abandoned, dissolve instead)
+DISSOLVING → DISSOLVED   (all members released, channel closed, work drained/reassigned)
+```
+
+During REORGANISING: membership is frozen (no join/leave), roles cannot be
+adopted or released, the group can still communicate via its existing channel.
+During DISSOLVING: no new work is accepted, existing work drains or is reassigned.
+
+**OrgRegistry** — remains a pure CRUD store. No lifecycle operations added.
+Existing methods (`registerUnit`, `removeUnit`, `findUnit`, `findUnits`,
+`childUnits`, `ancestorUnits`, `unitsFor`, `membersOf`, relationship methods)
+are unchanged. All methods require `tenancyId` — this invariant is preserved.
+
+New query methods for GroupInstance:
+
+```java
+Optional<GroupInstance> findGroupInstance(String unitId, String tenancyId);
+List<GroupInstance> findGroupInstances(OrgQuery query);
+```
+
+**GroupLifecycleService** — new SPI for lifecycle operations. All methods
+require `tenancyId` (tenancy isolation). `SocietyLifecycleManager` (§6.2)
+is the runtime implementation.
+
+```java
+public interface GroupLifecycleService {
+    GroupInstance formGroup(GroupFormationRequest request);
+    void dissolveGroup(String unitId, String tenancyId);
+    void joinGroup(String unitId, String agentId, String role, String tenancyId);
+    void leaveGroup(String unitId, String agentId, String tenancyId);
+    void adoptRole(String unitId, String agentId, String role, String tenancyId);
+    void releaseRole(String unitId, String agentId, String role, String tenancyId);
+    void changeTopology(String unitId, String topology, String topologyVocabulary,
+                        AuthorityModel authority, String tenancyId);
+}
+```
+
+Callers interact with `GroupLifecycleService` for group operations, not
+`OrgRegistry`. The lifecycle service orchestrates validation, event emission,
+Qhorus channel management, and desired-state updates internally, calling
+`OrgRegistry` for persistence.
+
+### 6.2 Runtime Changes
+
+**SocietyLifecycleManager** (eidos-org-runtime) — implements
+`GroupLifecycleService`. Orchestrates group formation, dissolution, membership
+changes. Emits events consumed by engine (role lifecycle, topology changes)
+and desired-state (actual state updates). Calls `OrgRegistry` for persistence
+of both `OrganizationalUnit` (spec) and `GroupInstance` (runtime state).
+
+**DesiredStateOrgAdapter** (casehub-desiredstate/eidos module) — implements
+desired-state's `ActualStateAdapter` SPI, handling `NodeType` `org:unit`. Reads
+`GroupInstance` from `OrgRegistry` as actual state, presents it as a node graph
+for diffing against the desired graph. Lives in `casehub-desiredstate-eidos`
+alongside `OrgGoalCompiler` — both are desiredstate bridge types that depend on
+`desiredstate-api` + `eidos-org-api`.
+
+**OrgGoalCompiler** (casehub-desiredstate/eidos module) — already exists at
+`io.casehub.eidos.org.runtime.OrgGoalCompiler` implementing
+`GoalCompiler<OrgGoal>`. Currently compiles `List<OrganizationalUnit>` +
+`List<AgentRelationship>` into `OrgUnitNodeSpec`/`OrgRelationshipNodeSpec` nodes.
+This spec extends the existing compiler to handle the new fields (topology,
+policy, selfDetermination, state) in its `OrgUnitNodeSpec`, and adds group-aware
+dependency edges (parent→child ordering for staged provisioning). The compiler
+stays in the desiredstate/eidos bridge module — it depends on both
+`desiredstate-api` and `eidos-org-api`, which is the standard bridge pattern
+(cf. `casehub-desiredstate/engine-adapter`).
 
 ### 6.3 Engine Integration
 
-Engine consumes eidos org events through existing SPI patterns:
-- TopologyProvider (engine#1284) queries eidos OrgRegistry for group topology
-- AgentWorkLifecycleListener (engine#1285) receives role adopt/release events
-- TeamDetector feeds DetectedTeam data to SocietyLifecycleManager for emergence promotion
+Engine consumes eidos org events through new SPIs defined as part of this spec:
+
+**TopologyProvider** (engine#1284) — new SPI in `casehub-engine-api`:
+
+```java
+public interface TopologyProvider {
+    Optional<CoordinationPattern> topologyFor(String agentId, String tenancyId);
+    double effectiveSelfDetermination(String agentId, String tenancyId);
+}
+```
+
+Queries eidos OrgRegistry for the agent's group membership. Returns the group's
+topology and resolves selfDetermination precedence (group value wins over
+`IntegrationPolicy` default when the agent is in a group).
+
+**AgentWorkLifecycleListener** (engine#1285) — new SPI in `casehub-engine-api`:
+
+```java
+public interface AgentWorkLifecycleListener {
+    void onRoleAdopted(String agentId, String unitId, String role, String tenancyId);
+    void onRoleReleased(String agentId, String unitId, String role, String tenancyId);
+    void onTopologyChanged(String unitId, String fromTopology,
+                           String toTopology, String tenancyId);
+}
+```
+
+**TeamDetector** (existing) feeds DetectedTeam data to SocietyLifecycleManager
+for emergence promotion. Promoted agents are excluded from subsequent detection
+cycles via group membership tracking.
 
 ### 6.4 Qhorus Integration
 
 When a group forms, SocietyLifecycleManager calls Qhorus to create the group's
 PRIVATE channel (qhorus#509). Coordinator gets MODERATOR role. Membership
 synchronised on join/leave. Channel closed (not deleted) on dissolution.
+
+**Failure isolation:** Channel creation is best-effort — group formation does not
+fail because Qhorus is unavailable. If channel creation fails, the group forms
+without a channel and a drift record is created. ReconciliationLoop retries
+channel creation on subsequent cycles until successful.
+
+Coordinator changes trigger a Qhorus MODERATOR role transfer. If the transfer
+fails, the old agent retains MODERATOR temporarily — the next reconciliation
+cycle detects the divergence and retries. Membership sync uses the same
+eventually-consistent pattern: OrgRegistry is authoritative, Qhorus channel
+membership converges via reconciliation.
 
 ## 7. YAML Declaration (Eidos Seed)
 
@@ -314,9 +694,41 @@ society:
           role: analyst
 ```
 
+**Schema migration:** This YAML uses `society:` as the root key, replacing the
+existing `organization:` root key used by `ClasspathYamlOrgRegistrar`. This is
+a breaking schema change. The existing `organization:` schema does not support
+topology, policy, or selfDetermination. Since eidos is pre-release (all
+consumers are internal), the migration is a clean replacement — update all
+`META-INF/eidos/organization.yaml` files to the new `society:` schema.
+`ClasspathYamlOrgRegistrar` is updated to parse the new schema.
+
 This YAML is both the eidos seed (loaded at boot by ClasspathYamlOrgRegistrar)
 and a desired-state goal specification (compiled by OrgGoalCompiler for
 restructuring).
+
+**tenancyId resolution:** The YAML omits `tenancyId` because it is a deployment-
+time concern, not a design-time one. `ClasspathYamlOrgRegistrar` injects the
+tenancyId from the deployment's tenant configuration (the same mechanism used
+by the existing org YAML loader). Each `OrganizationalUnit` created from the
+YAML receives the deployment tenant's ID. Multi-tenant deployments use separate
+YAML seeds per tenant, each loaded under its respective tenancyId.
+
+**Unified boot path (D8, D9):** At startup, the boot sequence feeds the YAML
+through the desired-state pipeline — the same path used for runtime
+restructuring. `ClasspathYamlOrgRegistrar` loads the YAML, passes it to
+`OrgGoalCompiler` to produce the desired-state graph, and the
+`ReconciliationLoop` runs an initial reconciliation: desired graph vs empty
+actual state → `TransitionPlan` with all additions → auto-approved → execute
+(provisions all groups via `OrgNodeProvisioner`). This eliminates the dual-path
+problem where boot uses imperative `registerUnit()` while runtime uses
+desired-state reconciliation. One path for all org mutations.
+
+**Event model:** Society events (formation, dissolution, role lifecycle, topology
+change) follow the platform's CDI event model — synchronous within a thread,
+ordered per-aggregate (per-group). Cross-service events use CloudEvents via
+the existing engine event bus. Ordering is guaranteed within a single group's
+lifecycle; cross-group event ordering is not guaranteed and consumers must
+tolerate out-of-order delivery across groups.
 
 ## 8. Cross-Repo Issue Map
 
@@ -331,7 +743,9 @@ restructuring).
 | **agency** | #380 | CoordinationTopology SPI + HiveTopology |
 | **agency** | #385 | TopologySpec YAML parity |
 | **qhorus** | #509 | Channel visibility (PUBLIC/PRIVATE/DIRECT) |
-| **desired-state** | — | OrgGoalCompiler + DesiredStateOrgAdapter (new issues TBD) |
+| **desired-state** | TBD-1 | Extend OrgGoalCompiler for topology/policy/state fields |
+| **desired-state** | TBD-2 | OrgNodeProvisioner + OrgDriftPolicy + OrgFaultPolicy |
+| **desired-state** | TBD-3 | DesiredStateOrgAdapter (ActualStateAdapter SPI impl) |
 
 ## References
 
