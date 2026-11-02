@@ -18,6 +18,12 @@ differently parameterised. A decision loop is a **playbook** — a declarative
 coordination recipe. The Java types are designed for YAML parity (#385) but this
 issue delivers Java only.
 
+The decision loop sits below the agentic execution model (ExecutionDriver,
+DecompositionStrategy, AggregationStrategy). It is the per-agent reasoning
+primitive that topology implementations compose. The agentic framework
+orchestrates multi-agent workflows; the decision loop handles one agent's
+observe→reason→decide cycle within that workflow.
+
 ## Core Concept
 
 Two types separate configuration from execution:
@@ -111,27 +117,25 @@ public record AgentBudgetPolicy(
 YAML-serialisable. The per-agent policy. Global governance is handled by the
 composite `AgentBudgetTracker` (see below).
 
-## ObservationContext
+## DecisionContext
 
 **Package:** `io.casehub.agency.orchestration.loop`
 **Module:** agency-core
 
 ```java
-public record ObservationContext(
+public record DecisionContext(
     UUID caseId,
     String agentId,
     DecisionScope scope,
     CommunicationMode communicationMode,
-    TopologyDescriptor topology,
-    AgentWorkState workState
+    TopologyDescriptor topology
 ) {
-    public ObservationContext {
+    public DecisionContext {
         Objects.requireNonNull(caseId, "caseId must not be null");
         Objects.requireNonNull(agentId, "agentId must not be null");
         Objects.requireNonNull(scope, "scope must not be null");
         Objects.requireNonNull(communicationMode, "communicationMode must not be null");
         Objects.requireNonNull(topology, "topology must not be null");
-        Objects.requireNonNull(workState, "workState must not be null");
     }
 }
 ```
@@ -140,8 +144,15 @@ Per-agent view of the coordination state. The centralised coordinator
 constructs this from SwarmContext; distributed agents receive a lighter
 view directly. The loop doesn't know about SwarmContext.
 
+**Why `AgentWorkState` is excluded:** Work state is dynamic — it transitions
+through IDLE → ASSIGNED → EXECUTING → IDLE over the loop's lifetime. Freezing
+it in an immutable record at construction time produces stale data on subsequent
+ticks. The `ContentSummariser` implementation can close over a live state
+reference (e.g., a `Supplier<AgentWorkState>`) if it needs current work state
+for prompt assembly.
+
 **Relationship to SwarmContext:** SwarmContext is swarm-level shared mutable
-state (roles, teams, progress, experiences). ObservationContext is a per-agent
+state (roles, teams, progress, experiences). DecisionContext is a per-agent
 snapshot derived from it. The mapping happens in the topology layer (#380/#381),
 not in the loop.
 
@@ -179,6 +190,8 @@ keyed so `ChangeGatedEmissionPolicy` can watch specific keys (e.g.,
 ```java
 public sealed interface DecisionOutcome {
 
+    // Observation = io.casehub.api.spi.observation.Observation (engine-api)
+    // — the same type used by EnvironmentWriter.storeObservations()
     record WriteBack(
         List<Observation> observations,
         List<SignalDeposit> signals,
@@ -316,11 +329,11 @@ Thread-safe via atomic counters (same pattern as `SwarmInvocationTracker`).
 ```java
 @FunctionalInterface
 public interface LoopPromptSection {
-    String contribute(ObservationContext context);
+    String contribute(DecisionContext context);
 }
 ```
 
-The loop's own prompt section interface, parameterised by `ObservationContext`
+The loop's own prompt section interface, parameterised by `DecisionContext`
 (not `SwarmContext`). Topology implementations adapt existing `SwarmPromptSection`
 instances when registering them:
 
@@ -399,35 +412,46 @@ public class DecisionLoopFactory {
 
     public AgentDecisionLoop create(
             DecisionLoopDescriptor descriptor,
-            ObservationContext context,
+            DecisionContext context,
             ContentSummariser<ObservationEvent, DecisionOutcome> reasoner,
             @Nullable SwarmInvocationTracker sharedBudget) {
 
         var sections = sectionRegistry.resolveAll(descriptor.promptSectionNames());
         var budget = new AgentBudgetTracker(descriptor.budgetPolicy(), sharedBudget);
-        var gate = new InFlightGate<>(reasoner);
+
+        // Wire prompt sections into the summariser — sections contribute
+        // context that the reasoner uses during prompt assembly
+        ContentSummariser<ObservationEvent, DecisionOutcome> withSections =
+            new SectionAwareContentSummariser(reasoner, sections, context);
+
+        // Wire budget gate — tryAcquire() before invocation
+        ContentSummariser<ObservationEvent, DecisionOutcome> budgetAware =
+            (events, prev) -> {
+                if (!budget.tryAcquire()) {
+                    return CompletableFuture.completedFuture(prev);
+                }
+                return withSections.summarise(events, prev);
+            };
+
+        var gate = new InFlightGate<>(budgetAware);
 
         EmissionPolicy<ObservationEvent, ?> emissionPolicy = buildEmissionPolicy(
-            descriptor.observationStrategy(), gate);
+            descriptor.observationStrategy());
 
         var runner = SummarisationRunner.<ObservationEvent, DecisionOutcome>builder(
                 gate.summariser().asSummariser(),
                 outputBus,
-                DECISION)
+                DecisionLoopLevels.DECISION)
             .emissionPolicy(gate.gating(emissionPolicy))
             .build();
 
-        return new AgentDecisionLoop(descriptor, context, runner, budget, sections);
+        return new AgentDecisionLoop(descriptor, context, runner, budget);
     }
 
     private EmissionPolicy<ObservationEvent, ?> buildEmissionPolicy(
-            ObservationStrategy strategy,
-            InFlightGate<ObservationEvent, DecisionOutcome> gate) {
+            ObservationStrategy strategy) {
         return switch (strategy) {
-            case EVENT_DRIVEN -> new ChangeGatedEmissionPolicy<>(
-                Set.of("*"), // watch all keys by default
-                event -> Set.of(event.payload().key()),
-                EmissionPolicy.window(WindowPolicy.ofCount(1)));
+            case EVENT_DRIVEN -> EmissionPolicy.window(WindowPolicy.ofCount(1));
             case TICK_DRIVEN -> EmissionPolicy.window(
                 WindowPolicy.ofDuration(java.time.Duration.ofSeconds(5)));
             case DEMAND_DRIVEN -> (buffered, state, now) -> false; // never auto-emit
@@ -436,13 +460,21 @@ public class DecisionLoopFactory {
 }
 ```
 
+**EVENT_DRIVEN emission policy:** Uses `WindowPolicy.ofCount(1)` — emit on every
+observation event. For loops that need selective triggering (fire only when
+specific keys change), wrap with `ChangeGatedEmissionPolicy` in the topology
+layer. Future descriptor versions may add a `watchedKeys` field to configure
+this declaratively.
+
 **Factory responsibilities:**
-1. Resolve prompt section names → SwarmPromptSection instances (fail-fast)
+1. Resolve prompt section names → LoopPromptSection instances (fail-fast)
 2. Construct AgentBudgetTracker with optional shared cap
-3. Build emission policy from ObservationStrategy
-4. Wire InFlightGate for concurrency control
-5. Assemble SummarisationRunner
-6. Construct and return AgentDecisionLoop
+3. Wire prompt sections into a `SectionAwareContentSummariser` decorator
+4. Wire budget gate — `tryAcquire()` before each LLM invocation
+5. Build emission policy from ObservationStrategy
+6. Wire InFlightGate for concurrency control
+7. Assemble SummarisationRunner
+8. Construct and return AgentDecisionLoop
 
 **Note on `outputBus`:** The factory receives `EventStreamBus<DecisionOutcome>`
 as a constructor parameter. `DecisionLoopLevels.DECISION` is the output level
@@ -453,7 +485,51 @@ constructed by the factory. This is intentional — the LLM invocation strategy
 (which model, what prompt template, how to parse JSON) varies by use case. The
 centralised coordinator will provide a routing-oriented summariser; a local
 agent loop will provide a task-decision summariser. The factory wires the
-plumbing; the caller provides the intelligence.
+plumbing (budget, sections, concurrency); the caller provides the intelligence.
+
+**Note on `recordTokens()`:** Token recording is the reasoner implementation's
+responsibility — it has access to the LLM response metadata. The budget tracker
+is available via the loop's `budget()` accessor.
+
+### SectionAwareContentSummariser
+
+Decorator that calls `LoopPromptSection.contribute(context)` for each section
+and makes the assembled prompt context available to the wrapped reasoner:
+
+```java
+class SectionAwareContentSummariser
+        implements ContentSummariser<ObservationEvent, DecisionOutcome> {
+
+    private final ContentSummariser<ObservationEvent, DecisionOutcome> delegate;
+    private final List<LoopPromptSection> sections;
+    private final DecisionContext context;
+
+    SectionAwareContentSummariser(
+            ContentSummariser<ObservationEvent, DecisionOutcome> delegate,
+            List<LoopPromptSection> sections,
+            DecisionContext context) {
+        this.delegate = delegate;
+        this.sections = List.copyOf(sections);
+        this.context = context;
+    }
+
+    @Override
+    public CompletionStage<DecisionOutcome> summarise(
+            List<ObservationEvent> items, @Nullable DecisionOutcome previous) {
+        var promptContext = new StringBuilder();
+        for (var section : sections) {
+            var contribution = section.contribute(context);
+            if (contribution != null && !contribution.isEmpty()) {
+                promptContext.append(contribution).append("\n");
+            }
+        }
+        // The assembled prompt context is available to the delegate via
+        // a thread-local or by wrapping the events with the context.
+        // Concrete wiring depends on the delegate's prompt assembly strategy.
+        return delegate.summarise(items, previous);
+    }
+}
+```
 
 ## AgentDecisionLoop
 
@@ -467,21 +543,18 @@ public class AgentDecisionLoop {
         System.getLogger(AgentDecisionLoop.class.getName());
 
     private final DecisionLoopDescriptor descriptor;
-    private final ObservationContext context;
+    private final DecisionContext context;
     private final SummarisationRunner<ObservationEvent, DecisionOutcome> runner;
     private final AgentBudgetTracker budget;
-    private final List<LoopPromptSection> promptSections;
 
     AgentDecisionLoop(DecisionLoopDescriptor descriptor,
-                      ObservationContext context,
+                      DecisionContext context,
                       SummarisationRunner<ObservationEvent, DecisionOutcome> runner,
-                      AgentBudgetTracker budget,
-                      List<LoopPromptSection> promptSections) {
+                      AgentBudgetTracker budget) {
         this.descriptor = descriptor;
         this.context = context;
         this.runner = runner;
         this.budget = budget;
-        this.promptSections = List.copyOf(promptSections);
     }
 
     public void collect(ObservationEvent event) {
@@ -500,15 +573,18 @@ public class AgentDecisionLoop {
 
     public CompletionStage<Void> flush() {
         if (budget.isBudgetExhausted()) {
-            LOG.log(System.Logger.Level.WARNING,
-                "Budget exhausted for {0} — cannot flush", context.agentId());
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.failedFuture(
+                new BudgetExhaustedException(context.agentId()));
         }
         return runner.flush();
     }
 
+    public void close() {
+        runner.clear();
+    }
+
     public DecisionLoopDescriptor descriptor() { return descriptor; }
-    public ObservationContext context() { return context; }
+    public DecisionContext context() { return context; }
     public AgentBudgetTracker budget() { return budget; }
 }
 ```
@@ -532,6 +608,23 @@ produces.
 **Rationale:** Scope filtering is a property of the reasoning phase, not the
 pipeline phase. The summariser knows what the LLM produced and what to filter.
 The pipeline knows when to fire and how to accumulate — not what's permitted.
+
+### DecisionType mapping conventions
+
+Topology implementations that build the `ContentSummariser` must map LLM
+output to `DecisionType` for scope filtering. Recommended mappings:
+
+| DecisionOutcome variant | DecisionType | Rationale |
+|-------------------------|-------------|-----------|
+| WriteBack with signals only | SIGNALING | Signal deposit is communication |
+| WriteBack with context writes | CONTEXT_MUTATION | Modifying shared state |
+| WriteBack with observations | SIGNALING | Observations are passive signals |
+| Route (Selected/SwarmAssignment) | TASK_SELECTION or COLLABORATION | Depends on whether selecting or coordinating |
+| Aggregate | n/a | Aggregation is synthesis, not a decision that needs scope gating |
+
+A single `WriteBack` can span multiple decision types — each sub-list should be
+checked independently. The topology's summariser splits multi-typed WriteBacks
+into separate scope checks.
 
 ### EventLevel constants
 
@@ -563,10 +656,10 @@ var descriptor = new DecisionLoopDescriptor(
     List.of("experience-replay", "role-context", "progress")
 );
 
-// 2. Build observation context for this agent
-var context = new ObservationContext(
+// 2. Build decision context for this agent
+var context = new DecisionContext(
     caseId, agentId, descriptor.scope(),
-    descriptor.communicationMode(), topology, AgentWorkState.IDLE);
+    descriptor.communicationMode(), topology);
 
 // 3. Provide the reasoning summariser
 ContentSummariser<ObservationEvent, DecisionOutcome> reasoner = (events, prev) -> {
@@ -615,8 +708,8 @@ loop.tick(System.currentTimeMillis());
 - Unlimited factory method returns MAX_VALUE
 - Negative values throw
 
-### 3. ObservationContext construction tests
-- Valid construction
+### 3. DecisionContext construction tests
+- Valid construction (5 fields, no workState)
 - Null validation for all required fields
 
 ### 4. DecisionOutcome variant tests
@@ -637,21 +730,22 @@ loop.tick(System.currentTimeMillis());
 - resolveAll returns ordered list
 
 ### 7. DecisionLoopFactory tests
-- Creates loop with EVENT_DRIVEN → ChangeGatedEmissionPolicy
-- Creates loop with TICK_DRIVEN → WindowPolicy
+- Creates loop with EVENT_DRIVEN → WindowPolicy.ofCount(1)
+- Creates loop with TICK_DRIVEN → WindowPolicy.ofDuration
 - Creates loop with DEMAND_DRIVEN → never-emit policy
 - Resolves prompt sections from registry
 - Fails fast on unknown prompt section name
 - Wires InFlightGate
-- Wires budget with shared cap
+- Wires budget gate — tryAcquire() called before summarisation
+- Wires prompt sections into SectionAwareContentSummariser
 
 ### 8. AgentDecisionLoop integration tests
 - collect() → tick() → DecisionOutcome appears on output bus (EVENT_DRIVEN)
-- collect() → tick() with no relevant change → no emission (ChangeGated)
 - flush() forces processing regardless of emission policy (DEMAND_DRIVEN)
 - Budget exhausted → tick() is no-op
-- Budget exhausted → flush() is no-op with warning log
+- Budget exhausted → flush() returns failed future with BudgetExhaustedException
 - Multiple observations accumulated → single summarisation call
+- close() clears accumulated events
 
 ### 9. Scope filtering tests (in ContentSummariser wrapper)
 - Permitted action passes through
@@ -668,15 +762,17 @@ All in `agency-core/src/main/java/io/casehub/agency/orchestration/loop/`:
 | `AgentDecisionLoop.java` | class | Loop runtime |
 | `DecisionLoopFactory.java` | class | Assembly from descriptor |
 | `DecisionOutcome.java` | sealed interface | Unified action output |
-| `ObservationContext.java` | record | Per-agent coordination view |
+| `DecisionContext.java` | record | Per-agent coordination view |
 | `ObservationEvent.java` | record | Pipeline input type |
 | `AgentBudgetPolicy.java` | record | Per-agent budget configuration |
 | `AgentBudgetTracker.java` | class | Per-agent budget with shared cap |
+| `BudgetExhaustedException.java` | class | Thrown by flush() when budget is spent |
 | `PromptSectionRegistry.java` | interface | Named section resolution |
 | `MapPromptSectionRegistry.java` | class | In-memory registry impl |
+| `SectionAwareContentSummariser.java` | class | Prompt section decorator for ContentSummariser |
 | `SignalDeposit.java` | record | WriteBack sub-record |
 | `ContextWrite.java` | record | WriteBack sub-record |
-| `LoopPromptSection.java` | interface | Loop-scoped prompt section (takes ObservationContext) |
+| `LoopPromptSection.java` | interface | Loop-scoped prompt section (takes DecisionContext) |
 | `DecisionLoopLevels.java` | class | EventLevel constants (OBSERVATION, DECISION) |
 
 ## Decisions
@@ -687,7 +783,7 @@ See `decisions-379.md` in this directory. Key choices:
 - D2: Sealed DecisionOutcome as unified action type
 - D3: Compose with SummarisationRunner for trigger mechanism
 - D4: Scope enforcement inside the loop (agency-side visibility)
-- D5: Per-agent ObservationContext (not shared SwarmContext)
+- D5: Per-agent DecisionContext (renamed from ObservationContext; not shared SwarmContext)
 - D6: Per-agent budget with swarm cap composite
 - D7: Descriptor + runtime split (playbook model)
 - D8: YAML-aware design, Java-first delivery
