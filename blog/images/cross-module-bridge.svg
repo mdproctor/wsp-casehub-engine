@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 280" font-family="Inter, system-ui, sans-serif">
+  <style>
+    .module { fill: none; stroke: #334155; stroke-width: 1.5; rx: 10; }
+    .module-label { fill: #94a3b8; font-size: 11px; font-weight: 700; text-anchor: start; letter-spacing: 0.08em; text-transform: uppercase; }
+    .class-box { rx: 6; stroke-width: 1.5; }
+    .class-spi { fill: #1e3a5f; stroke: #3b82f6; }
+    .class-impl { fill: #1a2e1a; stroke: #22c55e; }
+    .class-noop { fill: #1e293b; stroke: #475569; }
+    .class-label { font-size: 12px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+    .class-label-spi { fill: #93c5fd; }
+    .class-label-impl { fill: #86efac; }
+    .class-label-noop { fill: #94a3b8; }
+    .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+    .arrow-impl { stroke: #22c55e; stroke-width: 1.5; fill: none; marker-end: url(#arr-green); }
+    .arrow-label { fill: #94a3b8; font-size: 9px; text-anchor: middle; dominant-baseline: central; }
+    .title { fill: #e2e8f0; font-size: 11px; font-weight: 700; text-anchor: start; letter-spacing: 0.1em; text-transform: uppercase; }
+  </style>
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#64748b"/>
+    </marker>
+    <marker id="arr-green" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#22c55e"/>
+    </marker>
+  </defs>
+
+  <rect width="700" height="280" fill="#0f172a" rx="8"/>
+  <text x="24" y="26" class="title">Cross-Module Bridge Pattern</text>
+
+  <!-- api module -->
+  <rect x="220" y="44" width="260" height="68" class="module"/>
+  <text x="234" y="62" class="module-label">api</text>
+
+  <!-- AgentWorkStateNotifier -->
+  <rect x="240" y="72" width="220" height="30" class="class-box class-spi"/>
+  <text x="350" y="87" class="class-label class-label-spi">AgentWorkStateNotifier</text>
+
+  <!-- common-core module -->
+  <rect x="20" y="148" width="260" height="100" class="module"/>
+  <text x="34" y="166" class="module-label">common-core</text>
+
+  <!-- WorkerExecutionOrchestrator -->
+  <rect x="32" y="186" width="236" height="30" class="class-box class-impl"/>
+  <text x="150" y="201" class="class-label class-label-impl">WorkerExecutionOrchestrator</text>
+
+  <!-- runtime-core module -->
+  <rect x="420" y="148" width="260" height="100" class="module"/>
+  <text x="434" y="166" class="module-label">runtime-core</text>
+
+  <!-- StigmergyCoordinator -->
+  <rect x="432" y="186" width="236" height="30" class="class-box class-impl"/>
+  <text x="550" y="201" class="class-label class-label-impl">StigmergyCoordinator</text>
+
+  <!-- Orchestrator → SPI (calls) -->
+  <path d="M150,186 L150,110 L230,96" class="arrow"/>
+  <text x="120" y="145" class="arrow-label">calls</text>
+
+  <!-- Coordinator → SPI (implements) -->
+  <path d="M550,186 L550,110 L470,96" class="arrow-impl"/>
+  <text x="580" y="145" class="arrow-label">implements</text>
+
+  <!-- No direct dependency arrow -->
+  <line x1="280" y1="220" x2="420" y2="220" stroke="#ef4444" stroke-width="1" stroke-dasharray="6 3"/>
+  <text x="350" y="240" fill="#ef4444" font-size="10" text-anchor="middle" font-style="italic">no direct dependency</text>
+</svg>

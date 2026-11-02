@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" font-family="Inter, system-ui, sans-serif">
+  <style>
+    .state { fill: #1e293b; stroke: #334155; stroke-width: 2; rx: 12; }
+    .state-active { fill: #0f766e; stroke: #14b8a6; stroke-width: 2; rx: 12; }
+    .state-future { fill: #1e293b; stroke: #475569; stroke-width: 1.5; rx: 12; stroke-dasharray: 6 3; }
+    .label { fill: #f1f5f9; font-size: 13px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+    .label-future { fill: #94a3b8; font-size: 13px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+    .arrow { stroke: #64748b; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arrow-main { stroke: #14b8a6; stroke-width: 2; fill: none; marker-end: url(#arrowhead-teal); }
+    .trigger { fill: #94a3b8; font-size: 10px; text-anchor: middle; dominant-baseline: central; }
+    .trigger-main { fill: #5eead4; font-size: 10px; font-weight: 500; text-anchor: middle; dominant-baseline: central; }
+    .title { fill: #e2e8f0; font-size: 11px; font-weight: 700; text-anchor: start; letter-spacing: 0.1em; text-transform: uppercase; }
+    .legend { fill: #94a3b8; font-size: 10px; text-anchor: start; }
+    .legend-box { stroke-width: 1.5; rx: 4; fill: none; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-teal" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#14b8a6"/>
+    </marker>
+  </defs>
+
+  <rect width="720" height="340" fill="#0f172a" rx="8"/>
+  <text x="24" y="28" class="title">Agent Work State Machine</text>
+
+  <!-- Legend -->
+  <rect x="420" y="12" width="12" height="12" class="legend-box" stroke="#14b8a6"/>
+  <text x="438" y="20" class="legend">Worker dispatch path (this issue)</text>
+  <rect x="580" y="12" width="12" height="12" class="legend-box" stroke="#475569" stroke-dasharray="4 2"/>
+  <text x="598" y="20" class="legend">Future</text>
+
+  <!-- IDLE -->
+  <rect x="30" y="130" width="100" height="44" class="state-active"/>
+  <text x="80" y="152" class="label">IDLE</text>
+
+  <!-- ASSIGNED -->
+  <rect x="210" y="130" width="110" height="44" class="state-active"/>
+  <text x="265" y="152" class="label">ASSIGNED</text>
+
+  <!-- EXECUTING -->
+  <rect x="400" y="130" width="120" height="44" class="state-active"/>
+  <text x="460" y="152" class="label">EXECUTING</text>
+
+  <!-- ADAPTING (future) -->
+  <rect x="590" y="50" width="110" height="40" class="state-future"/>
+  <text x="645" y="70" class="label-future">ADAPTING</text>
+
+  <!-- SIGNALING (future) -->
+  <rect x="590" y="210" width="110" height="40" class="label-future"/>
+  <rect x="590" y="210" width="110" height="40" class="state-future"/>
+  <text x="645" y="230" class="label-future">SIGNALING</text>
+
+  <!-- WAITING (future) -->
+  <rect x="590" y="280" width="110" height="40" class="state-future"/>
+  <text x="645" y="300" class="label-future">WAITING</text>
+
+  <!-- IDLE → ASSIGNED (main path) -->
+  <path d="M130,152 L200,152" class="arrow-main"/>
+  <text x="165" y="142" class="trigger-main">task accepted</text>
+
+  <!-- ASSIGNED → EXECUTING (main path) -->
+  <path d="M320,152 L390,152" class="arrow-main"/>
+  <text x="355" y="142" class="trigger-main">invocation</text>
+
+  <!-- EXECUTING → IDLE (main path, arc below) -->
+  <path d="M460,174 C460,240 265,240 265,174" class="arrow-main"/>
+  <text x="362" y="230" class="trigger-main">completion</text>
+
+  <!-- ASSIGNED → IDLE (failure, arc below) -->
+  <path d="M265,174 C265,210 80,210 80,174" class="arrow"/>
+  <text x="172" y="205" class="trigger">resolution failed</text>
+
+  <!-- EXECUTING → ADAPTING (future) -->
+  <path d="M510,140 C540,100 570,80 580,70" class="arrow" stroke-dasharray="4 2"/>
+
+  <!-- ADAPTING → EXECUTING (future) -->
+  <path d="M590,80 C560,110 530,130 520,140" class="arrow" stroke-dasharray="4 2"/>
+
+  <!-- EXECUTING → SIGNALING (future) -->
+  <path d="M510,165 C540,190 570,210 580,220" class="arrow" stroke-dasharray="4 2"/>
+
+  <!-- SIGNALING → EXECUTING (future) -->
+  <path d="M590,220 C560,200 530,175 520,165" class="arrow" stroke-dasharray="4 2"/>
+
+  <!-- EXECUTING → WAITING (future) -->
+  <path d="M520,174 C550,250 570,280 580,295" class="arrow" stroke-dasharray="4 2"/>
+
+  <!-- WAITING → EXECUTING (future) -->
+  <path d="M590,290 C570,260 540,220 520,174" class="arrow" stroke-dasharray="4 2" opacity="0"/>
+</svg>
