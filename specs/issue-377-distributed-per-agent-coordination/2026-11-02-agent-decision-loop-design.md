@@ -308,6 +308,32 @@ Per-agent tracking with optional delegation to a shared swarm-level cap.
 The per-agent tracker checks its own limit first, then the shared limit.
 Thread-safe via atomic counters (same pattern as `SwarmInvocationTracker`).
 
+## LoopPromptSection
+
+**Package:** `io.casehub.agency.orchestration.loop`
+**Module:** agency-core
+
+```java
+@FunctionalInterface
+public interface LoopPromptSection {
+    String contribute(ObservationContext context);
+}
+```
+
+The loop's own prompt section interface, parameterised by `ObservationContext`
+(not `SwarmContext`). Topology implementations adapt existing `SwarmPromptSection`
+instances when registering them:
+
+```java
+// In CentralisedTopology (#381) — adapting SwarmPromptSection to LoopPromptSection
+SwarmPromptSection swarmSection = new SwarmExperienceSection(config);
+LoopPromptSection adapted = ctx -> swarmSection.contribute(swarmContextFor(ctx));
+registry.register("experience-replay", adapted);
+```
+
+This keeps the loop decoupled from swarm-specific context while allowing
+existing prompt sections to be reused through adaptation.
+
 ## PromptSectionRegistry
 
 **Package:** `io.casehub.agency.orchestration.loop`
@@ -316,15 +342,15 @@ Thread-safe via atomic counters (same pattern as `SwarmInvocationTracker`).
 ```java
 public interface PromptSectionRegistry {
 
-    SwarmPromptSection resolve(String name);
+    LoopPromptSection resolve(String name);
 
-    default List<SwarmPromptSection> resolveAll(List<String> names) {
+    default List<LoopPromptSection> resolveAll(List<String> names) {
         return names.stream().map(this::resolve).toList();
     }
 }
 ```
 
-Resolves prompt section names to `SwarmPromptSection` instances. Implementations
+Resolves prompt section names to `LoopPromptSection` instances. Implementations
 are CDI/Spring beans. `resolve()` throws `IllegalArgumentException` for unknown
 names — fail-fast at factory time, not at first tick.
 
@@ -335,14 +361,14 @@ A simple in-memory implementation for testing and programmatic use:
 ```java
 public class MapPromptSectionRegistry implements PromptSectionRegistry {
 
-    private final Map<String, SwarmPromptSection> sections;
+    private final Map<String, LoopPromptSection> sections;
 
-    public MapPromptSectionRegistry(Map<String, SwarmPromptSection> sections) {
+    public MapPromptSectionRegistry(Map<String, LoopPromptSection> sections) {
         this.sections = Map.copyOf(sections);
     }
 
     @Override
-    public SwarmPromptSection resolve(String name) {
+    public LoopPromptSection resolve(String name) {
         var section = sections.get(name);
         if (section == null) {
             throw new IllegalArgumentException(
@@ -363,9 +389,12 @@ public class MapPromptSectionRegistry implements PromptSectionRegistry {
 public class DecisionLoopFactory {
 
     private final PromptSectionRegistry sectionRegistry;
+    private final EventStreamBus<DecisionOutcome> outputBus;
 
-    public DecisionLoopFactory(PromptSectionRegistry sectionRegistry) {
+    public DecisionLoopFactory(PromptSectionRegistry sectionRegistry,
+                               EventStreamBus<DecisionOutcome> outputBus) {
         this.sectionRegistry = sectionRegistry;
+        this.outputBus = outputBus;
     }
 
     public AgentDecisionLoop create(
@@ -384,7 +413,7 @@ public class DecisionLoopFactory {
         var runner = SummarisationRunner.<ObservationEvent, DecisionOutcome>builder(
                 gate.summariser().asSummariser(),
                 outputBus,
-                EventLevel.DECISION)
+                DECISION)
             .emissionPolicy(gate.gating(emissionPolicy))
             .build();
 
@@ -415,10 +444,9 @@ public class DecisionLoopFactory {
 5. Assemble SummarisationRunner
 6. Construct and return AgentDecisionLoop
 
-**Note on `outputBus` and `EventLevel.DECISION`:** The factory needs an
-`EventStreamBus<DecisionOutcome>` to construct the SummarisationRunner. This is
-injected into the factory or passed as a parameter. `EventLevel.DECISION` is a
-new level for decision loop outputs — added to the `EventLevel` enum.
+**Note on `outputBus`:** The factory receives `EventStreamBus<DecisionOutcome>`
+as a constructor parameter. `DecisionLoopLevels.DECISION` is the output level
+for decision loop outcomes.
 
 **Note on `ContentSummariser` parameter:** The reasoner is passed in, not
 constructed by the factory. This is intentional — the LLM invocation strategy
@@ -442,13 +470,13 @@ public class AgentDecisionLoop {
     private final ObservationContext context;
     private final SummarisationRunner<ObservationEvent, DecisionOutcome> runner;
     private final AgentBudgetTracker budget;
-    private final List<SwarmPromptSection> promptSections;
+    private final List<LoopPromptSection> promptSections;
 
     AgentDecisionLoop(DecisionLoopDescriptor descriptor,
                       ObservationContext context,
                       SummarisationRunner<ObservationEvent, DecisionOutcome> runner,
                       AgentBudgetTracker budget,
-                      List<SwarmPromptSection> promptSections) {
+                      List<LoopPromptSection> promptSections) {
         this.descriptor = descriptor;
         this.context = context;
         this.runner = runner;
@@ -458,7 +486,7 @@ public class AgentDecisionLoop {
 
     public void collect(ObservationEvent event) {
         runner.collect(new LevelEvent<>(event, event.timestamp().toEpochMilli(),
-            EventLevel.OBSERVATION, null));
+            DecisionLoopLevels.OBSERVATION, null));
     }
 
     public CompletionStage<Void> tick(long now) {
@@ -505,14 +533,20 @@ produces.
 pipeline phase. The summariser knows what the LLM produced and what to filter.
 The pipeline knows when to fire and how to accumulate — not what's permitted.
 
-### EventLevel additions
+### EventLevel constants
 
-Add to `EventLevel` enum (summarisation-api):
+`EventLevel` is a record (`EventLevel(String name, int ordinal)`). Add constants
+in a new holder class in the loop package:
 
 ```java
-OBSERVATION,  // raw observation events entering the loop
-DECISION      // decision outcomes produced by the loop
+public final class DecisionLoopLevels {
+    public static final EventLevel OBSERVATION = new EventLevel("OBSERVATION", 50);
+    public static final EventLevel DECISION = new EventLevel("DECISION", 60);
+    private DecisionLoopLevels() {}
+}
 ```
+
+Ordinals are above the existing summarisation levels, below platform event levels.
 
 ## Integration — Assembly Flow
 
@@ -642,12 +676,8 @@ All in `agency-core/src/main/java/io/casehub/agency/orchestration/loop/`:
 | `MapPromptSectionRegistry.java` | class | In-memory registry impl |
 | `SignalDeposit.java` | record | WriteBack sub-record |
 | `ContextWrite.java` | record | WriteBack sub-record |
-
-## Files — Modified
-
-| File | Change |
-|------|--------|
-| `summarisation-api/.../EventLevel.java` | Add `OBSERVATION`, `DECISION` levels |
+| `LoopPromptSection.java` | interface | Loop-scoped prompt section (takes ObservationContext) |
+| `DecisionLoopLevels.java` | class | EventLevel constants (OBSERVATION, DECISION) |
 
 ## Decisions
 
