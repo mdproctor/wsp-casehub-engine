@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="720" height="280" fill="#f8fafc" rx="8"/>
+
+  <text x="360" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#1e293b">Permission Matrix — DecisionScope x DecisionType</text>
+  <text x="360" y="46" text-anchor="middle" font-size="11" fill="#94a3b8">Compiler-enforced total function: every cell defined via exhaustive switch</text>
+
+  <!-- Column headers -->
+  <text x="245" y="80" text-anchor="middle" font-size="10" font-weight="bold" fill="#475569">TASK_SELECTION</text>
+  <text x="345" y="80" text-anchor="middle" font-size="10" font-weight="bold" fill="#475569">COLLABORATION</text>
+  <text x="445" y="80" text-anchor="middle" font-size="10" font-weight="bold" fill="#475569">SIGNALING</text>
+  <text x="545" y="80" text-anchor="middle" font-size="10" font-weight="bold" fill="#475569">PROVISIONING</text>
+  <text x="650" y="80" text-anchor="middle" font-size="10" font-weight="bold" fill="#475569">CONTEXT_MUT.</text>
+
+  <!-- Row 1: STIMULUS_DRIVEN -->
+  <text x="110" y="120" text-anchor="middle" font-size="11" font-weight="bold" fill="#78350f">STIMULUS_DRIVEN</text>
+
+  <rect x="210" y="98" width="70" height="30" rx="4" fill="#fecaca" stroke="#ef4444" stroke-width="1"/>
+  <text x="245" y="117" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">DENY</text>
+
+  <rect x="310" y="98" width="70" height="30" rx="4" fill="#fecaca" stroke="#ef4444" stroke-width="1"/>
+  <text x="345" y="117" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">DENY</text>
+
+  <rect x="410" y="98" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="445" y="117" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <rect x="510" y="98" width="70" height="30" rx="4" fill="#fecaca" stroke="#ef4444" stroke-width="1"/>
+  <text x="545" y="117" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">DENY</text>
+
+  <rect x="615" y="98" width="70" height="30" rx="4" fill="#fecaca" stroke="#ef4444" stroke-width="1"/>
+  <text x="650" y="117" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">DENY</text>
+
+  <!-- Row 2: TASK_ADAPTATION -->
+  <text x="110" y="165" text-anchor="middle" font-size="11" font-weight="bold" fill="#78350f">TASK_ADAPTATION</text>
+
+  <rect x="210" y="143" width="70" height="30" rx="4" fill="#fecaca" stroke="#ef4444" stroke-width="1"/>
+  <text x="245" y="162" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">DENY</text>
+
+  <rect x="310" y="143" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="345" y="162" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <rect x="410" y="143" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="445" y="162" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <rect x="510" y="143" width="70" height="30" rx="4" fill="#fecaca" stroke="#ef4444" stroke-width="1"/>
+  <text x="545" y="162" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">DENY</text>
+
+  <rect x="615" y="143" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="650" y="162" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <!-- Row 3: FULL_AUTONOMY -->
+  <text x="110" y="210" text-anchor="middle" font-size="11" font-weight="bold" fill="#78350f">FULL_AUTONOMY</text>
+
+  <rect x="210" y="188" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="245" y="207" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <rect x="310" y="188" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="345" y="207" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <rect x="410" y="188" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="445" y="207" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <rect x="510" y="188" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="545" y="207" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <rect x="615" y="188" width="70" height="30" rx="4" fill="#bbf7d0" stroke="#22c55e" stroke-width="1"/>
+  <text x="650" y="207" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">PERMIT</text>
+
+  <!-- Footer -->
+  <text x="360" y="250" text-anchor="middle" font-size="11" fill="#64748b">Adding a DecisionType forces every scope to handle it — the build breaks until you decide</text>
+  <text x="360" y="268" text-anchor="middle" font-size="10" fill="#94a3b8">No new action category can silently slip through</text>
+</svg>
