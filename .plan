@@ -18,3 +18,4 @@ date: 2026-11-01
 - [ ] casehubio/agency#383 — feat: Per-agent degradation + topology-owned cascade policy
 - [ ] casehubio/agency#384 — feat: DecisionLoopEvent — per-agent loop observability
 - [ ] casehubio/agency#385 — feat: YAML parity — TopologySpec, DecisionScopeSpec, CommunicationModeSpec
+- [ ] casehubio/engine#1285 — feat: AgentWorkLifecycleListener + AgentWorkState + role lifecycle events
