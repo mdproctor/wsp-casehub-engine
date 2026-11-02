@@ -342,10 +342,17 @@ the plan for review, poll via `check()`, cancel if superseded.
 
 ### 5.3 Org-Specific Desired-State Types
 
-**NodeType:** `ORG_GROUP` — groups are the primary desired-state nodes. Agent
-membership, roles, and topology are properties of the group node's NodeSpec,
-not separate nodes. This keeps the graph shallow and avoids per-agent node
-overhead.
+**NodeType:** `org:unit` (existing `OrgNodeTypes.UNIT`) — groups are org units
+and use the existing node type. Agent membership, roles, and topology are
+properties of the group node's `OrgUnitNodeSpec`, not separate nodes. This
+keeps the graph shallow and avoids per-agent node overhead.
+
+The existing `org:relationship` node type (`OrgNodeTypes.RELATIONSHIP`) is
+preserved — `AgentRelationship` records (supervision, delegation, escalation,
+backup) are orthogonal to group structure and continue to be compiled as
+separate nodes by `OrgGoalCompiler`. The extended compiler adds new fields
+(topology, policy, selfDetermination) to `OrgUnitNodeSpec` but does not
+change relationship node handling.
 
 **Provisioning** (`OrgNodeProvisioner implements NodeProvisioner`):
 - `provision()` → register OrganizationalUnit (spec) + create GroupInstance (FORMING), create Qhorus
@@ -425,17 +432,23 @@ Existing fields retain their types — `AgentCapability`, `AgentGoal`, and
 every registry query requires it for tenancy isolation.
 
 **GroupInstance** — the mutable runtime entity (actual state, D9). Tracks
-lifecycle, current effective topology, and role adoptions:
+lifecycle, actual membership, current effective topology, and role adoptions:
 
 ```java
 public record GroupInstance(
     String unitId,                         // references OrganizationalUnit.unitId
     String tenancyId,                      // required — tenancy isolation
     GroupLifecycleState state,             // PROPOSED, FORMING, ACTIVE, REORGANISING, DISSOLVING, DISSOLVED
+    List<ActualMembership> members,        // who IS in the group right now
     String effectiveTopology,              // may differ from spec during transitions
     AuthorityModel effectiveAuthority,
     List<RoleAdoption> roleAdoptions,      // which agents currently hold which roles
     Instant stateChangedAt                 // timestamp of last state transition
+) {}
+
+public record ActualMembership(
+    String agentId,
+    Instant joinedAt
 ) {}
 
 public record RoleAdoption(
@@ -445,6 +458,13 @@ public record RoleAdoption(
     Instant adoptedAt
 ) {}
 ```
+
+**Invariant:** `roleAdoptions` is a subset of `members` by agentId — an agent
+must be a member before adopting a role. `joinGroup()` adds to `members`;
+`adoptRole()` adds to `roleAdoptions` (fails if not a member). `leaveGroup()`
+removes from both `members` and `roleAdoptions` (releases all roles first).
+An agent can be a member without a role (valid during formation, between role
+transitions, or in `many`-topology groups where roles are optional).
 
 `DesiredStateOrgAdapter` reads `GroupInstance` as actual state; `OrgGoalCompiler`
 compiles `OrganizationalUnit` as desired state. The diff between them drives
