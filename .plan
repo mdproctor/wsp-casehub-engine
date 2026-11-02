@@ -4,21 +4,13 @@
 branch: 
 state: active
 issue-repo: casehubio/agency
-covers: casehubio/engine#1285
+covers: casehubio/agency#378
 Current: casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
 date: 2026-11-01
 
 ## Queue
 - [x] casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
 - [ ] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity ← active
-  - [x] Batch 1: API Surface
-    - [x] Task 1: AgentWorkState enum + AgentState extension
-    - [x] Task 2: AgentWorkLifecycleListener + AgentWorkStateNotifier SPIs
-  - [x] Batch 2: State Machine + Default Wiring
-    - [x] Task 3: StigmergyCoordinator implements AgentWorkStateNotifier
-    - [x] Task 4: NoOpAgentWorkStateNotifier + SpiDefaultBeans
-  - [x] Batch 3: Orchestrator Integration
-    - [x] Task 5: WorkerExecutionOrchestrator + RuntimeBeans wiring
 - [ ] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive
 - [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations
 - [ ] casehubio/agency#381 — refactor: LlmSwarmCoordinator → CentralisedTopology
@@ -26,4 +18,4 @@ date: 2026-11-01
 - [ ] casehubio/agency#383 — feat: Per-agent degradation + topology-owned cascade policy
 - [ ] casehubio/agency#384 — feat: DecisionLoopEvent — per-agent loop observability
 - [ ] casehubio/agency#385 — feat: YAML parity — TopologySpec, DecisionScopeSpec, CommunicationModeSpec
-- [ ] casehubio/engine#1285 — feat: AgentWorkLifecycleListener + AgentWorkState + role lifecycle events
+- [x] casehubio/engine#1285 — feat: AgentWorkLifecycleListener + AgentWorkState + role lifecycle events
