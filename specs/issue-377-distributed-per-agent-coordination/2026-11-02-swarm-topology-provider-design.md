@@ -141,6 +141,17 @@ SwarmTopologyProvider centralisedTopologyProvider() {
 - **RoleTracker / TeamDetector adaptation** — informational only; behavioral adaptation is #380+.
 - **YAML surface** — DSL parity for TopologyDescriptor is agency#385.
 
+## Downstream Composability — eidos#216 (Self-Organising Agent Society)
+
+Groups will use TopologyType as a mutable property. This design is compatible:
+- TopologyDescriptor is a snapshot — the provider returns current state each call.
+  TopologyType mutation on a group is invisible to consumers of the descriptor.
+- Agent identity is String — a group coordinator's AgentRef has a string representation.
+  The `Map<String, AgentRole>` naturally accommodates group coordinators as topology
+  participants.
+- The SPI describes topology, not provisioning mechanics. Group-level
+  provision/deprovision is SwarmProvisioner's concern, not the topology provider's.
+
 ## Testing Strategy
 
 1. **TopologyDescriptor construction tests:**
