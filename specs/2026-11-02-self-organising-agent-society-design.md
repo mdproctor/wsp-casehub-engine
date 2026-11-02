@@ -507,10 +507,15 @@ The desired-state graph (persisted via `DesiredStateHistoryStore`) is the
 authoritative recovery layer. On restart: the `DesiredStateHistoryStore`
 provides the desired state, `OrgRegistry` is empty (no actual state), and
 `ReconciliationLoop` re-provisions all groups from the desired-state graph —
-the same path used for initial deployment (§7 unified boot path). Dynamic
-changes (role adoption, topology transition) update the desired-state graph
-first (via `SocietyLifecycleManager` → desired-state graph mutation →
-`ReconciliationLoop.requestReconciliation()`), then update `GroupInstance`.
+the same path used for initial deployment (§7 unified boot path).
+
+**Universal desired-state-first rule:** Every `GroupLifecycleService` mutation
+updates the desired-state graph before updating `GroupInstance`. This applies
+to all operations without exception: top-down formation, emergence promotion,
+bottom-up proposal acceptance, membership changes (join/leave), role adoption/
+release, topology transition, and dissolution. `SocietyLifecycleManager`
+mutates the desired-state graph first, calls
+`ReconciliationLoop.requestReconciliation()`, then updates `GroupInstance`.
 This ensures the desired-state graph is always ahead of or in sync with
 runtime state — restart recovery reconstructs from the authoritative graph.
 
@@ -803,15 +808,30 @@ by the existing org YAML loader). Each `OrganizationalUnit` created from the
 YAML receives the deployment tenant's ID. Multi-tenant deployments use separate
 YAML seeds per tenant, each loaded under its respective tenancyId.
 
-**Unified boot path (D8, D9):** At startup, the boot sequence feeds the YAML
-through the desired-state pipeline — the same path used for runtime
-restructuring. `ClasspathYamlOrgRegistrar` loads the YAML, passes it to
-`OrgGoalCompiler` to produce the desired-state graph, and the
-`ReconciliationLoop` runs an initial reconciliation: desired graph vs empty
-actual state → `TransitionPlan` with all additions → auto-approved → execute
-(provisions all groups via `OrgNodeProvisioner`). This eliminates the dual-path
-problem where boot uses imperative `registerUnit()` while runtime uses
-desired-state reconciliation. One path for all org mutations.
+**Unified boot path (D8, D9):** At startup, `ClasspathYamlOrgRegistrar` checks
+`DesiredStateHistoryStore` for an existing persisted graph for this tenancy:
+
+- **Persisted graph exists** (restart after prior run): the persisted graph is
+  authoritative. YAML is NOT recompiled — dynamic changes made at runtime
+  (emergence promotions, bottom-up proposals, role adoptions, topology
+  transitions) are preserved in the persisted graph and survive restart. The
+  `ReconciliationLoop` runs reconciliation against the persisted desired state
+  and the empty actual state (in-memory `OrgRegistry`), re-provisioning all
+  groups to match the persisted graph.
+- **No persisted graph** (fresh deployment): `ClasspathYamlOrgRegistrar` loads
+  the YAML, passes it to `OrgGoalCompiler` to compile the initial desired-state
+  graph, and the `ReconciliationLoop` runs initial reconciliation: desired graph
+  vs empty actual state → `TransitionPlan` with all additions → auto-approved →
+  execute (provisions all groups via `OrgNodeProvisioner`).
+- **Operator wants to restructure via YAML:** they update the YAML and trigger
+  an explicit restructuring operation (diagram A → diagram B, per §5.2). This
+  recompiles from YAML, producing a new desired-state graph that the
+  `ReconciliationLoop` transitions to. The boot path does not implicitly
+  override the persisted graph — restructuring is always an explicit operation.
+
+This eliminates the dual-path problem where boot uses imperative
+`registerUnit()` while runtime uses desired-state reconciliation. One path
+for all org mutations.
 
 **Event model:** Society events (formation, dissolution, role lifecycle, topology
 change) follow the platform's CDI event model — synchronous within a thread,
