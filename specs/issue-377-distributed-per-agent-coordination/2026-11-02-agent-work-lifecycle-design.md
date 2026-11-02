@@ -152,20 +152,23 @@ the notifier call is skipped (guard: `if (bindingName != null)`).
 
 ## Integration Points in WorkerExecutionOrchestrator
 
-### execute() — entry point
+All three transitions happen inside `executeWorker()` because `bindingName` (the agent
+identity) is only available after event log metadata extraction (~line 188).
+
+### After bindingName extraction — task accepted
 
 ```
 IDLE → ASSIGNED
 ```
 
-After `firePreExecutionHooks()`, before `executeWorker()`:
+After `bindingName` is extracted from event log metadata, before worker resolution:
 ```java
 if (bindingName != null) {
     workStateNotifier.taskAssigned(caseId, bindingName, workerId, inputContext);
 }
 ```
 
-### executeWorker() — worker invocation
+### Before workerExecutor.execute() — execution begins
 
 ```
 ASSIGNED → EXECUTING
@@ -178,13 +181,15 @@ if (bindingName != null) {
 }
 ```
 
-### publishOutcome() / exception handler — completion
+### After publishOutcome() — task complete
 
 ```
 EXECUTING → IDLE
 ```
 
-After `publishOutcome()` (success path) and in the catch block (failure path):
+After `publishOutcome()` returns. Also in `execute()`'s catch block — but only if
+`bindingName` was resolved (the catch must guard against early failures before metadata
+extraction):
 ```java
 if (bindingName != null) {
     workStateNotifier.transitionWorkState(caseId, bindingName, AgentWorkState.IDLE);
