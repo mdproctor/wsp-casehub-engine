@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 380" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="360" y="30" text-anchor="middle" font-size="16" font-weight="600" fill="#1e293b">AgentDecisionLoop — Observe → Reason → Decide</text>
+
+  <!-- Descriptor box (left) -->
+  <rect x="20" y="60" width="200" height="160" rx="8" fill="#f0f9ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="120" y="85" text-anchor="middle" font-size="13" font-weight="600" fill="#1e40af">DecisionLoopDescriptor</text>
+  <text x="120" y="100" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">the playbook</text>
+  <line x1="40" y1="110" x2="200" y2="110" stroke="#93c5fd" stroke-width="0.5"/>
+  <text x="35" y="130" font-size="11" fill="#334155">observation: EVENT_DRIVEN</text>
+  <text x="35" y="148" font-size="11" fill="#334155">scope: TASK_ADAPTATION</text>
+  <text x="35" y="166" font-size="11" fill="#334155">communication: STIGMERGY</text>
+  <text x="35" y="184" font-size="11" fill="#334155">budget: 5 calls / 10k tokens</text>
+  <text x="35" y="202" font-size="11" fill="#334155">sections: [role-ctx, exp]</text>
+
+  <!-- Arrow from descriptor to factory -->
+  <line x1="220" y1="140" x2="260" y2="140" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Factory box -->
+  <rect x="265" y="110" width="130" height="60" rx="6" fill="#fefce8" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="330" y="138" text-anchor="middle" font-size="12" font-weight="600" fill="#92400e">DecisionLoop</text>
+  <text x="330" y="155" text-anchor="middle" font-size="12" font-weight="600" fill="#92400e">Factory</text>
+
+  <!-- Arrow from factory to runtime -->
+  <line x1="395" y1="140" x2="435" y2="140" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Runtime pipeline (right) -->
+  <rect x="440" y="55" width="260" height="230" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="570" y="78" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">AgentDecisionLoop</text>
+  <text x="570" y="93" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">the runtime</text>
+
+  <!-- Observe phase -->
+  <rect x="460" y="105" width="105" height="36" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1"/>
+  <text x="512" y="120" text-anchor="middle" font-size="11" font-weight="500" fill="#166534">OBSERVE</text>
+  <text x="512" y="133" text-anchor="middle" font-size="9" fill="#4ade80">collect() + policy</text>
+
+  <!-- Arrow down -->
+  <line x1="512" y1="141" x2="512" y2="155" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- Reason phase -->
+  <rect x="460" y="160" width="105" height="36" rx="5" fill="#e0e7ff" stroke="#a5b4fc" stroke-width="1"/>
+  <text x="512" y="175" text-anchor="middle" font-size="11" font-weight="500" fill="#3730a3">REASON</text>
+  <text x="512" y="188" text-anchor="middle" font-size="9" fill="#818cf8">ContentSummariser</text>
+
+  <!-- Arrow down -->
+  <line x1="512" y1="196" x2="512" y2="210" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- Decide phase -->
+  <rect x="460" y="215" width="105" height="36" rx="5" fill="#fce7f3" stroke="#f9a8d4" stroke-width="1"/>
+  <text x="512" y="230" text-anchor="middle" font-size="11" font-weight="500" fill="#9d174d">DECIDE</text>
+  <text x="512" y="243" text-anchor="middle" font-size="9" fill="#ec4899">DecisionOutcome</text>
+
+  <!-- Side annotations for pipeline components -->
+  <text x="586" y="120" font-size="9" fill="#64748b">EmissionPolicy</text>
+  <text x="586" y="133" font-size="9" fill="#64748b">InFlightGate</text>
+  <text x="586" y="175" font-size="9" fill="#64748b">LoopPromptSection</text>
+  <text x="586" y="188" font-size="9" fill="#64748b">AgentBudgetTracker</text>
+  <text x="586" y="230" font-size="9" fill="#64748b">Scope filter</text>
+  <text x="586" y="243" font-size="9" fill="#64748b">→ EventStreamBus</text>
+
+  <!-- Bottom: three parameterisation examples -->
+  <text x="360" y="320" text-anchor="middle" font-size="12" font-weight="600" fill="#475569">Same abstraction, different playbooks</text>
+
+  <rect x="30" y="335" width="200" height="35" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1"/>
+  <text x="130" y="357" text-anchor="middle" font-size="10" fill="#166534">Centralised: FULL_AUTONOMY + routing</text>
+
+  <rect x="260" y="335" width="200" height="35" rx="5" fill="#e0e7ff" stroke="#a5b4fc" stroke-width="1"/>
+  <text x="360" y="357" text-anchor="middle" font-size="10" fill="#3730a3">Distributed: TASK_ADAPT + stigmergy</text>
+
+  <rect x="490" y="335" width="200" height="35" rx="5" fill="#fce7f3" stroke="#f9a8d4" stroke-width="1"/>
+  <text x="590" y="357" text-anchor="middle" font-size="10" fill="#9d174d">Hybrid: mixed scope + broadcast</text>
+</svg>
