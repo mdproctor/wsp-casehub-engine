@@ -2,12 +2,13 @@
 
 ## State
 branch: 
-state: active
+state: closing:review
 issue-repo: casehubio/agency
 covers: casehubio/agency#378
 Current: casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
 date: 2026-11-01
 
+evidence-era: true
 ## Queue
 - [x] casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
 - [x] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity
