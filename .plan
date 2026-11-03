@@ -19,8 +19,8 @@ date: 2026-11-01
     - [x] Task 2: CoordinationTopology SPI + supporting types
   - [x] Batch 3: CentralisedTopology
     - [x] Task 3: Refactor LlmSwarmCoordinator
-  - [ ] Batch 4: Distributed + Hybrid
-    - [ ] Task 4: DistributedTopology + HybridTopology
+  - [x] Batch 4: Distributed + Hybrid
+    - [x] Task 4: DistributedTopology + HybridTopology
   - [ ] Batch 5: Hierarchical + Graduated
     - [ ] Task 5: HierarchicalTopology + GraduatedTopology + GraduationState
   - [ ] Batch 6: Hive
