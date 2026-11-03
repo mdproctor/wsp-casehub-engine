@@ -395,7 +395,7 @@ public class CentralisedTopology implements CoordinationTopology {
 
 N independent loops with full-autonomy scope. Each agent decides independently via peer-to-peer coordination through stigmergy.
 
-**Constructor dependencies:** none beyond TopologyContext
+**Constructor dependencies:** `Map<String, AgentRole> agentRoles` — the agent roster for this topology. Stored at construction time for use by `describeTopology()`. The same roles are available at `configure()` time via `TopologyContext.descriptor().agentRoles()`, but `describeTopology()` is called independently of `configure()`.
 
 **Loop configuration:**
 
@@ -464,7 +464,7 @@ public class DistributedTopology implements CoordinationTopology {
 
 One global coordinator loop + N local agent loops with constrained scope. The global loop handles coordination decisions; local loops handle agent-specific task adaptation.
 
-**Constructor dependencies:** none beyond TopologyContext
+**Constructor dependencies:** `Map<String, AgentRole> agentRoles` — the agent roster. Same pattern as DistributedTopology — stored for `describeTopology()` independence.
 
 **Loop configuration:**
 
@@ -535,7 +535,7 @@ public class HybridTopology implements CoordinationTopology {
 
 Tree of loops at different scopes. Parent nodes have broader scope; leaf nodes have narrower scope. Delegation flows down the tree; aggregation flows up.
 
-**Constructor dependencies:** `Map<String, String> parentMap` — maps each agent to its parent in the hierarchy. Root agent has no parent.
+**Constructor dependencies:** `Map<String, AgentRole> agentRoles` (roster), `Map<String, String> parentMap` — maps each agent to its parent in the hierarchy. Root agent has no parent.
 
 **Loop configuration:**
 
@@ -624,7 +624,7 @@ public class HierarchicalTopology implements CoordinationTopology {
 
 N per-agent loops with mutable scope. Dynamic scope adjustment at runtime based on feedback signals via GraduationState.
 
-**Constructor dependencies:** `GraduationState graduationState`
+**Constructor dependencies:** `Map<String, AgentRole> agentRoles` (roster), `GraduationState graduationState`
 
 **Loop configuration:**
 
@@ -699,7 +699,7 @@ public class GraduatedTopology implements CoordinationTopology {
 
 Role-scoped loops with supervised orchestration. Composes existing orchestration patterns (supervisor, debate, voting) via HivePatternAdapter.
 
-**Constructor dependencies:** `HivePatternAdapter patternAdapter`, `OrchestrationPatternType patternType`
+**Constructor dependencies:** `Map<String, AgentRole> agentRoles` (roster), `HivePatternAdapter patternAdapter`, `OrchestrationPatternType patternType`
 
 **Loop configuration:**
 
