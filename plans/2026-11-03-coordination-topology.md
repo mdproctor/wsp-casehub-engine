@@ -32,13 +32,13 @@
 ### Task 1: Rename SwarmTopologyProvider → TopologyProvider and extend TopologyType
 
 **Files:**
-- Rename: `SwarmTopologyProvider` → `TopologyProvider` (use `ide_refactor_rename` — updates 14 references across api, runtime-core, runtime, runtime-spring)
+- Rename: `TopologyProvider` → `TopologyProvider` (use `ide_refactor_rename` — updates 14 references across api, runtime-core, runtime, runtime-spring)
 - Modify: `api/src/main/java/io/casehub/api/model/coordination/TopologyType.java` (add HIERARCHICAL, GRADUATED)
 - Modify: `api/src/test/java/io/casehub/api/model/coordination/TopologyTypeTest.java` (add tests for new values)
 - Test: `api/src/test/java/io/casehub/api/model/coordination/TopologyTypeTest.java`
 
 **Interfaces:**
-- Consumes: `TopologyType` enum (existing: CENTRALISED, DISTRIBUTED, HYBRID), `SwarmTopologyProvider` interface
+- Consumes: `TopologyType` enum (existing: CENTRALISED, DISTRIBUTED, HYBRID), `TopologyProvider` interface
 - Produces: `TopologyProvider` interface (renamed), `TopologyType.HIERARCHICAL`, `TopologyType.GRADUATED` with `deriveAuthority()` implementations
 
 - [ ] **Step 1: Write failing tests for HIERARCHICAL and GRADUATED**
@@ -126,7 +126,7 @@ Expected: PASS — all 15 tests (9 existing + 6 new)
 
 - [ ] **Step 5: Rename SwarmTopologyProvider → TopologyProvider**
 
-Use `ide_refactor_rename` on the `SwarmTopologyProvider` interface:
+Use `ide_refactor_rename` on the `TopologyProvider` interface:
 ```
 ide_refactor_rename(file="api/src/main/java/io/casehub/api/spi/coordination/SwarmTopologyProvider.java",
     line=21, column=18, newName="TopologyProvider")

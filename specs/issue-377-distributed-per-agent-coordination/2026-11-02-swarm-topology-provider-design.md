@@ -7,13 +7,13 @@
 
 ## Summary
 
-Add `SwarmTopologyProvider` SPI to engine-api so the engine becomes topology-aware.
+Add `TopologyProvider` SPI to engine-api so the engine becomes topology-aware.
 SwarmProvisioner consults the topology before making central provisioning decisions —
 in a DISTRIBUTED topology, central provisioning is inappropriate and is skipped.
 
 Three new types:
 - `TopologyDescriptor` — immutable record describing the current topology state
-- `SwarmTopologyProvider` — SPI for querying the current topology
+- `TopologyProvider` — SPI for querying the current topology
 - `CentralisedTopologyProvider` — backward-compatible default implementation
 
 ## TopologyDescriptor
@@ -103,7 +103,7 @@ SwarmProvisioner behavior is all-central. Wired via `SpiDefaultBeans` producer.
 
 ## Integration — SwarmProvisioner
 
-SwarmProvisioner receives `SwarmTopologyProvider` as a constructor parameter.
+SwarmProvisioner receives `TopologyProvider` as a constructor parameter.
 At the top of `evaluateAndProvision`, before any budget checks:
 
 ```java

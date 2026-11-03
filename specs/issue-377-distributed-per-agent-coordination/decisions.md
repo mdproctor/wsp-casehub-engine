@@ -40,7 +40,7 @@
 
 ## D4: SPI surface — single method
 
-**Choice:** `SwarmTopologyProvider` has one method: `TopologyDescriptor describeTopology(UUID caseId)`
+**Choice:** `TopologyProvider` has one method: `TopologyDescriptor describeTopology(UUID caseId)`
 **Alternatives:**
 - Additional lifecycle methods (onTransition, onGraduation) — topology transitions are internal provider state, not SPI surface
 - Query methods (isStable, epoch) — YAGNI, derivable from descriptor

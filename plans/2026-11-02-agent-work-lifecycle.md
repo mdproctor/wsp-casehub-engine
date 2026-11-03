@@ -554,7 +554,7 @@ public class NoOpAgentWorkStateNotifier implements AgentWorkStateNotifier {
 
 - [ ] **Step 2: Add @DefaultBean producer to SpiDefaultBeans**
 
-In `runtime/src/main/java/.../quarkus/SpiDefaultBeans.java`, add after the `SwarmTopologyProvider` producer (after line 299):
+In `runtime/src/main/java/.../quarkus/SpiDefaultBeans.java`, add after the `TopologyProvider` producer (after line 299):
 
 ```java
 @Produces
