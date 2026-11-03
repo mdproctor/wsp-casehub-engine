@@ -13,8 +13,8 @@ date: 2026-11-01
 - [x] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity
 - [x] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive
 - [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations ← active
-  - [ ] Batch 1: Engine Foundation
-    - [ ] Task 1: Rename TopologyProvider + extend TopologyType
+  - [x] Batch 1: Engine Foundation
+    - [x] Task 1: Rename TopologyProvider + extend TopologyType
   - [ ] Batch 2: SPI + Types
     - [ ] Task 2: CoordinationTopology SPI + supporting types
   - [ ] Batch 3: CentralisedTopology
