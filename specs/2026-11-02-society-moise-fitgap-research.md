@@ -117,9 +117,56 @@ The mapping is direct:
 | D4 | N-level recursive hierarchy | One concept: Group. Society is root, team is leaf. Any depth in between |
 | D5 | Inter-group communication: stigmergy primary, shared context space optional | Consistent with individual agent model. Shared context available for simple use cases |
 | D6 | All three formation paths: bottom-up proposal, emergence promotion, top-down spawning | selfDetermination controls which paths are available |
-| D7 | Dynamic society runtime lives in eidos | Eidos already owns identity, org structure, relationships. Engine depends on it directly. Agency is downstream |
+| D7 | ~~Dynamic society runtime lives in eidos~~ **REVISED D7**: Eidos is model layer (types, storage, SPIs). Society lifecycle orchestration lives in desiredstate/eidos | Eidos cannot depend on desiredstate (circular). GroupLifecycleService impl needs desiredstate-api. Eidos retains SPI interface + @DefaultBean stub. desiredstate/eidos provides the real implementation |
 | D8 | Reorganisation protocol via casehub-desiredstate | Desired-state already handles graph-based state reconciliation with approval gates, drift detection, and staged rollouts. Agent topology is a declared use case |
 | D9 | Eidos org diagrams ARE desired-state goal specifications | Org diagrams are declarative, idempotent, git-versioned. You never imperatively restructure — you declare the target state and desired-state transitions to it. Initial deployment = no state → diagram A. Restructuring = diagram A → B. Recovery = drift → reconcile back. Emergent formation (DetectedTeam promotion, coalition proposals) = runtime editing the desired-state graph when selfDetermination permits, triggering a new reconciliation cycle |
+
+| D10 | Evolve eidos-org in place | Pre-release, no compat concerns. Extend existing OrganizationalUnit. No new eidos modules |
+| D11 | Engine does not call GroupLifecycleService | Engine emits SWARM_TEAM_FORMED events. A listener in desiredstate/eidos handles emergence promotion. Engine stays unaware of org lifecycle |
+| D12 | Desiredstate stays a separate repo | Desiredstate is domain-agnostic (GoalCompiler, TransitionPlanner work for any domain). Core jars have no engine deps. The society bridge is one module (desiredstate/eidos) |
+
+## Repo Dependency Order
+
+```
+eidos (tier 0 — depends on nothing)
+  ↓
+qhorus (tier 1 — depends on eidos)
+engine (tier 1 — depends on eidos, qhorus)
+  ↓
+desiredstate (tier 2 — depends on eidos; engine only via engine-adapter)
+  ↓
+agency (tier 3 — depends on eidos, engine, qhorus)
+```
+
+## Module Responsibility Split
+
+| Layer | What | Where |
+|---|---|---|
+| Types, validation, storage SPIs | Records, enums, OrgRegistry, GroupInstanceStore | eidos-org-api |
+| @DefaultBean stubs | UnsupportedGroupLifecycleService, UnsupportedGroupInstanceStore | eidos-org-runtime |
+| In-memory storage | InMemoryOrgRegistry, InMemoryGroupInstanceStore | eidos-org-memory |
+| Compile + diff + plan | OrgGoalCompiler, DesiredStateOrgAdapter | desiredstate/eidos |
+| Reconcile + drift + fault | OrgDriftPolicy, OrgFaultPolicy, OrgNodeProvisioner | desiredstate/eidos |
+| GroupLifecycleService impl | Desired-state-aware orchestration | desiredstate/eidos |
+| Emergence promotion listener | SWARM_TEAM_FORMED → formGroup() | desiredstate/eidos |
+| Swarm detection, event emission | TeamDetector, StigmergyCoordinator | engine |
+| TopologyProvider, role events | Query org model for agent coordination | engine |
+| Channel visibility | PUBLIC/PRIVATE/DIRECT | qhorus |
+| Deliberation (coalition, negotiation) | Bottom-up proposals, normative reasoning | agency |
+
+## Issue Tracker
+
+| Repo | Issue | Status |
+|---|---|---|
+| eidos | #216 — Society epic (types, storage) | CLOSED |
+| eidos | #227 — Move DefaultGroupLifecycleService to desiredstate | OPEN |
+| qhorus | #509 — Channel visibility | CLOSED |
+| desiredstate | #211 — Society lifecycle bridge | OPEN |
+| engine | #1282 — CoordinationPattern + AuthorityModel | OPEN (slot 220) |
+| engine | #1284 — TopologyProvider SPI | OPEN (slot 220) |
+| engine | #1285 — AgentWorkLifecycleListener | OPEN (slot 220) |
+| agency | #380 — CoordinationTopology + HiveTopology | OPEN (slot 220) |
+| agency | #385 — TopologySpec YAML | OPEN (slot 220) |
 
 ## Academic References
 
