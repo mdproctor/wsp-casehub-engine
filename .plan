@@ -2,7 +2,7 @@
 
 ## State
 branch: 
-state: closing:promoted
+state: closing:pushed
 issue-repo: casehubio/agency
 covers: casehubio/agency#378
 Current: casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
