@@ -21,8 +21,8 @@ date: 2026-11-01
     - [x] Task 3: Refactor LlmSwarmCoordinator
   - [x] Batch 4: Distributed + Hybrid
     - [x] Task 4: DistributedTopology + HybridTopology
-  - [ ] Batch 5: Hierarchical + Graduated
-    - [ ] Task 5: HierarchicalTopology + GraduatedTopology + GraduationState
+  - [x] Batch 5: Hierarchical + Graduated
+    - [x] Task 5: HierarchicalTopology + GraduatedTopology + GraduationState
   - [ ] Batch 6: Hive
     - [ ] Task 6: HiveTopology + HivePatternAdapter
 - [ ] casehubio/agency#381 — refactor: LlmSwarmCoordinator → CentralisedTopology
