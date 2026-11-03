@@ -15,8 +15,8 @@ date: 2026-11-01
 - [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations ← active
   - [x] Batch 1: Engine Foundation
     - [x] Task 1: Rename TopologyProvider + extend TopologyType
-  - [ ] Batch 2: SPI + Types
-    - [ ] Task 2: CoordinationTopology SPI + supporting types
+  - [x] Batch 2: SPI + Types
+    - [x] Task 2: CoordinationTopology SPI + supporting types
   - [ ] Batch 3: CentralisedTopology
     - [ ] Task 3: Refactor LlmSwarmCoordinator
   - [ ] Batch 4: Distributed + Hybrid
