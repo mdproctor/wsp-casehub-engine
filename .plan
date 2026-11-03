@@ -17,8 +17,8 @@ date: 2026-11-01
     - [x] Task 1: Rename TopologyProvider + extend TopologyType
   - [x] Batch 2: SPI + Types
     - [x] Task 2: CoordinationTopology SPI + supporting types
-  - [ ] Batch 3: CentralisedTopology
-    - [ ] Task 3: Refactor LlmSwarmCoordinator
+  - [x] Batch 3: CentralisedTopology
+    - [x] Task 3: Refactor LlmSwarmCoordinator
   - [ ] Batch 4: Distributed + Hybrid
     - [ ] Task 4: DistributedTopology + HybridTopology
   - [ ] Batch 5: Hierarchical + Graduated
