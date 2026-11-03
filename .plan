@@ -11,8 +11,20 @@ date: 2026-11-01
 ## Queue
 - [x] casehubio/agency#377 — epic: Distributed Per-Agent LLM Coordination — Cross-Repo Parent
 - [x] casehubio/agency#378 — epic: Agency Intelligence Layer — Decision Loops, Topologies, YAML Parity
-- [ ] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive ← active
-- [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations
+- [x] casehubio/agency#379 — feat: AgentDecisionLoop — unified observe→reason→act primitive
+- [ ] casehubio/agency#380 — feat: CoordinationTopology SPI + concrete implementations ← active
+  - [ ] Batch 1: Engine Foundation
+    - [ ] Task 1: Rename TopologyProvider + extend TopologyType
+  - [ ] Batch 2: SPI + Types
+    - [ ] Task 2: CoordinationTopology SPI + supporting types
+  - [ ] Batch 3: CentralisedTopology
+    - [ ] Task 3: Refactor LlmSwarmCoordinator
+  - [ ] Batch 4: Distributed + Hybrid
+    - [ ] Task 4: DistributedTopology + HybridTopology
+  - [ ] Batch 5: Hierarchical + Graduated
+    - [ ] Task 5: HierarchicalTopology + GraduatedTopology + GraduationState
+  - [ ] Batch 6: Hive
+    - [ ] Task 6: HiveTopology + HivePatternAdapter
 - [ ] casehubio/agency#381 — refactor: LlmSwarmCoordinator → CentralisedTopology
 - [ ] casehubio/agency#382 — feat: HierarchicalInvocationTracker — LLM budget management
 - [ ] casehubio/agency#383 — feat: Per-agent degradation + topology-owned cascade policy
