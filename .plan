@@ -23,8 +23,8 @@ date: 2026-11-01
     - [x] Task 4: DistributedTopology + HybridTopology
   - [x] Batch 5: Hierarchical + Graduated
     - [x] Task 5: HierarchicalTopology + GraduatedTopology + GraduationState
-  - [ ] Batch 6: Hive
-    - [ ] Task 6: HiveTopology + HivePatternAdapter
+  - [x] Batch 6: Hive
+    - [x] Task 6: HiveTopology + HivePatternAdapter
 - [ ] casehubio/agency#381 — refactor: LlmSwarmCoordinator → CentralisedTopology
 - [ ] casehubio/agency#382 — feat: HierarchicalInvocationTracker — LLM budget management
 - [ ] casehubio/agency#383 — feat: Per-agent degradation + topology-owned cascade policy
