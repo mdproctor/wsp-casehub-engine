@@ -229,6 +229,23 @@ public record DegradationPolicy(
     int latencyBreachCount,                // breaches within window to trigger degradation
     Duration latencyBreachWindowDuration   // time-based expiry for sliding window entries
 ) {
+    public DegradationPolicy {
+        Objects.requireNonNull(thresholdType, "thresholdType must not be null");
+        if (cascadeThreshold <= 0.0 || cascadeThreshold > 1.0)
+            throw new IllegalArgumentException("cascadeThreshold must be in (0.0, 1.0]");
+        Objects.requireNonNull(priorityWeights, "priorityWeights must not be null");
+        if (latencyBreachWindow < 1)
+            throw new IllegalArgumentException("latencyBreachWindow must be >= 1");
+        if (latencyBreachCount < 1 || latencyBreachCount > latencyBreachWindow)
+            throw new IllegalArgumentException(
+                "latencyBreachCount must be in [1, latencyBreachWindow]");
+        Objects.requireNonNull(latencyBreachWindowDuration,
+            "latencyBreachWindowDuration must not be null");
+        if (latencyBreachWindowDuration.isNegative() || latencyBreachWindowDuration.isZero())
+            throw new IllegalArgumentException(
+                "latencyBreachWindowDuration must be positive");
+    }
+
     public static DegradationPolicy defaults() {
         return new DegradationPolicy(
             CascadeThresholdType.SIMPLE_FRACTION, 0.5,
@@ -357,7 +374,7 @@ the structural change persists for the execution.
 | Topology | Cascade Response | Structural Change |
 |----------|-----------------|-------------------|
 | Distributed | Independent — no cascade | None. `onDegradation()` is a no-op. Each loop degrades independently. |
-| Graduated | Reduce autonomy | `GraduationState.forceScope(agentId, STIMULUS_DRIVEN)` for all agents. All agents stop proactive reasoning and respond only to incoming signals. Requires new `forceScope()` method (current `downgrade()` steps one level at a time). |
+| Graduated | Reduce autonomy | `GraduationState.forceScope(agentId, STIMULUS_DRIVEN)` for all agents. All agents stop proactive reasoning and respond only to incoming signals. `forceScope()` also sets a `volatile DecisionScope scopeFloor` that prevents subsequent `upgrade()` calls from exceeding the forced scope — `upgrade()` clamps the result against the floor. This ensures the cascade ratchet holds even as `onFeedback()` → `adjustScope()` continues processing feedback signals. Requires new `forceScope()` method with scope floor enforcement (current `downgrade()` steps one level at a time). |
 | Hybrid | Force-degrade NORMAL loops | Each NORMAL-priority local loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, `CascadeDegradationTrigger.activate()` forces NORMAL loops to heuristic. The RESERVED central coordinator does not include a `CascadeDegradationTrigger` and retains LLM-backed reasoning. |
 | Centralised | All-heuristic | Each loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, all triggers are activated, forcing all remaining loops to heuristic. |
 | Hierarchical | Force-degrade leaves | Each leaf loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, leaf triggers are activated, forcing leaf loops to heuristic. Parent loops retain LLM-backed reasoning. |
@@ -409,7 +426,7 @@ Per-topology specifics:
 | `HierarchicalTopology.java` | Implement `onDegradation()`, wire triggers in `configure()` |
 | `GraduatedTopology.java` | Implement `onDegradation()`, wire triggers in `configure()` |
 | `HiveTopology.java` | Change `patternType` from `final` to `volatile`; implement `onDegradation()` (pattern downgrade + worker `CascadeDegradationTrigger` activation); wire triggers in `configure()` |
-| `GraduationState.java` | Add `forceScope(String agentId, DecisionScope scope)` method |
+| `GraduationState.java` | Add `forceScope(String agentId, DecisionScope scope)` method with `volatile DecisionScope scopeFloor`; `upgrade()` clamps result against floor to preserve cascade ratchet |
 | `SwarmDegradedEvent.java` | No change — existing record is sufficient |
 | `ExecutionEventListener.java` | No change — `onSwarmDegraded()` already declared |
 
