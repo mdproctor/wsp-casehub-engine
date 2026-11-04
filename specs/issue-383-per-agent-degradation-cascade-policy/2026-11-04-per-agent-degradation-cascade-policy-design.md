@@ -24,9 +24,10 @@ Two-level degradation model:
 
 1. **Per-loop degradation** — each decision loop independently checks a
    `DegradationTrigger` before every LLM call. When triggered, the call is
-   replaced with a heuristic response. Degradation is stateless per-call —
-   the trigger is a pure function of current conditions. Recovery is implicit
-   when the trigger clears (e.g., latency normalizes).
+   replaced with a heuristic response. Budget degradation is stateless
+   (reads current atomic counters). Latency degradation maintains a
+   time-bounded sliding window — entries expire after a configurable
+   duration, enabling implicit recovery without external intervention.
 
 2. **Topology-owned cascade** — when the count of degraded loops crosses a
    configurable `CascadeThreshold`, the topology executes a one-way structural
@@ -65,11 +66,24 @@ counters without acquiring budget. No circular dependency with
 `BudgetTelemetryEvent.Outcome` events (which already record `latencyMs` for
 every LLM call) and compares each duration against
 `LlmInvocationPolicy.errorAfter()`. It maintains a sliding window of recent
-results and fires `shouldDegrade()` when the breach count within the window
-exceeds a configurable threshold (`DegradationPolicy.latencyBreachCount`).
-When the loop is degraded (heuristic path), no `BudgetTelemetryEvent` is
-emitted — correct, since there is no LLM latency to measure. On recovery,
-the next LLM call emits an Outcome event, feeding the window.
+results — each entry carries a timestamp — and fires `shouldDegrade()` when
+the breach count within the window exceeds a configurable threshold
+(`DegradationPolicy.latencyBreachCount`).
+
+Entries in the sliding window expire after
+`DegradationPolicy.latencyBreachWindowDuration`. Before evaluating
+`shouldDegrade()`, expired entries are pruned. When all entries have expired
+(e.g., during extended degradation where no LLM calls produce new entries),
+the window is empty, `shouldDegrade()` returns `false`, and the next
+`summarise()` call routes through the LLM chain — a recovery probe. If the
+probe breaches the threshold, the new entry enters the window and
+re-triggers degradation. If it does not breach, recovery succeeds and
+subsequent LLM calls continue normally.
+
+Unlike `BudgetDegradationTrigger` (which is stateless — it reads the view's
+atomic counters), `LatencyDegradationTrigger` is stateful. However, recovery
+is still implicit: entries expire by time, the trigger clears without
+external intervention, and the system self-heals.
 
 `InvocationPolicyMonitor` is a stateless fire-and-forget logger — it cannot
 be adapted. The latency trigger reuses `LlmInvocationPolicy` threshold
@@ -94,10 +108,12 @@ Before each `summarise()` call, it checks `trigger.shouldDegrade()`:
   path needs none of these.
 
 On degradation state transition (non-degraded → degraded), emits a
-`SwarmDegradedEvent` via a `Consumer<SwarmDegradedEvent>` sink. Maintains a
-`previouslyDegraded` boolean to detect transitions. On recovery (degraded →
-non-degraded), resets the flag so a subsequent re-degradation emits another
-event.
+`SwarmDegradedEvent` with `fallbackActive=true` via a
+`Consumer<SwarmDegradedEvent>` sink. On recovery (degraded → non-degraded),
+emits a `SwarmDegradedEvent` with `fallbackActive=false` so the topology
+can remove the loop from its degraded set and observers can distinguish
+current from historical degradation. Uses an `AtomicBoolean` with
+`compareAndSet()` for exactly-once event emission under concurrent access.
 
 ```java
 public class DegradationAwareSummariser<T, R> implements ContentSummariser<T, R> {
@@ -107,19 +123,21 @@ public class DegradationAwareSummariser<T, R> implements ContentSummariser<T, R>
     private final DegradationTrigger             trigger;
     private final Consumer<SwarmDegradedEvent>   eventSink;
     private final String                         loopName;
-    private       boolean                        previouslyDegraded;
+    private final AtomicBoolean                  previouslyDegraded = new AtomicBoolean(false);
 
     @Override
     public CompletionStage<R> summarise(List<T> items, @Nullable R previous) {
         if (trigger.shouldDegrade()) {
-            if (!previouslyDegraded) {
-                previouslyDegraded = true;
+            if (previouslyDegraded.compareAndSet(false, true)) {
                 eventSink.accept(new SwarmDegradedEvent(
                     loopName, "degradation trigger fired", true));
             }
             return heuristic.summarise(items, previous);
         }
-        previouslyDegraded = false;
+        if (previouslyDegraded.compareAndSet(true, false)) {
+            eventSink.accept(new SwarmDegradedEvent(
+                loopName, "degradation cleared", false));
+        }
         return delegate.summarise(items, previous);
     }
 }
@@ -139,9 +157,33 @@ orchestration/degradation/NoOpHeuristicSummariser.java          — for non-Cent
 
 Each heuristic summariser adapts a `SwarmFallbackStrategy` method to the
 `ContentSummariser<ObservationEvent, DecisionOutcome>` interface. The
-summariser parses the observation context to extract the inputs the fallback
-method needs (routing candidates, agent results, swarm size), calls the
-fallback, and wraps the result in the appropriate `DecisionOutcome` variant.
+summariser extracts domain inputs from the `ObservationEvent` list by
+matching event keys and casting payloads — the same pattern used by the
+existing LLM-based reasoners (`RoutingReasoner`, `AggregationReasoner`,
+`ProvisioningReasoner`), which already introspect `ObservationEvent`
+payloads to build their prompts.
+
+Adaptation contracts per heuristic:
+
+- **`HeuristicRoutingSummariser`:** extracts `RoutingCandidate` list from
+  events keyed `"candidates-available"`. Calls
+  `fallbackRouting(candidates)` → `RoutingDecision`. Wraps as
+  `DecisionOutcome.Route(decision)`.
+
+- **`HeuristicAggregationSummariser`:** extracts `AgentResult` list from
+  events keyed `"member-completed"`. Calls
+  `fallbackAggregation(results)` → `AggregationResult`. Wraps as
+  `DecisionOutcome.Aggregate(result)`.
+
+- **`HeuristicProvisioningSummariser`:** extracts `currentSize` and
+  `maxSize` from events keyed `"provisioning-changed"` (payload is
+  `SwarmCoordinationEvent.ProvisioningChanged`). Calls
+  `fallbackProvisioningAdvice(currentSize, maxSize)` → `boolean`. Wraps as
+  `DecisionOutcome.Provision(new ProvisioningAdvice(shouldProvision,
+  null, null, "heuristic-fallback"))`. The `boolean` maps directly to
+  `ProvisioningAdvice.shouldProvision` — the nullable enrichment fields
+  (`adjustedCapabilities`, `adjustedPolicy`) are legitimately absent for
+  a heuristic fallback.
 
 `NoOpHeuristicSummariser` is for non-Centralised topologies where each loop
 does general reasoning. It returns `previous` — the agent stops making novel
@@ -182,14 +224,15 @@ public record DegradationPolicy(
     CascadeThresholdType thresholdType,    // SIMPLE_FRACTION, PRIORITY_WEIGHTED
     double cascadeThreshold,               // e.g., 0.5
     Map<BudgetPriority, Double> priorityWeights,  // for PRIORITY_WEIGHTED
-    int latencyBreachWindow,               // sliding window size for LatencyDegradationTrigger
-    int latencyBreachCount                 // breaches within window to trigger degradation
+    int latencyBreachWindow,               // max sliding window size for LatencyDegradationTrigger
+    int latencyBreachCount,                // breaches within window to trigger degradation
+    Duration latencyBreachWindowDuration   // time-based expiry for sliding window entries
 ) {
     public static DegradationPolicy defaults() {
         return new DegradationPolicy(
             CascadeThresholdType.SIMPLE_FRACTION, 0.5,
             Map.of(BudgetPriority.RESERVED, 2.0, BudgetPriority.NORMAL, 1.0),
-            5, 3);
+            5, 3, Duration.ofMinutes(2));
     }
 }
 
@@ -218,10 +261,17 @@ wired during topology `configure()`:
 1. **Cascade path:** `CoordinationTopology.onDegradation(SwarmDegradedEvent)` —
    a new method on the interface. Each topology implementation maintains a
    `Set<String>` of degraded loop IDs (idempotent) and evaluates the
-   `CascadeThreshold` on each event.
+   `CascadeThreshold` on each event. When `fallbackActive=true`, the loop
+   is added to the set. When `fallbackActive=false` (recovery), the loop
+   is removed from the set. This ensures the degraded set reflects
+   *current* degradation state, not historical. The cascade threshold is
+   only evaluated on `fallbackActive=true` events — recovery events
+   update the set but do not reverse a cascade (D7 one-way ratchet).
 
 2. **Observability path:** `ExecutionEventListener.onSwarmDegraded(SwarmDegradedEvent)` —
-   activates the existing scaffolded infrastructure.
+   activates the existing scaffolded infrastructure. Receives both
+   degradation (`fallbackActive=true`) and recovery (`fallbackActive=false`)
+   events, enabling observers to track current degradation state.
 
 The push model avoids a dead path in pull: when budget exhaustion causes
 `AgentDecisionLoop.tick()` to short-circuit, no feedback fires and
@@ -241,7 +291,10 @@ public interface CoordinationTopology extends TopologyProvider {
 
 ### DecisionLoopFactory Changes
 
-`DecisionLoopFactory.create()` gains parameters for the degradation decorator:
+`DecisionLoopFactory.create()` gains parameters for the degradation decorator
+and switches from the 2-arg to 5-arg `BudgetAwareSummariser` constructor to
+enable `BudgetTelemetryEvent` emission (required for `LatencyDegradationTrigger`
+to receive latency data):
 
 ```java
 public AgentDecisionLoop create(
@@ -251,9 +304,13 @@ public AgentDecisionLoop create(
         ContentSummariser<ObservationEvent, DecisionOutcome> heuristic,  // NEW
         AutonomyBudgetPool pool,
         DegradationTrigger trigger,                                      // NEW
-        Consumer<SwarmDegradedEvent> degradationSink) {                   // NEW
+        Consumer<SwarmDegradedEvent> degradationSink,                    // NEW
+        Consumer<BudgetTelemetryEvent> budgetEventSink) {                // NEW
 
-    // ... existing section + budget wrapping ...
+    // ... existing section wrapping ...
+
+    ContentSummariser<...> budgetAware = new BudgetAwareSummariser<>(
+        withSections, view, budgetEventSink, r -> 0L, "unknown");
 
     var degradationAware = new DegradationAwareSummariser<>(
         budgetAware, heuristic, trigger, degradationSink, descriptor.name());
@@ -263,9 +320,25 @@ public AgentDecisionLoop create(
 }
 ```
 
+The `budgetEventSink` is a composite consumer wired by the topology to
+deliver events to both `LatencyDegradationTrigger` (for latency window
+updates) and any external telemetry subscribers. The token estimator
+(`r -> 0L`) is a placeholder — the token estimator fix is a separate
+concern (tracked by agency#402).
+
 Each topology's `configure()` method constructs the appropriate
 `DegradationTrigger` (composite of budget + latency) and heuristic
 summariser per loop, then passes them to `DecisionLoopFactory.create()`.
+
+### AgentDecisionLoop Changes
+
+The budget guards in `tick()` and `flush()` are removed.
+`DegradationAwareSummariser` now handles budget exhaustion via
+`BudgetDegradationTrigger` — when the trigger fires, the summariser routes
+to the heuristic path, producing a heuristic response (rather than
+returning `null` from `tick()` or throwing `BudgetExhaustedException` from
+`flush()`). This is the primary change that enables the spec's design goal:
+replacing silent `tick()` short-circuiting with heuristic responses.
 
 ### Per-Topology Cascade Responses
 
@@ -277,24 +350,49 @@ the structural change persists for the execution.
 |----------|-----------------|-------------------|
 | Distributed | Independent — no cascade | None. `onDegradation()` is a no-op. Each loop degrades independently. |
 | Graduated | Centralise authority | `GraduationState.forceScope(agentId, STIMULUS_DRIVEN)` for all non-degraded agents. Concentrates decision-making at the root. Requires new `forceScope()` method (current `downgrade()` steps one level at a time). |
-| Hybrid | Tighten local budgets | Reduce per-agent budget allocation for NORMAL-priority local loops via `AutonomyBudgetPool` adjustments. Central coordinator (RESERVED) retains full budget. |
-| Centralised | All-heuristic | Force-degrade all remaining loops by setting a topology-level `cascadeTriggered` flag that each loop's `DegradationTrigger` reads. |
-| Hierarchical | Collapse upward | Degraded leaf loops stop ticking. Parent loops absorb their observation scope — parent receives events that would have gone to collapsed children. |
+| Hybrid | Force-degrade NORMAL loops | Each NORMAL-priority local loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, `CascadeDegradationTrigger.activate()` forces NORMAL loops to heuristic. The RESERVED central coordinator does not include a `CascadeDegradationTrigger` and retains LLM-backed reasoning. |
+| Centralised | All-heuristic | Each loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, all triggers are activated, forcing all remaining loops to heuristic. |
+| Hierarchical | Force-degrade leaves | Each leaf loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, leaf triggers are activated, forcing leaf loops to heuristic. Parent loops retain LLM-backed reasoning. |
 | Hive | Simplify pattern | Downgrade `OrchestrationPatternType`: DEBATE → VOTING → SUPERVISOR. `HivePatternAdapter.execute()` dispatches dynamically on pattern type, so the existing dispatch path works once the topology passes the new type. |
 
-**In-flight drain:** Cascade transitions complete any in-flight LLM
-operations before applying structural changes. The one-way ratchet flag is
-set immediately (preventing new LLM calls in the affected scope), but
-structural mutation (scope changes, pattern switches) waits for in-flight
-completions.
+**`CascadeDegradationTrigger`:** A `DegradationTrigger` implementation
+backed by a `volatile boolean` flag. `activate()` sets the flag,
+`shouldDegrade()` reads it. Wired into `CompositeDegradationTrigger`
+alongside budget and latency triggers for loops that should respond to
+cascade. The topology's `onDegradation()` calls `activate()` on the
+appropriate triggers when the cascade threshold is breached.
+
+**In-flight safety:** The `DegradationTrigger` mechanism provides natural
+in-flight safety. `shouldDegrade()` is checked at the start of each
+`summarise()` call. An in-flight LLM call (started before the cascade
+flag was set) completes normally — the `InFlightGate` prevents
+overlapping calls, so no new LLM call starts until the in-flight one
+completes. The next `summarise()` call sees the cascade trigger and
+routes to the heuristic.
+
+Per-topology specifics:
+
+- **Graduated:** `forceScope()` writes to `ConcurrentHashMap` and takes
+  effect immediately for new calls. In-flight calls that started under the
+  old scope complete normally — their results are the last LLM decisions
+  from the pre-cascade state. Scope enforcement at execution time catches
+  violations.
+- **Hive:** Pattern type change applies to new `HivePatternAdapter.execute()`
+  calls only. In-flight pattern executions (e.g., DEBATE rounds) complete
+  with their original pattern semantics. New calls dispatch on the
+  downgraded pattern type.
+- **Hierarchical / Hybrid / Centralised:** `CascadeDegradationTrigger`
+  activation is immediate. In-flight completions are the last pre-cascade
+  results. No structural mutation needed beyond the flag.
 
 ## Changes to Existing Files
 
 | File | Change |
 |------|--------|
+| `AgentDecisionLoop.java` | Remove budget guards from `tick()` and `flush()` — degradation is handled by `DegradationAwareSummariser` in the chain |
 | `CoordinationTopology.java` | Add `onDegradation(SwarmDegradedEvent)` method |
 | `TopologyContext.java` | Add `DegradationPolicy degradationPolicy` field |
-| `DecisionLoopFactory.java` | Add `heuristic`, `trigger`, `degradationSink` parameters to `create()` |
+| `DecisionLoopFactory.java` | Add `heuristic`, `trigger`, `degradationSink`, `budgetEventSink` parameters to `create()`; switch `BudgetAwareSummariser` to 5-arg constructor |
 | `CentralisedTopology.java` | Implement `onDegradation()`, wire heuristic summarisers + triggers in `configure()` |
 | `DistributedTopology.java` | Implement `onDegradation()` (no-op), wire triggers in `configure()` |
 | `HybridTopology.java` | Implement `onDegradation()`, wire triggers in `configure()` |
@@ -322,6 +420,7 @@ completions.
 | `orchestration/degradation/SimpleFractionThreshold.java` | Fraction-based threshold |
 | `orchestration/degradation/PriorityWeightedThreshold.java` | Priority-weighted threshold |
 | `orchestration/degradation/DegradationPolicy.java` | Configuration record |
+| `orchestration/degradation/CascadeDegradationTrigger.java` | Volatile-flag trigger activated by topology on cascade |
 | `orchestration/degradation/CascadeThresholdType.java` | Enum |
 
 ## Testing Strategy
@@ -330,8 +429,9 @@ completions.
 
 - `DegradationTriggerTest` — composite OR semantics, individual trigger behavior
 - `BudgetDegradationTriggerTest` — fires when `isBudgetExhausted()` returns true
-- `LatencyDegradationTriggerTest` — sliding window breach counting, threshold crossing, recovery (breach count drops below threshold)
-- `DegradationAwareSummariserTest` — delegates to heuristic when triggered, delegates to inner chain when not, emits `SwarmDegradedEvent` on transition only, recovery resets transition flag
+- `LatencyDegradationTriggerTest` — sliding window breach counting, threshold crossing, time-based entry expiry, recovery after window empties, re-degradation on probe breach
+- `DegradationAwareSummariserTest` — delegates to heuristic when triggered, delegates to inner chain when not, emits `SwarmDegradedEvent(fallbackActive=true)` on degradation transition, emits `SwarmDegradedEvent(fallbackActive=false)` on recovery transition, exactly-once emission under concurrent access
+- `CascadeDegradationTriggerTest` — `activate()` causes `shouldDegrade()` to return true, volatile visibility across threads
 - `SimpleFractionThresholdTest` — threshold arithmetic with various loop counts
 - `PriorityWeightedThresholdTest` — weight calculations with RESERVED/NORMAL mixes
 - `HeuristicRoutingSummariserTest` — produces correct `DecisionOutcome.Route` from `fallbackRouting()`
@@ -343,13 +443,14 @@ completions.
 - `CentralisedTopologyCascadeTest` — exhaust budget on 2/3 loops, verify remaining loop degrades to heuristic
 - `DistributedTopologyCascadeTest` — exhaust budget on N loops, verify no cascade (independent)
 - `GraduatedTopologyCascadeTest` — cross threshold, verify all scopes forced to STIMULUS_DRIVEN
-- `HybridTopologyCascadeTest` — cross threshold, verify local loop budgets tightened
-- `HierarchicalTopologyCascadeTest` — degrade leaf, verify parent absorbs observation scope
+- `HybridTopologyCascadeTest` — cross threshold, verify NORMAL loops force-degraded, RESERVED coordinator retains LLM
+- `HierarchicalTopologyCascadeTest` — cross threshold, verify leaf loops force-degraded, parent loops retain LLM
 - `HiveTopologyCascadeTest` — cross threshold, verify pattern downgrade (DEBATE → VOTING)
 
 ### Edge Cases
 
-- Latency recovery: trigger clears, loop resumes LLM, re-degradation emits new event
+- Latency recovery: window entries expire, trigger clears, loop probes LLM, re-degradation emits new event
+- Recovery event: `SwarmDegradedEvent(fallbackActive=false)` removes loop from degraded set — premature cascade prevented
 - Cascade with zero degraded loops post-recovery: cascade response stays (one-way ratchet)
 - All loops degraded simultaneously: cascade fires once, not per-loop
 - Single-loop topology (Distributed with 1 agent): cascade threshold never crossed (0/1 < 0.5)
@@ -357,9 +458,10 @@ completions.
 ## Out of Scope
 
 - YAML configuration of `DegradationPolicy` (tracked by agency#385)
-- `BudgetAwareSummariser` token estimator fix (separate concern)
-- Cascade response for topologies not yet implemented beyond SPI
-- Latency trigger integration with external circuit breakers
+- `BudgetAwareSummariser` token estimator fix (tracked by agency#402)
+- Cascade response for topologies not yet implemented beyond SPI (tracked by agency#403)
+- Latency trigger integration with external circuit breakers (tracked by agency#404)
+- Hierarchical observation routing infrastructure — parent absorbing child event scope (tracked by agency#405)
 
 ## References
 
