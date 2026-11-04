@@ -1,21 +1,26 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-11-04, session 7)
+## Last Session (2026-11-04, session 8)
 
 ### agency#381 — LlmSwarmCoordinator → CentralisedTopology refactoring (in progress)
 
-Designed and partially implemented the decomposition of LlmSwarmCoordinator into CentralisedTopology. Full brainstorming with 7 validated decisions (standard decision review, 3 rounds). Key design change from original plan: provisioning maps to a new `DecisionOutcome.Provision` sealed variant (not WriteBack) — the decision review proved loop-identity dispatching is architecturally impossible since the executor receives no loop name.
+Completed Task 4 (wire loops into CentralisedTopology). CentralisedTopology now creates three AgentDecisionLoop instances during configure() via DecisionLoopFactory, with adapter reasoners from Batch 2. onSwarmEvent() feeds observations into the appropriate loop by name. Each loop gets a distinct agentId (descriptor name) for budget isolation.
 
-Completed Batches 1-2 (3 of 5 tasks):
+Plan deviation from written plan: used `Supplier<List<RoutingCandidate>>` instead of `AgentProvider` for the candidate supplier (AgentProvider has no `listCandidates()` method), and caseId sourced from `TopologyContext.caseId()` during `configure()` instead of a constructor parameter.
+
+Also updated SwarmCoordinatorBuilder.buildTopology() to pass the new constructor params (SwarmProvisioningAdvisorImpl + `List::of` candidate supplier) — this will be fully reworked in Task 5.
+
+Completed Batches 1-3 (4 of 5 tasks):
 - Added `DecisionOutcome.Provision` variant with null-safety and CentralisedTopology executor case arm
 - Fixed `SectionAwareContentSummariser` bug — assembled prompt context was silently discarded
 - Created three `ContentSummariser` adapters: `RoutingReasoner`, `AggregationReasoner`, `ProvisioningReasoner`
+- Wired three `AgentDecisionLoop` instances into CentralisedTopology with event→observation routing
 
-Branch: `issue-381-llm-swarm-coordinator-centralised-topology` in agency repo (3 commits). Engine repo remains on main.
+Branch: `issue-381-llm-swarm-coordinator-centralised-topology` in agency repo (4 commits). Engine repo remains on main.
 
 ## Immediate Next Step
 
-Task 4: Wire loops into CentralisedTopology — update constructor to accept `SwarmProvisioningAdvisor` + `AgentProvider` + `UUID caseId`, create three `AgentDecisionLoop` instances in `configure()` using `TopologyContext.loopFactory()`, add `loops()` accessor, wire event→observation routing in `onSwarmEvent()`. Then Task 5: eliminate `LlmSwarmCoordinator` and remove `build()` from `SwarmCoordinatorBuilder`.
+Task 5: Eliminate LlmSwarmCoordinator — delete the class (0 callers), remove `build()` from SwarmCoordinatorBuilder (dead code), update `buildTopology()` to properly wire SwarmProvisioningAdvisorImpl with the shared SwarmContext, and update tests.
 
 ## Cross-Module
 
