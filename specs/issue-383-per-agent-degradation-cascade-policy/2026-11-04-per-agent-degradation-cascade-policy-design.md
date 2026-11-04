@@ -156,34 +156,35 @@ orchestration/degradation/NoOpHeuristicSummariser.java          — for non-Cent
 ```
 
 Each heuristic summariser adapts a `SwarmFallbackStrategy` method to the
-`ContentSummariser<ObservationEvent, DecisionOutcome>` interface. The
-summariser extracts domain inputs from the `ObservationEvent` list by
-matching event keys and casting payloads — the same pattern used by the
-existing LLM-based reasoners (`RoutingReasoner`, `AggregationReasoner`,
-`ProvisioningReasoner`), which already introspect `ObservationEvent`
-payloads to build their prompts.
+`ContentSummariser<ObservationEvent, DecisionOutcome>` interface. Each
+heuristic mirrors its LLM-based counterpart's data access pattern —
+constructor-injected dependencies where the reasoner uses them, event
+extraction only where the reasoner uses it.
 
 Adaptation contracts per heuristic:
 
-- **`HeuristicRoutingSummariser`:** extracts `RoutingCandidate` list from
-  events keyed `"candidates-available"`. Calls
-  `fallbackRouting(candidates)` → `RoutingDecision`. Wraps as
-  `DecisionOutcome.Route(decision)`.
+- **`HeuristicRoutingSummariser`:** holds a
+  `Supplier<List<RoutingCandidate>>` (same dependency as
+  `RoutingReasoner`). Calls `fallbackRouting(candidateSupplier.get())`
+  → `RoutingDecision`. Wraps as `DecisionOutcome.Route(decision)`.
+  Does not extract from `ObservationEvent` items — `RoutingReasoner`
+  ignores them too.
 
 - **`HeuristicAggregationSummariser`:** extracts `AgentResult` list from
-  events keyed `"member-completed"`. Calls
-  `fallbackAggregation(results)` → `AggregationResult`. Wraps as
-  `DecisionOutcome.Aggregate(result)`.
+  events keyed `"member-completed"` (same pattern as
+  `AggregationReasoner`). Calls `fallbackAggregation(results)` →
+  `AggregationResult`. Wraps as `DecisionOutcome.Aggregate(result)`.
 
-- **`HeuristicProvisioningSummariser`:** extracts `currentSize` and
-  `maxSize` from events keyed `"provisioning-changed"` (payload is
-  `SwarmCoordinationEvent.ProvisioningChanged`). Calls
-  `fallbackProvisioningAdvice(currentSize, maxSize)` → `boolean`. Wraps as
-  `DecisionOutcome.Provision(new ProvisioningAdvice(shouldProvision,
+- **`HeuristicProvisioningSummariser`:** holds a `SwarmContext` reference
+  (same dependency as `ProvisioningReasoner`). Reads provisioning state
+  from `SwarmContext` to obtain `currentSize` and `maxSize`. Calls
+  `fallbackProvisioningAdvice(currentSize, maxSize)` → `boolean`. Wraps
+  as `DecisionOutcome.Provision(new ProvisioningAdvice(shouldProvision,
   null, null, "heuristic-fallback"))`. The `boolean` maps directly to
   `ProvisioningAdvice.shouldProvision` — the nullable enrichment fields
   (`adjustedCapabilities`, `adjustedPolicy`) are legitimately absent for
-  a heuristic fallback.
+  a heuristic fallback. Does not extract from `ObservationEvent` items —
+  `ProvisioningReasoner` ignores them too.
 
 `NoOpHeuristicSummariser` is for non-Centralised topologies where each loop
 does general reasoning. It returns `previous` — the agent stops making novel
@@ -260,13 +261,20 @@ wired during topology `configure()`:
 
 1. **Cascade path:** `CoordinationTopology.onDegradation(SwarmDegradedEvent)` —
    a new method on the interface. Each topology implementation maintains a
-   `Set<String>` of degraded loop IDs (idempotent) and evaluates the
-   `CascadeThreshold` on each event. When `fallbackActive=true`, the loop
-   is added to the set. When `fallbackActive=false` (recovery), the loop
-   is removed from the set. This ensures the degraded set reflects
-   *current* degradation state, not historical. The cascade threshold is
-   only evaluated on `fallbackActive=true` events — recovery events
-   update the set but do not reverse a cascade (D7 one-way ratchet).
+   `Set<String>` of degraded loop IDs backed by
+   `ConcurrentHashMap.newKeySet()` and evaluates the `CascadeThreshold`
+   on each event. When `fallbackActive=true`, the loop is added to the
+   set. When `fallbackActive=false` (recovery), the loop is removed from
+   the set. This ensures the degraded set reflects *current* degradation
+   state, not historical. The cascade threshold is only evaluated on
+   `fallbackActive=true` events — recovery events update the set but do
+   not reverse a cascade (D7 one-way ratchet).
+
+   `onDegradation()` is called concurrently from multiple loops' threads
+   when degradation events arrive simultaneously (e.g., budget exhaustion
+   across a shared pool). Cascade activation is guarded by an
+   `AtomicBoolean cascadeTriggered` with `compareAndSet(false, true)` —
+   exactly-once activation even under concurrent threshold breaches.
 
 2. **Observability path:** `ExecutionEventListener.onSwarmDegraded(SwarmDegradedEvent)` —
    activates the existing scaffolded infrastructure. Receives both
@@ -349,11 +357,11 @@ the structural change persists for the execution.
 | Topology | Cascade Response | Structural Change |
 |----------|-----------------|-------------------|
 | Distributed | Independent — no cascade | None. `onDegradation()` is a no-op. Each loop degrades independently. |
-| Graduated | Centralise authority | `GraduationState.forceScope(agentId, STIMULUS_DRIVEN)` for all non-degraded agents. Concentrates decision-making at the root. Requires new `forceScope()` method (current `downgrade()` steps one level at a time). |
+| Graduated | Reduce autonomy | `GraduationState.forceScope(agentId, STIMULUS_DRIVEN)` for all agents. All agents stop proactive reasoning and respond only to incoming signals. Requires new `forceScope()` method (current `downgrade()` steps one level at a time). |
 | Hybrid | Force-degrade NORMAL loops | Each NORMAL-priority local loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, `CascadeDegradationTrigger.activate()` forces NORMAL loops to heuristic. The RESERVED central coordinator does not include a `CascadeDegradationTrigger` and retains LLM-backed reasoning. |
 | Centralised | All-heuristic | Each loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, all triggers are activated, forcing all remaining loops to heuristic. |
 | Hierarchical | Force-degrade leaves | Each leaf loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger`. On cascade, leaf triggers are activated, forcing leaf loops to heuristic. Parent loops retain LLM-backed reasoning. |
-| Hive | Simplify pattern | Downgrade `OrchestrationPatternType`: DEBATE → VOTING → SUPERVISOR. `HivePatternAdapter.execute()` dispatches dynamically on pattern type, so the existing dispatch path works once the topology passes the new type. |
+| Hive | Simplify pattern + force-degrade workers | Downgrade `OrchestrationPatternType`: DEBATE → VOTING → SUPERVISOR. `HiveTopology.patternType` changes from `final` to `volatile` to enable runtime mutation. `HivePatternAdapter.execute()` dispatches dynamically on pattern type. Additionally, each NORMAL-priority worker loop's `CompositeDegradationTrigger` includes a `CascadeDegradationTrigger` — on cascade, workers are force-degraded to heuristic. The RESERVED coordinator retains LLM-backed reasoning. This ensures the cascade is meaningful even when the topology is already at SUPERVISOR. |
 
 **`CascadeDegradationTrigger`:** A `DegradationTrigger` implementation
 backed by a `volatile boolean` flag. `activate()` sets the flag,
@@ -377,10 +385,12 @@ Per-topology specifics:
   old scope complete normally — their results are the last LLM decisions
   from the pre-cascade state. Scope enforcement at execution time catches
   violations.
-- **Hive:** Pattern type change applies to new `HivePatternAdapter.execute()`
-  calls only. In-flight pattern executions (e.g., DEBATE rounds) complete
-  with their original pattern semantics. New calls dispatch on the
-  downgraded pattern type.
+- **Hive:** Pattern type change (volatile write) applies to new
+  `HivePatternAdapter.execute()` calls only. In-flight pattern executions
+  (e.g., DEBATE rounds) complete with their original pattern semantics.
+  New calls dispatch on the downgraded pattern type. Worker
+  `CascadeDegradationTrigger` activation is immediate alongside the
+  pattern change.
 - **Hierarchical / Hybrid / Centralised:** `CascadeDegradationTrigger`
   activation is immediate. In-flight completions are the last pre-cascade
   results. No structural mutation needed beyond the flag.
@@ -398,7 +408,7 @@ Per-topology specifics:
 | `HybridTopology.java` | Implement `onDegradation()`, wire triggers in `configure()` |
 | `HierarchicalTopology.java` | Implement `onDegradation()`, wire triggers in `configure()` |
 | `GraduatedTopology.java` | Implement `onDegradation()`, wire triggers in `configure()` |
-| `HiveTopology.java` | Implement `onDegradation()`, wire triggers in `configure()` |
+| `HiveTopology.java` | Change `patternType` from `final` to `volatile`; implement `onDegradation()` (pattern downgrade + worker `CascadeDegradationTrigger` activation); wire triggers in `configure()` |
 | `GraduationState.java` | Add `forceScope(String agentId, DecisionScope scope)` method |
 | `SwarmDegradedEvent.java` | No change — existing record is sufficient |
 | `ExecutionEventListener.java` | No change — `onSwarmDegraded()` already declared |
@@ -445,7 +455,7 @@ Per-topology specifics:
 - `GraduatedTopologyCascadeTest` — cross threshold, verify all scopes forced to STIMULUS_DRIVEN
 - `HybridTopologyCascadeTest` — cross threshold, verify NORMAL loops force-degraded, RESERVED coordinator retains LLM
 - `HierarchicalTopologyCascadeTest` — cross threshold, verify leaf loops force-degraded, parent loops retain LLM
-- `HiveTopologyCascadeTest` — cross threshold, verify pattern downgrade (DEBATE → VOTING)
+- `HiveTopologyCascadeTest` — cross threshold, verify pattern downgrade (DEBATE → VOTING) and worker loops force-degraded; verify cascade at SUPERVISOR still force-degrades workers
 
 ### Edge Cases
 
