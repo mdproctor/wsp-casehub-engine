@@ -38,7 +38,7 @@
 
 **Choice:** Create three ContentSummariser adapter classes (RoutingReasoner, AggregationReasoner, ProvisioningReasoner) that wrap the existing LLM strategies
 **Alternatives:**
-- Modify strategies directly to implement ContentSummariser — breaks PatternCompiler and other consumers of SwarmRoutingStrategy as RoutingStrategy. Forces domain-specific classes to know about the generic observation pipeline.
+- Modify strategies directly to implement ContentSummariser — breaks consumers of SwarmRoutingStrategy as RoutingStrategy (e.g. SwarmCoordinatorBuilder.buildTopology()). Forces domain-specific classes to know about the generic observation pipeline.
 - Lambdas in configure() — compact but untestable in isolation. The adaptation logic (extracting domain data from ObservationEvents, building contexts, mapping results) is meaningful enough to deserve isolation.
 **Rationale:** Each adapter translates between the generic observation pipeline (ObservationEvent → DecisionOutcome) and domain-specific strategy interfaces (RoutingContext → RoutingDecision, etc.). Existing strategies and their consumers remain untouched.
 **Trade-offs:** Three new classes. Each is thin (~30-50 lines) but adds to the class count. Justified by testability and separation of concerns.
