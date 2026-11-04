@@ -2,25 +2,36 @@
 
 ## Last Session (2026-11-04, session 8)
 
-### agency#381 — LlmSwarmCoordinator → CentralisedTopology refactoring (in progress)
+### agency#381 — LlmSwarmCoordinator → CentralisedTopology refactoring (complete)
 
-Completed Task 4 (wire loops into CentralisedTopology). CentralisedTopology now creates three AgentDecisionLoop instances during configure() via DecisionLoopFactory, with adapter reasoners from Batch 2. onSwarmEvent() feeds observations into the appropriate loop by name. Each loop gets a distinct agentId (descriptor name) for budget isolation.
+Completed all 5 tasks across 4 batches. The LlmSwarmCoordinator class has been eliminated — CentralisedTopology is now the single coordination path.
 
-Plan deviation from written plan: used `Supplier<List<RoutingCandidate>>` instead of `AgentProvider` for the candidate supplier (AgentProvider has no `listCandidates()` method), and caseId sourced from `TopologyContext.caseId()` during `configure()` instead of a constructor parameter.
-
-Also updated SwarmCoordinatorBuilder.buildTopology() to pass the new constructor params (SwarmProvisioningAdvisorImpl + `List::of` candidate supplier) — this will be fully reworked in Task 5.
-
-Completed Batches 1-3 (4 of 5 tasks):
+**Batch 1 (Foundation):**
 - Added `DecisionOutcome.Provision` variant with null-safety and CentralisedTopology executor case arm
 - Fixed `SectionAwareContentSummariser` bug — assembled prompt context was silently discarded
-- Created three `ContentSummariser` adapters: `RoutingReasoner`, `AggregationReasoner`, `ProvisioningReasoner`
-- Wired three `AgentDecisionLoop` instances into CentralisedTopology with event→observation routing
 
-Branch: `issue-381-llm-swarm-coordinator-centralised-topology` in agency repo (4 commits). Engine repo remains on main.
+**Batch 2 (Adapters):**
+- Created three `ContentSummariser` adapters: `RoutingReasoner`, `AggregationReasoner`, `ProvisioningReasoner`
+
+**Batch 3 (Wiring):**
+- Wired three `AgentDecisionLoop` instances into CentralisedTopology with event→observation routing
+- Constructor gained `SwarmProvisioningAdvisor` + `Supplier<List<RoutingCandidate>>` (plan deviation: `AgentProvider.listCandidates()` doesn't exist)
+- Each loop gets a distinct agentId (descriptor name) for budget isolation
+
+**Batch 4 (Cleanup):**
+- Deleted `LlmSwarmCoordinator` class (0 production callers)
+- Removed `build()` from `SwarmCoordinatorBuilder` (dead code) — `buildTopology()` is the single path
+- Deleted `LlmSwarmCoordinatorTest`, removed 4 `build()`-related tests from `SwarmCoordinatorBuilderTest`
+- Migrated `SwarmPromptCustomiserIntegrationTest` to use `buildTopology()`
+- Updated CLAUDE.md module index
+
+Branch: `issue-381-llm-swarm-coordinator-centralised-topology` in agency repo (5 commits). Engine repo remains on main.
+
+All 1896 agency module tests pass.
 
 ## Immediate Next Step
 
-Task 5: Eliminate LlmSwarmCoordinator — delete the class (0 callers), remove `build()` from SwarmCoordinatorBuilder (dead code), update `buildTopology()` to properly wire SwarmProvisioningAdvisorImpl with the shared SwarmContext, and update tests.
+Issue #381 is functionally complete. Ready for `work end` to close the branch, or proceed to the next issue in the queue (#382 — HierarchicalInvocationTracker budget).
 
 ## Cross-Module
 
