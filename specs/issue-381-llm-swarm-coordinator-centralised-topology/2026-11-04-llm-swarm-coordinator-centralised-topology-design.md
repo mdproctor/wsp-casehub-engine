@@ -107,7 +107,7 @@ Each adapter holds references to the strategy and `SwarmContext`. The `SwarmCont
 
 ### CentralisedTopology
 
-Constructor gains a `SwarmProvisioningAdvisorImpl` parameter (or `SwarmProvisioningAdvisor` interface if one exists).
+Constructor gains a `SwarmProvisioningAdvisor` parameter (the SPI interface; `SwarmProvisioningAdvisorImpl` is the concrete implementation).
 
 `configure(TopologyContext)` changes:
 1. Creates `AutonomyBudgetPool` (as before)
@@ -124,19 +124,19 @@ New accessor:
 - `List<AgentDecisionLoop> loops()` — exposes loops for runtime lifecycle management (tick, flush, close)
 
 Executor dispatch:
-- `executeRouting()` — no longer a stub; applies the routing assignment from `DecisionOutcome.Route`
-- `executeAggregation()` — no longer a stub; stores the synthesis from `DecisionOutcome.Aggregate`
-- `executeProvisioning()` — new; triggers provisioning from `DecisionOutcome.Provision`
+- `executeRouting()` — adds `case Provision` arm; otherwise returns `SUCCESS` as current stubs do. No runtime consumes the executor today (`build()` has 0 callers). Real executor behavior is a future concern when the runtime is built.
+- `executeAggregation()` — same: `SUCCESS` feedback for now
+- `executeProvisioning()` — new arm; returns `SUCCESS` feedback. Actual provisioning action deferred to runtime layer.
 
 ### SwarmCoordinatorBuilder
 
 - Remove `build()` method (0 callers — dead code)
 - `buildTopology()` becomes the only build path
-- `buildTopology()` creates `SwarmProvisioningAdvisorImpl` and passes it to `CentralisedTopology` constructor
+- `buildTopology()` creates `SwarmProvisioningAdvisorImpl` and passes it (as `SwarmProvisioningAdvisor`) to `CentralisedTopology` constructor
 
 ### SectionAwareContentSummariser
 
-Fix existing bug: `promptContext` is built but not forwarded to the delegate's `summarise()` call. This must be fixed for prompt sections to work correctly through the loop pipeline.
+Fix existing bug (verified): `summarise()` at line 28-34 builds `promptContext` from `LoopPromptSection` contributions but line 35 calls `delegate.summarise(items, previous)` without passing it — the assembled context is silently discarded. This must be fixed for prompt sections to work correctly through the loop pipeline. The fix requires either passing the prompt context to the delegate (which means the delegate's interface must accept it) or prepending it to the observation items as a synthetic event.
 
 ### DecisionOutcome Switch Sites
 
