@@ -1,0 +1,7 @@
+{
+  "repo": "engine",
+  "commits_before": 5,
+  "commits_after": 1,
+  "verified": true,
+  "strategy": "single-commit-squash"
+}

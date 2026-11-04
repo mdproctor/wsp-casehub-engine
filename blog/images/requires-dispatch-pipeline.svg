@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" font-family="Inter, system-ui, sans-serif">
+  <rect width="720" height="280" fill="#fafafa" rx="8"/>
+
+  <text x="360" y="28" text-anchor="middle" font-size="14" font-weight="600" fill="#1a1a1a">Binding Dispatch Pipeline — Where requires Fits</text>
+
+  <!-- Pipeline boxes -->
+  <rect x="20" y="55" width="95" height="50" rx="5" fill="#e8f0fe" stroke="#4285f4" stroke-width="1"/>
+  <text x="67" y="76" text-anchor="middle" font-size="9" font-weight="600" fill="#1a73e8">Trigger</text>
+  <text x="67" y="91" text-anchor="middle" font-size="8" fill="#555">contextChange</text>
+  <text x="67" y="100" text-anchor="middle" font-size="8" fill="#555">scopeActivated</text>
+
+  <line x1="115" y1="80" x2="130" y2="80" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="130" y="55" width="80" height="50" rx="5" fill="#e8f0fe" stroke="#4285f4" stroke-width="1"/>
+  <text x="170" y="76" text-anchor="middle" font-size="9" font-weight="600" fill="#1a73e8">when</text>
+  <text x="170" y="91" text-anchor="middle" font-size="8" fill="#555">JQ guard</text>
+
+  <line x1="210" y1="80" x2="225" y2="80" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="225" y="55" width="95" height="50" rx="5" fill="#e8f0fe" stroke="#4285f4" stroke-width="1"/>
+  <text x="272" y="76" text-anchor="middle" font-size="9" font-weight="600" fill="#1a73e8">Compound</text>
+  <text x="272" y="91" text-anchor="middle" font-size="8" fill="#555">gating</text>
+
+  <line x1="320" y1="80" x2="335" y2="80" stroke="#137333" stroke-width="2" marker-end="url(#arrG)"/>
+
+  <!-- NEW requires box - highlighted -->
+  <rect x="335" y="48" width="95" height="64" rx="5" fill="#e6f4ea" stroke="#137333" stroke-width="2"/>
+  <text x="382" y="70" text-anchor="middle" font-size="10" font-weight="700" fill="#137333">requires</text>
+  <text x="382" y="84" text-anchor="middle" font-size="8" fill="#137333">quorum guard</text>
+  <text x="382" y="96" text-anchor="middle" font-size="7" fill="#555">NEW</text>
+  <text x="382" y="108" text-anchor="middle" font-size="7" fill="#555">pre-strategy filter</text>
+
+  <line x1="430" y1="80" x2="445" y2="80" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="445" y="55" width="90" height="50" rx="5" fill="#e8f0fe" stroke="#4285f4" stroke-width="1"/>
+  <text x="490" y="76" text-anchor="middle" font-size="9" font-weight="600" fill="#1a73e8">Impl</text>
+  <text x="490" y="91" text-anchor="middle" font-size="8" fill="#555">routing</text>
+
+  <line x1="535" y1="80" x2="550" y2="80" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="550" y="55" width="90" height="50" rx="5" fill="#e8f0fe" stroke="#4285f4" stroke-width="1"/>
+  <text x="595" y="76" text-anchor="middle" font-size="9" font-weight="600" fill="#1a73e8">Strategy</text>
+  <text x="595" y="91" text-anchor="middle" font-size="8" fill="#555">dispatch</text>
+
+  <line x1="640" y1="80" x2="655" y2="80" stroke="#999" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="655" y="60" width="50" height="40" rx="5" fill="#fff3e0" stroke="#e65100" stroke-width="1"/>
+  <text x="680" y="84" text-anchor="middle" font-size="9" font-weight="600" fill="#e65100">Fire</text>
+
+  <!-- Example scenario below -->
+  <rect x="20" y="140" width="680" height="120" rx="6" fill="#f8f9fa" stroke="#ddd" stroke-width="1"/>
+  <text x="30" y="160" font-size="11" font-weight="600" fill="#333">Example: 3 extractors → quorum barrier → aggregator</text>
+
+  <rect x="40" y="175" width="72" height="30" rx="4" fill="#c8e6c9" stroke="#4caf50" stroke-width="1"/>
+  <text x="76" y="195" text-anchor="middle" font-size="9" fill="#2e7d32">extract-a ✓</text>
+
+  <rect x="125" y="175" width="72" height="30" rx="4" fill="#c8e6c9" stroke="#4caf50" stroke-width="1"/>
+  <text x="161" y="195" text-anchor="middle" font-size="9" fill="#2e7d32">extract-b ✓</text>
+
+  <rect x="210" y="175" width="72" height="30" rx="4" fill="#fff9c4" stroke="#f9a825" stroke-width="1"/>
+  <text x="246" y="195" text-anchor="middle" font-size="9" fill="#f57f17">extract-c ⏳</text>
+
+  <!-- Barrier -->
+  <line x1="305" y1="170" x2="305" y2="210" stroke="#137333" stroke-width="3"/>
+  <text x="305" y="228" text-anchor="middle" font-size="9" font-weight="600" fill="#137333">requires</text>
+  <text x="305" y="242" text-anchor="middle" font-size="8" fill="#137333">atLeast: 2 ✓</text>
+
+  <line x1="310" y1="190" x2="365" y2="190" stroke="#137333" stroke-width="1.5" marker-end="url(#arrG)"/>
+
+  <!-- Aggregator fires -->
+  <rect x="370" y="175" width="85" height="30" rx="4" fill="#e6f4ea" stroke="#137333" stroke-width="1.5"/>
+  <text x="412" y="195" text-anchor="middle" font-size="9" font-weight="600" fill="#137333">aggregate →</text>
+
+  <text x="490" y="195" font-size="9" fill="#666">fires because 2 ≥ 2</text>
+  <text x="490" y="209" font-size="9" fill="#666">(extract-c keeps running)</text>
+
+  <defs>
+    <marker id="arr" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <path d="M0,0 L6,2.5 L0,5" fill="#999"/>
+    </marker>
+    <marker id="arrG" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <path d="M0,0 L6,2.5 L0,5" fill="#137333"/>
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="720" height="400" fill="#f8fafc" rx="8"/>
+
+  <!-- Title -->
+  <text x="360" y="32" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e293b">AgentRole — Three Independent Facets</text>
+
+  <!-- Name facet (left) -->
+  <rect x="30" y="60" width="200" height="280" rx="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+  <text x="130" y="86" text-anchor="middle" font-size="14" font-weight="bold" fill="#0c4a6e">Name (Path)</text>
+  <text x="130" y="108" text-anchor="middle" font-size="11" fill="#475569">Hierarchical identity</text>
+  <text x="130" y="122" text-anchor="middle" font-size="11" fill="#475569">+ display label</text>
+
+  <rect x="50" y="140" width="160" height="28" rx="4" fill="#fff" stroke="#0284c7" stroke-width="1"/>
+  <text x="130" y="158" text-anchor="middle" font-size="12" fill="#0c4a6e">coordinator</text>
+
+  <rect x="50" y="176" width="160" height="28" rx="4" fill="#fff" stroke="#0284c7" stroke-width="1"/>
+  <text x="130" y="194" text-anchor="middle" font-size="12" fill="#0c4a6e">reviewer/code</text>
+
+  <rect x="50" y="212" width="160" height="28" rx="4" fill="#fff" stroke="#0284c7" stroke-width="1"/>
+  <text x="130" y="230" text-anchor="middle" font-size="12" fill="#0c4a6e">reviewer/code/security</text>
+
+  <rect x="50" y="248" width="160" height="28" rx="4" fill="#fff" stroke="#0284c7" stroke-width="1"/>
+  <text x="130" y="266" text-anchor="middle" font-size="12" fill="#0c4a6e">medic</text>
+
+  <text x="130" y="302" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">Open — applications</text>
+  <text x="130" y="316" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">define freely</text>
+
+  <!-- Archetype facet (middle) -->
+  <rect x="260" y="60" width="200" height="280" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="360" y="86" text-anchor="middle" font-size="14" font-weight="bold" fill="#78350f">StructuralRole</text>
+  <text x="360" y="108" text-anchor="middle" font-size="11" fill="#475569">Structural position</text>
+  <text x="360" y="122" text-anchor="middle" font-size="11" fill="#475569">in the topology</text>
+
+  <rect x="280" y="140" width="160" height="28" rx="4" fill="#fff" stroke="#d97706" stroke-width="1"/>
+  <text x="360" y="158" text-anchor="middle" font-size="12" fill="#78350f">INITIATOR</text>
+
+  <rect x="280" y="176" width="160" height="28" rx="4" fill="#fff" stroke="#d97706" stroke-width="1"/>
+  <text x="360" y="194" text-anchor="middle" font-size="12" fill="#78350f">PEER</text>
+
+  <rect x="280" y="212" width="160" height="28" rx="4" fill="#fff" stroke="#d97706" stroke-width="1"/>
+  <text x="360" y="230" text-anchor="middle" font-size="12" fill="#78350f">CONTRACTOR</text>
+
+  <text x="360" y="276" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">Closed — engine</text>
+  <text x="360" y="290" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">switches on these</text>
+  <text x="360" y="304" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">for enforcement</text>
+
+  <!-- PlatformRole facet (right) -->
+  <rect x="490" y="60" width="200" height="280" rx="8" fill="#fce7f3" stroke="#db2777" stroke-width="1.5"/>
+  <text x="590" y="86" text-anchor="middle" font-size="14" font-weight="bold" fill="#831843">PlatformRole</text>
+  <text x="590" y="108" text-anchor="middle" font-size="11" fill="#475569">Behavioral contract</text>
+  <text x="590" y="122" text-anchor="middle" font-size="11" fill="#475569">with wired behavior</text>
+
+  <rect x="510" y="140" width="160" height="28" rx="4" fill="#fff" stroke="#db2777" stroke-width="1"/>
+  <text x="590" y="158" text-anchor="middle" font-size="12" fill="#831843">COORDINATOR</text>
+
+  <rect x="510" y="176" width="160" height="28" rx="4" fill="#fff" stroke="#db2777" stroke-width="1"/>
+  <text x="590" y="194" text-anchor="middle" font-size="12" fill="#831843">SUPERVISOR</text>
+
+  <rect x="510" y="212" width="160" height="28" rx="4" fill="#fff" stroke="#db2777" stroke-width="1"/>
+  <text x="590" y="230" text-anchor="middle" font-size="12" fill="#831843">JUDGE</text>
+
+  <rect x="510" y="248" width="160" height="28" rx="4" fill="#fff" stroke="#db2777" stroke-width="1"/>
+  <text x="590" y="266" text-anchor="middle" font-size="12" fill="#831843">MODERATOR</text>
+
+  <text x="590" y="302" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">Closed — platform</text>
+  <text x="590" y="316" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">owns behavior</text>
+
+  <!-- Footer labels -->
+  <text x="130" y="370" text-anchor="middle" font-size="11" fill="#64748b">Always present</text>
+  <text x="360" y="370" text-anchor="middle" font-size="11" fill="#64748b">Nullable (symbolic roles)</text>
+  <text x="590" y="370" text-anchor="middle" font-size="11" fill="#64748b">Nullable (domain roles)</text>
+
+  <text x="360" y="394" text-anchor="middle" font-size="10" fill="#94a3b8">If PlatformRole is set, StructuralRole must match its requiredStructuralRole()</text>
+</svg>
