@@ -1,38 +1,28 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-11-04, session 4)
+## Last Session (2026-11-04, session 5)
 
-### Agency branch landed — #379, #380, #382 COMPLETE
+### Budget telemetry fixes landed on agency
 
-Completed Batch 3 (integration/migration), squashed 21 commits to 1 semantic commit on agency main, pushed to origin. Branch `issue-377-distributed-per-agent-coordination` stamped closed.
+Fixed the three critical code-review bugs from session 4: BudgetAwareSummariser now emits Acquisition/Outcome telemetry events and records tokens back to the pool (#388, #389), buildTopology() now wires the budget pool (#390). Also fixed BudgetGrant null checks (#398), createView duplicate guard (#399), TOCTOU documentation (#400), correlationId parameter docs (#397), plus concurrency stress test (#393), delegate failure test (#395), and priority() accessor (#396).
 
-**Code review across all 3 batches** — 13 findings filed as agency#388-#400, all queued in the slot .plan:
-- **Critical (3):** BudgetAwareSummariser missing telemetry emission (#388), missing recordTokens (#389), buildTopology() missing setBudgetPool wiring (#390)
-- **Important (5):** BudgetPriority test assertions (#391), CoordinationPlan pool assertions (#392), concurrency stress test (#393), setBudgetPool swarm tests (#394), delegate failure test (#395)
-- **Minor (5):** AgentBudgetView priority accessor (#396), recordTokens correlationId unused (#397), BudgetGrant null checks (#398), createView duplicate handling (#399), TOCTOU documentation (#400)
+Branch: `issue-388-390-budget-telemetry-fixes` in agency repo (2 commits, not yet merged).
 
-**Genericity analysis** — CentralisedTopology uses concrete swarm types instead of existing generic interfaces (RoutingStrategy\<T\>, AggregationStrategy\<T\>). Filed as agency#401. Also filed #387 for future budget type placement in platform (neocortex cost visibility).
+Plan advanced past 9 closed issues to reach agency#381. Engine#1286 (SwarmConvergenceEvaluator) accidentally marked done but is still OPEN — needs re-adding.
 
-**Blog entries:**
-- Revised: `2026-11-03-mp01-autonomy-budget.md` — practical cost arithmetic, degradation SVG, neocortex acknowledgement
-- New: `2026-11-04-mp01-topology-genericity.md` — ISP violation, CentralisedTopology coupling, "the interfaces were already there"
+## Immediate Next Step
 
-## Queue state
+Merge `issue-388-390-budget-telemetry-fixes` via work-end, then assess: agency#381 (LlmSwarmCoordinator refactor, M/Med) or engine#1286 (SwarmConvergenceEvaluator, S/Med). #391/#392 (topology test assertions) are blocked on pre-existing compilation errors in topology classes — need engine-api installed first.
 
-Slot .plan at `/Users/mdproctor/claude/casehub/slots/220/.plan` has 25 items queued.
-Priority: #388-#390 (critical budget gaps), then #401 (CentralisedTopology generification).
+## Cross-Module
 
-## Artifacts
+- Engine#1286 (SwarmConvergenceEvaluator) — OPEN on GitHub, accidentally marked done in .plan. Needs re-adding or manual plan edit.
+- Topology classes in agency-core have pre-existing compilation errors: `io.casehub.api.model.coordination` package requires engine-api to be installed. Run `mvn install -DskipTests -pl api` in engine before agency-core compilation.
+
+## References
 
 | Artifact | Path |
 |----------|------|
-| Spec (#382) | `specs/issue-382-per-agent-invocation-budget/2026-11-03-autonomy-budget-design.md` |
-| Plan (#382) | `plans/2026-11-03-autonomy-budget.md` |
-| Blog (budget) | `blog/2026-11-03-mp01-autonomy-budget.md` |
+| Blog (telemetry) | `blog/2026-11-04-mp02-the-budget-that-couldnt-count.md` |
 | Blog (genericity) | `blog/2026-11-04-mp01-topology-genericity.md` |
-
-## Prior Sessions
-
-- Session 3 (2026-11-03): Batch 3 implementation — full topology/loop/swarm migration
-- Session 2 (2026-11-03): Spec/plan design + Batches 1-2 (core types + telemetry)
-- Session 1 (2026-11-03): agency#380 CoordinationTopology SPI + 6 implementations
+| Plan | `/Users/mdproctor/claude/casehub/slots/220/.plan` |
