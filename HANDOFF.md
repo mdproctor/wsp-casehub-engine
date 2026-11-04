@@ -1,33 +1,31 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-11-04, session 6)
+## Last Session (2026-11-04, session 7)
 
-### Agency budget-telemetry branch merged, engine#1286 implemented
+### agency#381 — LlmSwarmCoordinator → CentralisedTopology refactoring (in progress)
 
-Merged `issue-388-390-budget-telemetry-fixes` in agency (ff, 2 commits). Closed 10 issues (#388-#390, #393, #395-#400). Cleaned slot .plan: removed closed issues, unchecked engine#1286 (not implemented), unchecked engine#1286 which the previous session had accidentally marked done.
+Designed and partially implemented the decomposition of LlmSwarmCoordinator into CentralisedTopology. Full brainstorming with 7 validated decisions (standard decision review, 3 rounds). Key design change from original plan: provisioning maps to a new `DecisionOutcome.Provision` sealed variant (not WriteBack) — the decision review proved loop-identity dispatching is architecturally impossible since the executor receives no loop name.
 
-Implemented SwarmConvergenceEvaluator SPI (engine#1286): extracted convergence evaluation from `SwarmProgressTracker` into a pluggable `engine-api` interface. SPI types: `SwarmConvergenceEvaluator`, `ConvergenceSignal`, `ConvergenceState`, `ConvergenceContext`. Default `ThresholdConvergenceEvaluator` with `@DefaultBean`. Contract test in api, 7 unit tests in runtime-core, all existing tests updated. Also fixed pre-existing Spring `RuntimeManualConfig` compilation error (missing `TopologyProvider` parameter).
+Completed Batches 1-2 (3 of 5 tasks):
+- Added `DecisionOutcome.Provision` variant with null-safety and CentralisedTopology executor case arm
+- Fixed `SectionAwareContentSummariser` bug — assembled prompt context was silently discarded
+- Created three `ContentSummariser` adapters: `RoutingReasoner`, `AggregationReasoner`, `ProvisioningReasoner`
 
-Branch `issue-1286-swarm-convergence-evaluator` merged to engine main, pushed, issue closed. Blog written: "When Should the Swarm Stop?"
-
-### Bug filed: work-end clobbers slot-level .plan
-
-Filed Hortora/soredium#496. The work-end orchestrator overwrites the slot-level `.plan` (epic queue) with the workspace-level `.plan` (single-issue) during branch closure. Discovered when the epic's 18-item queue was replaced by a single completed issue. Manually restored. Issue requires TDD fix.
+Branch: `issue-381-llm-swarm-coordinator-centralised-topology` in agency repo (3 commits). Engine repo remains on main.
 
 ## Immediate Next Step
 
-Pick up agency#381 (LlmSwarmCoordinator refactor to CentralisedTopology, M/Med). This is the active item in the slot .plan. Requires reading `LlmSwarmCoordinator` and `CentralisedTopology` in the agency repo to understand the refactoring scope.
+Task 4: Wire loops into CentralisedTopology — update constructor to accept `SwarmProvisioningAdvisor` + `AgentProvider` + `UUID caseId`, create three `AgentDecisionLoop` instances in `configure()` using `TopologyContext.loopFactory()`, add `loops()` accessor, wire event→observation routing in `onSwarmEvent()`. Then Task 5: eliminate `LlmSwarmCoordinator` and remove `build()` from `SwarmCoordinatorBuilder`.
 
 ## Cross-Module
 
-- **Blocked by** — agency#391/#392 (topology test assertions) still blocked on pre-existing compilation errors in agency-core topology classes. Requires `mvn install -DskipTests -pl api` in engine before agency-core compilation.
+- **Blocked by** — agency#391/#392 (topology test assertions) still blocked on pre-existing compilation errors in agency-core topology classes
 
 ## References
 
 | Artifact | Path |
 |----------|------|
-| Blog (convergence) | `blog/2026-11-04-mp03-when-should-the-swarm-stop.md` |
-| Blog (telemetry) | `blog/2026-11-04-mp02-the-budget-that-couldnt-count.md` |
-| Blog (genericity) | `blog/2026-11-04-mp01-topology-genericity.md` |
-| Soredium bug | Hortora/soredium#496 |
+| Design spec | `specs/issue-381-llm-swarm-coordinator-centralised-topology/2026-11-04-llm-swarm-coordinator-centralised-topology-design.md` |
+| Decisions | `specs/issue-381-llm-swarm-coordinator-centralised-topology/decisions.md` |
+| Implementation plan | `plans/2026-11-04-llm-swarm-coordinator-centralised-topology.md` |
 | Plan | `/Users/mdproctor/claude/casehub/slots/220/.plan` |
