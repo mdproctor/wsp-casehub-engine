@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1286-swarm-convergence-evaluator
-state: closing:pushed
+state: closing:merged
 project-sha: 
 date: 
 issue-repo: casehubio/agency
