@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 420" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Before -->
+  <text x="180" y="28" font-size="15" font-weight="600" text-anchor="middle" fill="#333">Before</text>
+
+  <!-- Coordinator box -->
+  <rect x="40" y="45" width="280" height="240" rx="8" fill="#fff3e0" stroke="#e65100" stroke-width="1.5"/>
+  <text x="180" y="68" font-weight="600" fill="#e65100" text-anchor="middle">LlmSwarmCoordinator</text>
+  <line x1="60" y1="78" x2="300" y2="78" stroke="#e65100" stroke-width="0.5"/>
+
+  <!-- Internal components -->
+  <rect x="60" y="90" width="240" height="28" rx="4" fill="#ffcc80" stroke="#e65100" stroke-width="0.8"/>
+  <text x="180" y="109" text-anchor="middle" fill="#333">SwarmRoutingStrategy</text>
+
+  <rect x="60" y="128" width="240" height="28" rx="4" fill="#ffcc80" stroke="#e65100" stroke-width="0.8"/>
+  <text x="180" y="147" text-anchor="middle" fill="#333">CollectiveReasoningAggregation</text>
+
+  <rect x="60" y="166" width="240" height="28" rx="4" fill="#ffcc80" stroke="#e65100" stroke-width="0.8"/>
+  <text x="180" y="185" text-anchor="middle" fill="#333">SwarmProvisioningAdvisor</text>
+
+  <rect x="60" y="210" width="115" height="24" rx="4" fill="#ffe0b2" stroke="#e65100" stroke-width="0.5"/>
+  <text x="118" y="226" text-anchor="middle" font-size="11" fill="#555">BudgetPool</text>
+
+  <rect x="185" y="210" width="115" height="24" rx="4" fill="#ffe0b2" stroke="#e65100" stroke-width="0.5"/>
+  <text x="243" y="226" text-anchor="middle" font-size="11" fill="#555">PromptSections</text>
+
+  <rect x="60" y="244" width="240" height="24" rx="4" fill="#ffe0b2" stroke="#e65100" stroke-width="0.5"/>
+  <text x="180" y="260" text-anchor="middle" font-size="11" fill="#555">assembleCoordinatorPrompt()</text>
+
+  <!-- Arrow -->
+  <text x="395" y="175" font-size="28" text-anchor="middle" fill="#888">→</text>
+
+  <!-- After -->
+  <text x="630" y="28" font-size="15" font-weight="600" text-anchor="middle" fill="#333">After</text>
+
+  <!-- Topology box -->
+  <rect x="460" y="45" width="340" height="360" rx="8" fill="#e3f2fd" stroke="#1565c0" stroke-width="1.5"/>
+  <text x="630" y="68" font-weight="600" fill="#1565c0" text-anchor="middle">CentralisedTopology</text>
+  <line x1="480" y1="78" x2="780" y2="78" stroke="#1565c0" stroke-width="0.5"/>
+
+  <!-- Three loops -->
+  <rect x="480" y="88" width="300" height="66" rx="6" fill="#bbdefb" stroke="#1565c0" stroke-width="0.8"/>
+  <text x="630" y="106" text-anchor="middle" font-weight="500" fill="#0d47a1">Team Formation Loop</text>
+  <text x="630" y="122" text-anchor="middle" font-size="11" fill="#555">RoutingReasoner → AgentDecisionLoop</text>
+  <text x="630" y="138" text-anchor="middle" font-size="10" fill="#777">budget · prompt sections · emission policy</text>
+
+  <rect x="480" y="164" width="300" height="66" rx="6" fill="#bbdefb" stroke="#1565c0" stroke-width="0.8"/>
+  <text x="630" y="182" text-anchor="middle" font-weight="500" fill="#0d47a1">Collective Reasoning Loop</text>
+  <text x="630" y="198" text-anchor="middle" font-size="11" fill="#555">AggregationReasoner → AgentDecisionLoop</text>
+  <text x="630" y="214" text-anchor="middle" font-size="10" fill="#777">budget · prompt sections · emission policy</text>
+
+  <rect x="480" y="240" width="300" height="66" rx="6" fill="#bbdefb" stroke="#1565c0" stroke-width="0.8"/>
+  <text x="630" y="258" text-anchor="middle" font-weight="500" fill="#0d47a1">Provisioning Loop</text>
+  <text x="630" y="274" text-anchor="middle" font-size="11" fill="#555">ProvisioningReasoner → AgentDecisionLoop</text>
+  <text x="630" y="290" text-anchor="middle" font-size="10" fill="#777">budget · prompt sections · emission policy</text>
+
+  <!-- Shared infra -->
+  <rect x="480" y="318" width="145" height="28" rx="4" fill="#e1f5fe" stroke="#1565c0" stroke-width="0.5"/>
+  <text x="553" y="336" text-anchor="middle" font-size="11" fill="#555">EventStreamBus</text>
+
+  <rect x="635" y="318" width="145" height="28" rx="4" fill="#e1f5fe" stroke="#1565c0" stroke-width="0.5"/>
+  <text x="708" y="336" text-anchor="middle" font-size="11" fill="#555">Executor (type dispatch)</text>
+
+  <!-- Subtext -->
+  <text x="180" y="310" font-size="11" fill="#999" text-anchor="middle">Monolithic holder</text>
+  <text x="180" y="326" font-size="11" fill="#999" text-anchor="middle">All concerns coupled</text>
+  <text x="180" y="342" font-size="11" fill="#999" text-anchor="middle">Prompt assembly manual</text>
+
+  <text x="630" y="375" font-size="11" fill="#999" text-anchor="middle">Independent loops · Shared infrastructure</text>
+  <text x="630" y="391" font-size="11" fill="#999" text-anchor="middle">Budget, prompts, gating — composed, not coded</text>
+</svg>
