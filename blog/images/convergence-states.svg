@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="720" height="340" rx="8" fill="#fafafa" stroke="#e2e8f0"/>
+
+  <!-- Title -->
+  <text x="360" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="#1e293b">Convergence State Machine</text>
+
+  <!-- PROGRESSING - center left -->
+  <rect x="40" y="130" width="140" height="50" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="110" y="160" text-anchor="middle" font-size="12" font-weight="500" fill="#1e40af">PROGRESSING</text>
+
+  <!-- CONVERGING - center -->
+  <rect x="240" y="80" width="140" height="50" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="310" y="110" text-anchor="middle" font-size="12" font-weight="500" fill="#92400e">CONVERGING</text>
+
+  <!-- CONSENSUS - right -->
+  <rect x="540" y="80" width="140" height="50" rx="6" fill="#d1fae5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="610" y="110" text-anchor="middle" font-size="12" font-weight="500" fill="#065f46">CONSENSUS</text>
+
+  <!-- DEADLOCK - center bottom -->
+  <rect x="240" y="200" width="140" height="50" rx="6" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="310" y="230" text-anchor="middle" font-size="12" font-weight="500" fill="#991b1b">DEADLOCK</text>
+
+  <!-- DIMINISHING_RETURNS - right bottom -->
+  <rect x="540" y="200" width="140" height="50" rx="6" fill="#fce7f3" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="610" y="218" text-anchor="middle" font-size="11" font-weight="500" fill="#9d174d">DIMINISHING</text>
+  <text x="610" y="234" text-anchor="middle" font-size="11" font-weight="500" fill="#9d174d">RETURNS</text>
+
+  <!-- Arrows -->
+  <!-- PROGRESSING -> CONVERGING -->
+  <line x1="180" y1="145" x2="238" y2="115" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="195" y="120" font-size="9" fill="#64748b">consensus rising</text>
+
+  <!-- CONVERGING -> CONSENSUS -->
+  <line x1="380" y1="105" x2="538" y2="105" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="440" y="96" font-size="9" fill="#64748b">threshold crossed</text>
+
+  <!-- PROGRESSING -> DEADLOCK -->
+  <line x1="180" y1="170" x2="238" y2="210" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="185" y="205" font-size="9" fill="#64748b">stable but no consensus</text>
+
+  <!-- PROGRESSING -> DIMINISHING_RETURNS -->
+  <line x1="180" y1="165" x2="538" y2="220" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="340" y="210" font-size="9" fill="#64748b">exploration dropping</text>
+
+  <!-- Engine actions -->
+  <text x="610" y="160" text-anchor="middle" font-size="10" fill="#065f46" font-style="italic">auto-deprovision</text>
+  <text x="310" y="275" text-anchor="middle" font-size="10" fill="#991b1b" font-style="italic">escalate / topology change</text>
+  <text x="610" y="275" text-anchor="middle" font-size="10" fill="#9d174d" font-style="italic">budget conservation</text>
+
+  <!-- Legend -->
+  <text x="40" y="320" font-size="10" fill="#94a3b8">Engine acts mechanically on each signal — the evaluator decides what state we're in</text>
+</svg>

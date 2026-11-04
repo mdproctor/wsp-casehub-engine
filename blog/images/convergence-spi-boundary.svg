@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" font-family="'Segoe UI',system-ui,sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="720" height="280" rx="8" fill="#fafafa" stroke="#e2e8f0"/>
+
+  <!-- Engine side -->
+  <rect x="20" y="40" width="300" height="200" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-dasharray="4,3"/>
+  <text x="170" y="65" text-anchor="middle" font-size="13" font-weight="600" fill="#1e40af">Engine (mechanics)</text>
+
+  <rect x="40" y="85" width="120" height="40" rx="4" fill="white" stroke="#93c5fd"/>
+  <text x="100" y="110" text-anchor="middle" font-size="11" fill="#1e293b">compute scores</text>
+
+  <rect x="180" y="85" width="120" height="40" rx="4" fill="white" stroke="#93c5fd"/>
+  <text x="240" y="110" text-anchor="middle" font-size="11" fill="#1e293b">SwarmProgress</text>
+
+  <rect x="40" y="175" width="260" height="40" rx="4" fill="white" stroke="#93c5fd"/>
+  <text x="170" y="200" text-anchor="middle" font-size="11" fill="#1e293b">act on signal: deprovision / escalate / conserve</text>
+
+  <!-- SPI boundary -->
+  <line x1="350" y1="40" x2="350" y2="240" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6,4"/>
+  <text x="360" y="258" font-size="10" font-weight="600" fill="#d97706">SPI boundary</text>
+
+  <!-- Consumer side -->
+  <rect x="380" y="40" width="320" height="200" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-dasharray="4,3"/>
+  <text x="540" y="65" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">Consumer (judgment)</text>
+
+  <rect x="400" y="100" width="280" height="60" rx="4" fill="white" stroke="#fbbf24"/>
+  <text x="540" y="126" text-anchor="middle" font-size="12" font-weight="500" fill="#1e293b">SwarmConvergenceEvaluator</text>
+  <text x="540" y="146" text-anchor="middle" font-size="10" fill="#64748b">interpret progress → ConvergenceSignal</text>
+
+  <text x="430" y="195" font-size="10" fill="#78716c">• LLM-backed evaluator</text>
+  <text x="430" y="212" font-size="10" fill="#78716c">• distributed voting</text>
+  <text x="430" y="229" font-size="10" fill="#78716c">• domain heuristics</text>
+
+  <!-- Arrows across boundary -->
+  <path d="M300,105 L398,130" stroke="#475569" stroke-width="1.2" fill="none" marker-end="url(#arr)"/>
+  <text x="330" y="110" font-size="9" fill="#64748b">progress +</text>
+  <text x="330" y="122" font-size="9" fill="#64748b">context</text>
+
+  <path d="M398,140 L280,175" stroke="#475569" stroke-width="1.2" fill="none" marker-end="url(#arr)"/>
+  <text x="310" y="168" font-size="9" fill="#64748b">signal</text>
+</svg>
