@@ -1,60 +1,38 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-11-03)
+## Last Session (2026-11-04, session 4)
 
-### Branch `issue-377-distributed-per-agent-coordination` — #380 + #381 COMPLETE
+### Agency branch landed — #379, #380, #382 COMPLETE
 
-Designed and implemented agency#380 (CoordinationTopology SPI + concrete
-implementations) — L/High issue. Full brainstorm→spec→plan→implementation
-cycle. Also absorbed and closed agency#381 (LlmSwarmCoordinator refactor).
+Completed Batch 3 (integration/migration), squashed 21 commits to 1 semantic commit on agency main, pushed to origin. Branch `issue-377-distributed-per-agent-coordination` stamped closed.
 
-**Engine changes (1 commit on branch, rebased onto latest main):**
-- Renamed SwarmTopologyProvider → TopologyProvider (IntelliJ refactoring, 12 files)
-- Extended TopologyType with HIERARCHICAL and GRADUATED
+**Code review across all 3 batches** — 13 findings filed as agency#388-#400, all queued in the slot .plan:
+- **Critical (3):** BudgetAwareSummariser missing telemetry emission (#388), missing recordTokens (#389), buildTopology() missing setBudgetPool wiring (#390)
+- **Important (5):** BudgetPriority test assertions (#391), CoordinationPlan pool assertions (#392), concurrency stress test (#393), setBudgetPool swarm tests (#394), delegate failure test (#395)
+- **Minor (5):** AgentBudgetView priority accessor (#396), recordTokens correlationId unused (#397), BudgetGrant null checks (#398), createView duplicate handling (#399), TOCTOU documentation (#400)
 
-**Agency changes (6 commits):**
-- CoordinationTopology SPI (extends TopologyProvider) with 3 methods: configure, onSwarmEvent, onFeedback
-- Supporting types: TopologyContext (5-field universal record), CoordinationPlan (descriptors + executor), DecisionOutcomeExecutor, CoordinationFeedback, FeedbackSignal
-- 6 concrete topologies, all with full configure() + event handling:
-  - CentralisedTopology — 3 loops (team-formation, collective-reasoning, provisioning), refactored from LlmSwarmCoordinator
-  - DistributedTopology — N per-agent loops, FULL_AUTONOMY, STIGMERGY
-  - HybridTopology — 1 global + N local loops
-  - HierarchicalTopology — tree of loops (root/intermediate/leaf scopes)
-  - GraduatedTopology — dynamic scope via GraduationState (windowed feedback accumulator)
-  - HiveTopology — composes existing orchestration patterns via HivePatternAdapter
-- SwarmCoordinatorBuilder.buildTopology() bridges to the new SPI
-- 25 new files in agency-core, all tests passing
+**Genericity analysis** — CentralisedTopology uses concrete swarm types instead of existing generic interfaces (RoutingStrategy\<T\>, AggregationStrategy\<T\>). Filed as agency#401. Also filed #387 for future budget type placement in platform (neocortex cost visibility).
 
-**Rebase resolved 4 conflicts** with 9 new commits on main (swarm telemetry,
-gallery API, org-aware escalation). Conflicts were in RuntimeBeans.java
-(SwarmProvisioner producer), StigmergyCoordinator.java (agent counters vs
-work state notifier), and AgentWorkState.java (merged both sets of enum values).
-
-## Key decisions (#380)
-
-- TopologyContext: 5 universal fields (caseId, descriptor, agentProvider, loopFactory, invocationPolicy). Topology-specific deps constructor-injected.
-- CoordinationPlan: List<DecisionLoopDescriptor> + DecisionOutcomeExecutor. Factory + executor pattern.
-- GraduationState: mutable wrapper over immutable DecisionScope. Windowed feedback (80% success → upgrade, 50% failure → downgrade, SCOPE_VIOLATION → hard downgrade).
-- No Mockito in agency-core — used TestAgentProviders.noOp() helper and real DecisionLoopFactory instances.
-
-## Next action
-
-**agency#382** — feat: HierarchicalInvocationTracker — LLM budget management.
-M/Med complexity. Needs brainstorming. Related to the topology work (budget
-tracking is used by topologies) but a distinct concern — new SPI, new tracker,
-new budget model.
+**Blog entries:**
+- Revised: `2026-11-03-mp01-autonomy-budget.md` — practical cost arithmetic, degradation SVG, neocortex acknowledgement
+- New: `2026-11-04-mp01-topology-genericity.md` — ISP violation, CentralisedTopology coupling, "the interfaces were already there"
 
 ## Queue state
 
-Branch `issue-377-distributed-per-agent-coordination` is on main (work-end completed).
-The .plan queue has 4 remaining issues: #382, #383, #384, #385.
-#381 was absorbed into #380 and should be skipped/closed on next advance.
+Slot .plan at `/Users/mdproctor/claude/casehub/slots/220/.plan` has 25 items queued.
+Priority: #388-#390 (critical budget gaps), then #401 (CentralisedTopology generification).
 
 ## Artifacts
 
 | Artifact | Path |
 |----------|------|
-| Spec (#380) | `specs/issue-377-distributed-per-agent-coordination/2026-11-03-coordination-topology-design.md` |
-| Decisions (#380) | `specs/issue-377-distributed-per-agent-coordination/decisions-380.md` |
-| Plan (#380) | `plans/2026-11-03-coordination-topology.md` |
-| Blog | `blog/2026-11-03-mdp01-six-topologies-one-primitive.md` |
+| Spec (#382) | `specs/issue-382-per-agent-invocation-budget/2026-11-03-autonomy-budget-design.md` |
+| Plan (#382) | `plans/2026-11-03-autonomy-budget.md` |
+| Blog (budget) | `blog/2026-11-03-mp01-autonomy-budget.md` |
+| Blog (genericity) | `blog/2026-11-04-mp01-topology-genericity.md` |
+
+## Prior Sessions
+
+- Session 3 (2026-11-03): Batch 3 implementation — full topology/loop/swarm migration
+- Session 2 (2026-11-03): Spec/plan design + Batches 1-2 (core types + telemetry)
+- Session 1 (2026-11-03): agency#380 CoordinationTopology SPI + 6 implementations
