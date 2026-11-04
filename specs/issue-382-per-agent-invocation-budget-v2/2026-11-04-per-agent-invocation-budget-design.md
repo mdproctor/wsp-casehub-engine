@@ -64,8 +64,12 @@ var pool = new AutonomyBudgetPool(context.budgetPolicy(), context.caseId() + "-C
 
 routingStrategy.setTokenRecorder(t -> pool.recordTokens("routing", t));
 aggregation.setTokenRecorder(t -> pool.recordTokens("aggregation", t));
-provisioningAdvisor.setTokenRecorder(t -> pool.recordTokens("provisioning", t));
+if (provisioningAdvisor instanceof SwarmProvisioningAdvisorImpl impl) {
+    impl.setTokenRecorder(t -> pool.recordTokens("provisioning", t));
+}
 ```
+
+**Note:** `routingStrategy` and `aggregation` are concrete types in CentralisedTopology. The provisioner is held as the SPI interface `SwarmProvisioningAdvisor`, so `setTokenRecorder()` requires an `instanceof` check. This is consistent with the topology's existing tight coupling to the concrete swarm components.
 
 **Recording path precedence:** `tokenRecorder` > `budgetPool`. When both are set (not expected, but defensive), `tokenRecorder` wins. The YAML path uses `setBudgetPool()` only; the topology path uses `setTokenRecorder()` only.
 
