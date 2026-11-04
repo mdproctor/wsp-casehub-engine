@@ -1,28 +1,33 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-11-04, session 5)
+## Last Session (2026-11-04, session 6)
 
-### Budget telemetry fixes landed on agency
+### Agency budget-telemetry branch merged, engine#1286 implemented
 
-Fixed the three critical code-review bugs from session 4: BudgetAwareSummariser now emits Acquisition/Outcome telemetry events and records tokens back to the pool (#388, #389), buildTopology() now wires the budget pool (#390). Also fixed BudgetGrant null checks (#398), createView duplicate guard (#399), TOCTOU documentation (#400), correlationId parameter docs (#397), plus concurrency stress test (#393), delegate failure test (#395), and priority() accessor (#396).
+Merged `issue-388-390-budget-telemetry-fixes` in agency (ff, 2 commits). Closed 10 issues (#388-#390, #393, #395-#400). Cleaned slot .plan: removed closed issues, unchecked engine#1286 (not implemented), unchecked engine#1286 which the previous session had accidentally marked done.
 
-Branch: `issue-388-390-budget-telemetry-fixes` in agency repo (2 commits, not yet merged).
+Implemented SwarmConvergenceEvaluator SPI (engine#1286): extracted convergence evaluation from `SwarmProgressTracker` into a pluggable `engine-api` interface. SPI types: `SwarmConvergenceEvaluator`, `ConvergenceSignal`, `ConvergenceState`, `ConvergenceContext`. Default `ThresholdConvergenceEvaluator` with `@DefaultBean`. Contract test in api, 7 unit tests in runtime-core, all existing tests updated. Also fixed pre-existing Spring `RuntimeManualConfig` compilation error (missing `TopologyProvider` parameter).
 
-Plan advanced past 9 closed issues to reach agency#381. Engine#1286 (SwarmConvergenceEvaluator) accidentally marked done but is still OPEN — needs re-adding.
+Branch `issue-1286-swarm-convergence-evaluator` merged to engine main, pushed, issue closed. Blog written: "When Should the Swarm Stop?"
+
+### Bug filed: work-end clobbers slot-level .plan
+
+Filed Hortora/soredium#496. The work-end orchestrator overwrites the slot-level `.plan` (epic queue) with the workspace-level `.plan` (single-issue) during branch closure. Discovered when the epic's 18-item queue was replaced by a single completed issue. Manually restored. Issue requires TDD fix.
 
 ## Immediate Next Step
 
-Merge `issue-388-390-budget-telemetry-fixes` via work-end, then assess: agency#381 (LlmSwarmCoordinator refactor, M/Med) or engine#1286 (SwarmConvergenceEvaluator, S/Med). #391/#392 (topology test assertions) are blocked on pre-existing compilation errors in topology classes — need engine-api installed first.
+Pick up agency#381 (LlmSwarmCoordinator refactor to CentralisedTopology, M/Med). This is the active item in the slot .plan. Requires reading `LlmSwarmCoordinator` and `CentralisedTopology` in the agency repo to understand the refactoring scope.
 
 ## Cross-Module
 
-- Engine#1286 (SwarmConvergenceEvaluator) — OPEN on GitHub, accidentally marked done in .plan. Needs re-adding or manual plan edit.
-- Topology classes in agency-core have pre-existing compilation errors: `io.casehub.api.model.coordination` package requires engine-api to be installed. Run `mvn install -DskipTests -pl api` in engine before agency-core compilation.
+- **Blocked by** — agency#391/#392 (topology test assertions) still blocked on pre-existing compilation errors in agency-core topology classes. Requires `mvn install -DskipTests -pl api` in engine before agency-core compilation.
 
 ## References
 
 | Artifact | Path |
 |----------|------|
+| Blog (convergence) | `blog/2026-11-04-mp03-when-should-the-swarm-stop.md` |
 | Blog (telemetry) | `blog/2026-11-04-mp02-the-budget-that-couldnt-count.md` |
 | Blog (genericity) | `blog/2026-11-04-mp01-topology-genericity.md` |
+| Soredium bug | Hortora/soredium#496 |
 | Plan | `/Users/mdproctor/claude/casehub/slots/220/.plan` |
