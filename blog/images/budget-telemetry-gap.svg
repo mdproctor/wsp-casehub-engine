@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">
+
+  <text x="20" y="24" font-family="system-ui, -apple-system, sans-serif" font-weight="600" fill="#1e293b" font-size="14">BudgetAwareSummariser — the telemetry path that didn't exist</text>
+
+  <!-- Timeline -->
+  <line x1="60" y1="60" x2="60" y2="310" stroke="#cbd5e1" stroke-width="2"/>
+
+  <!-- Step 1: tryAcquire -->
+  <circle cx="60" cy="80" r="8" fill="#3b82f6"/>
+  <text x="80" y="84" fill="#1e293b" font-size="12" font-family="system-ui, -apple-system, sans-serif" font-weight="500">tryAcquire()</text>
+  <text x="220" y="84" fill="#64748b" font-size="11" font-family="system-ui, -apple-system, sans-serif">→ BudgetGrant.Granted { correlationId, pressure }</text>
+
+  <!-- Gap 1: Acquisition event -->
+  <rect x="80" y="100" width="320" height="44" rx="4" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <circle cx="60" cy="122" r="6" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <line x1="56" y1="118" x2="64" y2="126" stroke="#ef4444" stroke-width="2"/>
+  <line x1="64" y1="118" x2="56" y2="126" stroke="#ef4444" stroke-width="2"/>
+  <text x="95" y="118" fill="#991b1b" font-size="11" font-family="system-ui, -apple-system, sans-serif" font-weight="500">GAP: no Acquisition event emitted</text>
+  <text x="95" y="134" fill="#991b1b" font-size="10" font-family="system-ui, -apple-system, sans-serif">correlationId discarded — grant/deny invisible to telemetry</text>
+
+  <!-- Step 2: delegate -->
+  <circle cx="60" cy="170" r="8" fill="#3b82f6"/>
+  <text x="80" y="174" fill="#1e293b" font-size="12" font-family="system-ui, -apple-system, sans-serif" font-weight="500">delegate.summarise()</text>
+  <text x="240" y="174" fill="#64748b" font-size="11" font-family="system-ui, -apple-system, sans-serif">→ CompletionStage&lt;R&gt;</text>
+
+  <!-- Gap 2: recordTokens -->
+  <rect x="80" y="190" width="320" height="44" rx="4" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <circle cx="60" cy="212" r="6" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <line x1="56" y1="208" x2="64" y2="216" stroke="#ef4444" stroke-width="2"/>
+  <line x1="64" y1="208" x2="56" y2="216" stroke="#ef4444" stroke-width="2"/>
+  <text x="95" y="208" fill="#991b1b" font-size="11" font-family="system-ui, -apple-system, sans-serif" font-weight="500">GAP: view.recordTokens() never called</text>
+  <text x="95" y="224" fill="#991b1b" font-size="10" font-family="system-ui, -apple-system, sans-serif">token dimension always zero — budget is single-dimension (calls only)</text>
+
+  <!-- Gap 3: Outcome event -->
+  <rect x="80" y="245" width="320" height="44" rx="4" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <circle cx="60" cy="267" r="6" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <line x1="56" y1="263" x2="64" y2="271" stroke="#ef4444" stroke-width="2"/>
+  <line x1="64" y1="263" x2="56" y2="271" stroke="#ef4444" stroke-width="2"/>
+  <text x="95" y="263" fill="#991b1b" font-size="11" font-family="system-ui, -apple-system, sans-serif" font-weight="500">GAP: no Outcome event emitted</text>
+  <text x="95" y="279" fill="#991b1b" font-size="10" font-family="system-ui, -apple-system, sans-serif">no latency, no token consumption, no model attribution</text>
+
+  <!-- Return -->
+  <circle cx="60" cy="310" r="8" fill="#3b82f6"/>
+  <text x="80" y="314" fill="#1e293b" font-size="12" font-family="system-ui, -apple-system, sans-serif" font-weight="500">return result</text>
+
+  <!-- Right side: what should have existed -->
+  <rect x="440" y="60" width="260" height="250" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="570" y="84" text-anchor="middle" fill="#166534" font-size="12" font-family="system-ui, -apple-system, sans-serif" font-weight="600">Designed but never wired</text>
+
+  <text x="460" y="110" fill="#166534" font-size="11" font-family="system-ui, -apple-system, sans-serif">BudgetTelemetryEvent.Acquisition</text>
+  <text x="470" y="128" fill="#166534" font-size="10">correlationId, agentId, topologyId</text>
+  <text x="470" y="143" fill="#166534" font-size="10">priority, pressure, granted, timestamp</text>
+
+  <line x1="460" y1="158" x2="680" y2="158" stroke="#bbf7d0" stroke-width="1"/>
+
+  <text x="460" y="178" fill="#166534" font-size="11" font-family="system-ui, -apple-system, sans-serif">BudgetTelemetryEvent.Outcome</text>
+  <text x="470" y="196" fill="#166534" font-size="10">correlationId, modelId</text>
+  <text x="470" y="211" fill="#166534" font-size="10">tokensConsumed, latencyMs, timestamp</text>
+
+  <line x1="460" y1="226" x2="680" y2="226" stroke="#bbf7d0" stroke-width="1"/>
+
+  <text x="460" y="246" fill="#166534" font-size="11" font-family="system-ui, -apple-system, sans-serif">AgentBudgetView.recordTokens()</text>
+  <text x="470" y="264" fill="#166534" font-size="10">correlationId → token accumulation</text>
+  <text x="470" y="279" fill="#166534" font-size="10">pool-level pressure calculation</text>
+
+  <text x="460" y="300" fill="#166534" font-size="10" font-family="system-ui, -apple-system, sans-serif" font-style="italic">Types existed. Emission path did not.</text>
+
+</svg>
