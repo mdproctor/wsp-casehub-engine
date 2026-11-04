@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-1286-swarm-convergence-evaluator
-state: active
+state: closing:review
 project-sha: 
 date: 
 issue-repo: casehubio/agency
@@ -11,5 +11,6 @@ design-repo: project
 design-section-hashes: 
 flyway-next-v: 
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/agency#1286 — Issue #1286 ← active
