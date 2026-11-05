@@ -162,11 +162,11 @@ agency (tier 3 — depends on eidos, engine, qhorus)
 | eidos | #227 — Move DefaultGroupLifecycleService to desiredstate | CLOSED |
 | qhorus | #509 — Channel visibility | CLOSED |
 | desiredstate | #211 — Society lifecycle bridge | CLOSED |
-| engine | #1282 — CoordinationPattern + AuthorityModel | OPEN (slot 220) |
-| engine | #1284 — TopologyProvider SPI | OPEN (slot 220) |
-| engine | #1285 — AgentWorkLifecycleListener | OPEN (slot 220) |
-| agency | #380 — CoordinationTopology + HiveTopology | OPEN (slot 220) |
-| agency | #385 — TopologySpec YAML | OPEN (slot 220) |
+| engine | #1282 — CoordinationPattern + AuthorityModel | CLOSED |
+| engine | #1284 — TopologyProvider SPI | CLOSED |
+| engine | #1285 — AgentWorkLifecycleListener | CLOSED |
+| agency | #380 — CoordinationTopology + HiveTopology | CLOSED |
+| agency | #385 — TopologySpec YAML | CLOSED |
 
 ## Academic References
 
