@@ -9,7 +9,7 @@ status: draft
 series: issue-60-unified-execution-model
 ---
 
-*Part of a series on [#60 — unified execution model](https://github.com/casehubio/blocks/issues/60). Previous: [Delete the Duplicate, Promote the SPI](2026-07-28-mdp01-delete-duplicate-promote-spi.md).*
+*Part of a series on [#60 — unified execution model](https://github.com/casehubio/agency/issues/60). Previous: [Delete the Duplicate, Promote the SPI](2026-07-28-mdp01-delete-duplicate-promote-spi.md).*
 
 Most case management systems treat task dispatch as flat: a condition fires, a worker runs, the context updates. CaseHub's engine already goes further — compound PlanItems can contain children dispatched by a named strategy. But until now, the planning infrastructure couldn't express *how* a complex task decomposes into subtasks. The decomposition was invisible to the engine.
 

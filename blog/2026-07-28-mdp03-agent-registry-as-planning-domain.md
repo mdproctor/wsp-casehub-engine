@@ -10,7 +10,7 @@ tags: [goap, planning, agent-orchestration, disposition]
 series: issue-60-unified-execution-model
 ---
 
-*Part of a series on [#60 — Unified execution model](https://github.com/casehubio/blocks/issues/60). Previous: [Why your case needs decomposition](2026-07-28-mdp02-why-your-case-needs-decomposition.md).*
+*Part of a series on [#60 — Unified execution model](https://github.com/casehubio/agency/issues/60). Previous: [Why your case needs decomposition](2026-07-28-mdp02-why-your-case-needs-decomposition.md).*
 
 The unified execution model migration is done — all eight phases. But the interesting part wasn't the migration itself. It was what fell out at the end.
 
