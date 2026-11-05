@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#666"/>
+    </marker>
+  </defs>
+
+  <text x="360" y="24" text-anchor="middle" font-size="15" font-weight="600" fill="#333">Two-Level Degradation Model</text>
+
+  <!-- Level 1: Per-Call -->
+  <rect x="30" y="50" width="660" height="155" rx="10" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="50" y="72" font-size="14" font-weight="600" fill="#1565C0">Level 1: Per-Call Degradation</text>
+
+  <!-- Summariser chain -->
+  <rect x="60" y="90" width="140" height="36" rx="5" fill="#fff" stroke="#90CAF9"/>
+  <text x="130" y="112" text-anchor="middle" fill="#1565C0" font-size="11">DegradationAware</text>
+
+  <line x1="200" y1="108" x2="230" y2="108" stroke="#666" marker-end="url(#arr2)"/>
+
+  <!-- Fork -->
+  <rect x="240" y="82" width="110" height="22" rx="4" fill="#4CAF50" opacity="0.2" stroke="#4CAF50"/>
+  <text x="295" y="97" text-anchor="middle" fill="#2E7D32" font-size="11">LLM chain</text>
+
+  <rect x="240" y="110" width="110" height="22" rx="4" fill="#FF9800" opacity="0.2" stroke="#FF9800"/>
+  <text x="295" y="125" text-anchor="middle" fill="#E65100" font-size="11">Heuristic</text>
+
+  <!-- Decision diamond -->
+  <text x="215" y="100" text-anchor="middle" fill="#666" font-size="10">✓</text>
+  <text x="215" y="128" text-anchor="middle" fill="#666" font-size="10">✗</text>
+
+  <!-- Trigger -->
+  <rect x="400" y="86" width="140" height="50" rx="5" fill="#fff" stroke="#90CAF9"/>
+  <text x="470" y="105" text-anchor="middle" fill="#1565C0" font-size="11">DegradationTrigger</text>
+  <text x="470" y="120" text-anchor="middle" fill="#1565C0" font-size="11">shouldDegrade()</text>
+
+  <!-- Trigger sources -->
+  <rect x="570" y="76" width="100" height="24" rx="4" fill="#FFEBEE" stroke="#EF9A9A"/>
+  <text x="620" y="92" text-anchor="middle" fill="#C62828" font-size="10">Budget</text>
+
+  <rect x="570" y="106" width="100" height="24" rx="4" fill="#FFF3E0" stroke="#FFCC80"/>
+  <text x="620" y="122" text-anchor="middle" fill="#E65100" font-size="10">Latency</text>
+
+  <rect x="570" y="136" width="100" height="24" rx="4" fill="#F3E5F5" stroke="#CE93D8"/>
+  <text x="620" y="152" text-anchor="middle" fill="#6A1B9A" font-size="10">Cascade</text>
+
+  <text x="360" y="185" text-anchor="middle" fill="#1565C0" font-size="11" font-style="italic">Each call independently checks the trigger — no degradation state to manage</text>
+
+  <!-- Level 2: Cascade -->
+  <rect x="30" y="220" width="660" height="165" rx="10" fill="#FFF3E0" stroke="#E65100" stroke-width="1.5"/>
+  <text x="50" y="242" font-size="14" font-weight="600" fill="#E65100">Level 2: Topology Cascade (one-way ratchet)</text>
+
+  <!-- Topology responses -->
+  <rect x="60" y="260" width="130" height="50" rx="5" fill="#fff" stroke="#FFCC80"/>
+  <text x="125" y="280" text-anchor="middle" fill="#E65100" font-size="11" font-weight="500">Centralised</text>
+  <text x="125" y="298" text-anchor="middle" fill="#E65100" font-size="10">all-heuristic</text>
+
+  <rect x="210" y="260" width="130" height="50" rx="5" fill="#fff" stroke="#FFCC80"/>
+  <text x="275" y="280" text-anchor="middle" fill="#E65100" font-size="11" font-weight="500">Graduated</text>
+  <text x="275" y="298" text-anchor="middle" fill="#E65100" font-size="10">force STIMULUS</text>
+
+  <rect x="360" y="260" width="130" height="50" rx="5" fill="#fff" stroke="#FFCC80"/>
+  <text x="425" y="280" text-anchor="middle" fill="#E65100" font-size="11" font-weight="500">Hive</text>
+  <text x="425" y="298" text-anchor="middle" fill="#E65100" font-size="10">DEBATE→VOTING</text>
+
+  <rect x="510" y="260" width="160" height="50" rx="5" fill="#fff" stroke="#FFCC80"/>
+  <text x="590" y="280" text-anchor="middle" fill="#E65100" font-size="11" font-weight="500">Hybrid / Hierarchical</text>
+  <text x="590" y="298" text-anchor="middle" fill="#E65100" font-size="10">force-degrade leaves</text>
+
+  <text x="360" y="345" text-anchor="middle" fill="#E65100" font-size="11">Threshold crossed → topology responds → response persists for the execution</text>
+
+  <text x="360" y="370" text-anchor="middle" fill="#E65100" font-size="11" font-style="italic">Individual loops can recover. The topology-level response never reverses.</text>
+</svg>
