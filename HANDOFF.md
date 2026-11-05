@@ -2,27 +2,27 @@
 
 ## Last Session (2026-11-05, session 10)
 
+### agency#385 — YAML parity TopologySpec registries (complete)
+
+Three new sealed record hierarchies in `agentic-yaml`:
+- **TopologySpec** — `pattern` discriminator: swarm/hive/mesh/many. Swarm and Mesh default to DISTRIBUTED, Hive to CENTRALISED. Authority field overrides default. Hive carries roles, orchestration, and per-role policy (obligations/permissions). RolePolicySpec nested record for policy config.
+- **DecisionScopeSpec** — reactive→STIMULUS_DRIVEN, task-adaptation→TASK_ADAPTATION, full-autonomy→FULL_AUTONOMY
+- **CommunicationModeSpec** — stigmergy→STIGMERGY, direct-messaging→DIRECT_MESSAGING, broadcast→BROADCAST, group-channel→BROADCAST (temp mapping)
+
+Three registries (TopologySpecRegistry, DecisionScopeSpecRegistry, CommunicationModeSpecRegistry) resolve specs to engine enums via exhaustive switch. PatternCompiler wired with resolve methods. PatternDefinition.Swarm extended with topology/scope/communication nullable fields.
+
+55 tests: 8 TopologySpec, 3 DecisionScopeSpec, 4 CommunicationModeSpec, 8 TopologyRegistry, 3 ScopeRegistry, 4 CommRegistry, 25 PatternDefinitionSerialization (including swarm-topology integration).
+
 ### agency#384 — DecisionLoopEvent per-agent loop observability (complete)
 
-Sealed event hierarchy `DecisionLoopEvent` with 7 variants: LoopTriggered, ObservationGathered, ReasoningStarted, ReasoningCompleted, ActionDispatched, BudgetExhausted, Degraded. Common fields (caseId, agentId, timestamp) on the sealed interface.
+Sealed event hierarchy + OTel metrics + factory bridge emission wiring. See previous handover for details.
 
-Extended `ExecutionEventListener` with `onDecisionLoopEvent` callback. Added 5 OTel metrics to `MetricsListener`: loop triggers, reasoning duration/tokens, budget exhaustions, degradations.
-
-Wired emission through factory bridge pattern — `DecisionLoopFactory.create()` accepts optional `Consumer<DecisionLoopEvent>` (backward-compatible 8-param overload). Bridge consumers intercept `BudgetTelemetryEvent` → ReasoningStarted/ReasoningCompleted/BudgetExhausted and `SwarmDegradedEvent` → Degraded. `AgentDecisionLoop.collect()` emits ObservationGathered. LoopTriggered fires at creation.
-
-ActionDispatched deferred — output bus lacks per-loop identity, needs enrichment to carry agent context.
-
-Engine: extended `SwarmTelemetry` record with `invocationCount`, `tokensConsumed`, `totalLatency` on branch `issue-384-decision-loop-event-observability`.
-
-All tests pass: 30 loop tests, 12 MetricsListener tests, 7 SwarmTelemetryCollector tests.
-
-Branches:
-- agency: `issue-383-per-agent-degradation-cascade-policy` (2 commits for #384)
-- engine: `issue-384-decision-loop-event-observability` (1 commit)
+Branch: agency `issue-383-per-agent-degradation-cascade-policy` (4 commits for #384 + #385)
+Engine: `issue-384-decision-loop-event-observability` (1 commit)
 
 ## Immediate Next Step
 
-Advance to #385 (YAML parity TopologySpec registries).
+Advance to next issue in the queue (#391 BudgetPriority test assertions or #392 CoordinationPlan pool assertions).
 
 ## Cross-Module
 
