@@ -1,47 +1,28 @@
 # HANDOFF — casehub-engine
 
-## Last Session (2026-11-04, session 8)
+## Last Session (2026-11-05, session 9)
 
-### agency#381 — LlmSwarmCoordinator → CentralisedTopology refactoring (complete)
+### agency#383 — Per-agent degradation + cascade policy (complete)
 
-Completed all 5 tasks across 4 batches. The LlmSwarmCoordinator class has been eliminated — CentralisedTopology is now the single coordination path.
+Designed and implemented a two-level degradation model for the coordination topology system. Per-loop: composable `DegradationTrigger` SPI checks budget exhaustion and latency breaches before each LLM call, switching to heuristic fallback via `DegradationAwareSummariser` decorator. Cascade: when enough loops degrade, the topology responds with a one-way structural change — CentralisedTopology forces all-heuristic, GraduatedTopology forces STIMULUS_DRIVEN scope, HiveTopology simplifies orchestration pattern.
 
-**Batch 1 (Foundation):**
-- Added `DecisionOutcome.Provision` variant with null-safety and CentralisedTopology executor case arm
-- Fixed `SectionAwareContentSummariser` bug — assembled prompt context was silently discarded
+Key design decision: degradation is stateless per-call (trigger IS the state), cascade is a one-way ratchet. Push model via `SwarmDegradedEvent` to new `CoordinationTopology.onDegradation()` — pull model had a dead path where budget-exhausted loops stop producing feedback.
 
-**Batch 2 (Adapters):**
-- Created three `ContentSummariser` adapters: `RoutingReasoner`, `AggregationReasoner`, `ProvisioningReasoner`
-
-**Batch 3 (Wiring):**
-- Wired three `AgentDecisionLoop` instances into CentralisedTopology with event→observation routing
-- Constructor gained `SwarmProvisioningAdvisor` + `Supplier<List<RoutingCandidate>>` (plan deviation: `AgentProvider.listCandidates()` doesn't exist)
-- Each loop gets a distinct agentId (descriptor name) for budget isolation
-
-**Batch 4 (Cleanup):**
-- Deleted `LlmSwarmCoordinator` class (0 production callers)
-- Removed `build()` from `SwarmCoordinatorBuilder` (dead code) — `buildTopology()` is the single path
-- Deleted `LlmSwarmCoordinatorTest`, removed 4 `build()`-related tests from `SwarmCoordinatorBuilderTest`
-- Migrated `SwarmPromptCustomiserIntegrationTest` to use `buildTopology()`
-- Updated CLAUDE.md module index
-
-Branch: `issue-381-llm-swarm-coordinator-centralised-topology` in agency repo (5 commits). Engine repo remains on main.
-
-All 1896 agency module tests pass.
+Branch: `issue-383-per-agent-degradation-cascade-policy` in agency repo (12 commits). Engine: `TopologyContext` gained `DegradationPolicy` field. Ready for `work end`.
 
 ## Immediate Next Step
 
-Issue #381 is functionally complete. Ready for `work end` to close the branch, or proceed to the next issue in the queue (#382 — HierarchicalInvocationTracker budget).
+Run `work end` on agency#383 to close the branch, then advance to #384 (DecisionLoopEvent observability).
 
 ## Cross-Module
 
-- **Blocked by** — agency#391/#392 (topology test assertions) still blocked on pre-existing compilation errors in agency-core topology classes
+- **agency#391/#392** — topology test assertions still blocked on pre-existing compilation errors in agency-core topology classes
 
 ## References
 
 | Artifact | Path |
 |----------|------|
-| Design spec | `specs/issue-381-llm-swarm-coordinator-centralised-topology/2026-11-04-llm-swarm-coordinator-centralised-topology-design.md` |
-| Decisions | `specs/issue-381-llm-swarm-coordinator-centralised-topology/decisions.md` |
-| Implementation plan | `plans/2026-11-04-llm-swarm-coordinator-centralised-topology.md` |
+| Design spec | `specs/issue-383-per-agent-degradation-cascade-policy/2026-11-04-per-agent-degradation-cascade-policy-design.md` |
+| Decisions | `specs/issue-383-per-agent-degradation-cascade-policy/decisions.md` |
+| Implementation plan | `plans/2026-11-04-per-agent-degradation-cascade-policy.md` |
 | Plan | `/Users/mdproctor/claude/casehub/slots/220/.plan` |
