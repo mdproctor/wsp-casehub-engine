@@ -1,0 +1,19 @@
+# Work Plan — main
+
+## State
+branch: issue-1305-society-integration-hardening
+status: active
+project-sha: 
+date: 
+issue-repo: casehubio/engine
+covers: 1305
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [x] casehubio/engine#1305 — Issue #1305
+- [ ] casehubio/engine#1306 — TopologyProvider must be agent-scoped ← active
+- [ ] casehubio/engine#1308 — Add onTopologyChanged to AgentWorkLifecycleListener
+- [ ] casehubio/engine#1309 — TeamDetector suppress promoted agents
+- [ ] casehubio/engine#1310 — Add GROUP_CHANNEL to CommunicationMode
