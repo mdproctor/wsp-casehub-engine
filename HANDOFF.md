@@ -2,31 +2,29 @@
 
 ## Last Session (2026-11-05, session 10)
 
-### agency#385 — YAML parity TopologySpec registries (complete)
+### Epic agency#377 — Distributed per-agent LLM coordination (COMPLETE)
 
-Three new sealed record hierarchies in `agentic-yaml`:
-- **TopologySpec** — `pattern` discriminator: swarm/hive/mesh/many. Swarm and Mesh default to DISTRIBUTED, Hive to CENTRALISED. Authority field overrides default. Hive carries roles, orchestration, and per-role policy (obligations/permissions). RolePolicySpec nested record for policy config.
-- **DecisionScopeSpec** — reactive→STIMULUS_DRIVEN, task-adaptation→TASK_ADAPTATION, full-autonomy→FULL_AUTONOMY
-- **CommunicationModeSpec** — stigmergy→STIGMERGY, direct-messaging→DIRECT_MESSAGING, broadcast→BROADCAST, group-channel→BROADCAST (temp mapping)
+Completed all 18 issues in one session. This session delivered issues #384–#401:
 
-Three registries (TopologySpecRegistry, DecisionScopeSpecRegistry, CommunicationModeSpecRegistry) resolve specs to engine enums via exhaustive switch. PatternCompiler wired with resolve methods. PatternDefinition.Swarm extended with topology/scope/communication nullable fields.
+**#384 — DecisionLoopEvent observability:** Sealed event hierarchy (7 variants), ExecutionEventListener callback, 5 OTel metrics in MetricsListener, factory bridge emission wiring.
 
-55 tests: 8 TopologySpec, 3 DecisionScopeSpec, 4 CommunicationModeSpec, 8 TopologyRegistry, 3 ScopeRegistry, 4 CommRegistry, 25 PatternDefinitionSerialization (including swarm-topology integration).
+**#385 — YAML parity specs:** TopologySpec (swarm/hive/mesh/many), DecisionScopeSpec (reactive/task-adaptation/full-autonomy), CommunicationModeSpec (stigmergy/direct-messaging/broadcast/group-channel). Registries + PatternDefinition.Swarm extension + PatternCompiler wiring.
 
-### agency#384 — DecisionLoopEvent per-agent loop observability (complete)
+**#391 — BudgetPriority test assertions:** All 6 topology tests now verify the priority assignment table.
 
-Sealed event hierarchy + OTel metrics + factory bridge emission wiring. See previous handover for details.
+**#392 — CoordinationPlan pool assertions:** All 6 topology tests verify pool topologyId and initial state.
 
-Branch: agency `issue-383-per-agent-degradation-cascade-policy` (4 commits for #384 + #385)
-Engine: `issue-384-decision-loop-event-observability` (1 commit)
+**#394 — setBudgetPool swarm tests:** 3 exhausted-budget fallback tests for SwarmRoutingStrategy, CollectiveReasoningAggregation, SwarmProvisioningAdvisorImpl.
+
+**#401 — Genericise CentralisedTopology:** `CentralisedTopology<C>` with `RoutingStrategy<C>`/`AggregationStrategy<C>`. SwarmFallbackStrategy dissolved from constructor. Heuristic summarisers + swarm event handler passed externally. `SwarmCoordinatorBuilder` creates `CentralisedTopology<SwarmContext>`.
+
+Branches:
+- agency: `issue-383-per-agent-degradation-cascade-policy` (8 commits for #384–#401)
+- engine: `issue-384-decision-loop-event-observability` (1 commit — SwarmTelemetry LLM fields)
 
 ## Immediate Next Step
 
-Advance to next issue in the queue (#391 BudgetPriority test assertions or #392 CoordinationPlan pool assertions).
-
-## Cross-Module
-
-- **agency#391/#392** — topology test assertions still blocked on pre-existing compilation errors in agency-core topology classes
+Run `work end` to close the epic — rebase, squash, push.
 
 ## References
 
