@@ -161,7 +161,7 @@ agency (tier 3 — depends on eidos, engine, qhorus)
 | eidos | #216 — Society epic (types, storage) | CLOSED |
 | eidos | #227 — Move DefaultGroupLifecycleService to desiredstate | CLOSED |
 | qhorus | #509 — Channel visibility | CLOSED |
-| desiredstate | #211 — Society lifecycle bridge | OPEN |
+| desiredstate | #211 — Society lifecycle bridge | CLOSED |
 | engine | #1282 — CoordinationPattern + AuthorityModel | OPEN (slot 220) |
 | engine | #1284 — TopologyProvider SPI | OPEN (slot 220) |
 | engine | #1285 — AgentWorkLifecycleListener | OPEN (slot 220) |
