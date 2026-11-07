@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 380" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <style>
+      text { font-size: 13px; fill: #1a1a2e; }
+      .title { font-size: 14px; font-weight: 600; }
+      .subtitle { font-size: 11px; fill: #64748b; }
+      .mode { font-size: 11px; font-weight: 600; }
+      .box { rx: 6; ry: 6; stroke-width: 1.5; }
+      .arrow { stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+      .dashed { stroke-dasharray: 6 3; }
+    </style>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="720" height="380" fill="#fafafa" rx="8"/>
+  <text x="360" y="28" text-anchor="middle" class="title" font-size="16">Emergent → Declared Role Bridging</text>
+
+  <!-- Engine side -->
+  <rect x="20" y="50" width="220" height="280" rx="8" fill="#f3e5f5" stroke="#ab47bc" stroke-width="1" opacity="0.3"/>
+  <text x="130" y="70" text-anchor="middle" class="title" fill="#7b1fa2">Engine (detection)</text>
+
+  <rect x="40" y="85" width="180" height="50" class="box" fill="#f3e5f5" stroke="#ab47bc"/>
+  <text x="130" y="107" text-anchor="middle" class="title" fill="#6a1b9a">RoleTracker</text>
+  <text x="130" y="123" text-anchor="middle" class="subtitle">behavioral clustering</text>
+
+  <rect x="40" y="160" width="180" height="45" class="box" fill="#f3e5f5" stroke="#ab47bc"/>
+  <text x="130" y="180" text-anchor="middle" fill="#6a1b9a">DetectedRole</text>
+  <text x="130" y="195" text-anchor="middle" class="subtitle">fingerprint · stability · drift</text>
+
+  <!-- Arrow tracker → detected -->
+  <line x1="130" y1="135" x2="130" y2="160" class="arrow" stroke="#64748b"/>
+
+  <!-- Bridge SPI -->
+  <rect x="270" y="120" width="180" height="55" class="box" fill="#e3f2fd" stroke="#42a5f5"/>
+  <text x="360" y="143" text-anchor="middle" class="title" fill="#1565c0">RoleBridgingStrategy</text>
+  <text x="360" y="161" text-anchor="middle" class="subtitle">map() → RoleSuggestion</text>
+
+  <!-- Arrow detected → strategy -->
+  <line x1="220" y1="182" x2="270" y2="152" class="arrow" stroke="#64748b"/>
+
+  <!-- Agency side -->
+  <rect x="480" y="50" width="220" height="280" rx="8" fill="#e8f5e9" stroke="#66bb6a" stroke-width="1" opacity="0.3"/>
+  <text x="590" y="70" text-anchor="middle" class="title" fill="#2e7d32">Agency (topology)</text>
+
+  <!-- Policy -->
+  <rect x="500" y="85" width="180" height="55" class="box" fill="#e8f5e9" stroke="#66bb6a"/>
+  <text x="590" y="107" text-anchor="middle" class="title" fill="#2e7d32">RoleBridgingPolicy</text>
+  <text x="590" y="123" text-anchor="middle" class="subtitle">mode · thresholds · hold cycles</text>
+
+  <!-- Arrow strategy → policy -->
+  <line x1="450" y1="147" x2="500" y2="112" class="arrow" stroke="#64748b"/>
+
+  <!-- Three modes -->
+  <rect x="500" y="160" width="180" height="75" class="box" fill="#f1f8e9" stroke="#aed581"/>
+  <text x="515" y="180" class="mode" fill="#558b2f">ADVISORY</text>
+  <text x="605" y="180" class="subtitle">→ surface for review</text>
+  <text x="515" y="200" class="mode" fill="#558b2f">AUTO_ABOVE</text>
+  <text x="620" y="200" class="subtitle">→ apply if confident</text>
+  <text x="515" y="220" class="mode" fill="#558b2f">AUTOMATIC</text>
+  <text x="605" y="220" class="subtitle">→ self-organise</text>
+
+  <!-- Topology update -->
+  <rect x="500" y="255" width="180" height="50" class="box" fill="#e8f5e9" stroke="#66bb6a"/>
+  <text x="590" y="277" text-anchor="middle" class="title" fill="#2e7d32">TopologyDescriptor</text>
+  <text x="590" y="293" text-anchor="middle" class="subtitle">agentRoles updated</text>
+
+  <!-- Arrow policy → topology -->
+  <line x1="590" y1="235" x2="590" y2="255" class="arrow" stroke="#64748b"/>
+
+  <!-- Oscillation protection callout -->
+  <rect x="40" y="230" width="180" height="70" class="box dashed" fill="#fff8e1" stroke="#ffa726"/>
+  <text x="130" y="252" text-anchor="middle" class="title" fill="#e65100" font-size="12">Oscillation Protection</text>
+  <text x="130" y="268" text-anchor="middle" class="subtitle">asymmetric thresholds</text>
+  <text x="130" y="282" text-anchor="middle" class="subtitle">hysteresis band + hold cycles</text>
+
+  <!-- Dashed line to policy -->
+  <line x1="220" y1="265" x2="500" y2="200" class="arrow dashed" stroke="#ffa726"/>
+</svg>
