@@ -1,7 +1,7 @@
 # Work Plan — main
 
 ## State
-branch: issue-1295-detected-role-agent-role-bridging
+branch: 
 status: active
 project-sha: 
 date: 
@@ -18,8 +18,8 @@ flyway-next-v:
 - [x] casehubio/engine#1309 — TeamDetector suppress promoted agents
 - [x] casehubio/engine#1310 — Add GROUP_CHANNEL to CommunicationMode
 - [x] casehubio/engine#1294 — resolve Conductor SUPERVISOR overlap
-- [ ] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI ← active
-- [ ] casehubio/engine#1290 — TransitionPolicy graduated topology transition
+- [x] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
+- [ ] casehubio/engine#1290 — TransitionPolicy graduated topology transition ← active
 - [ ] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
 - [ ] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
 - [ ] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
