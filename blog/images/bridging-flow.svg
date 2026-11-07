@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arr-g" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#16a34a"/>
+    </marker>
+  </defs>
+
+  <!-- Step 1: Detection -->
+  <rect x="30" y="50" width="140" height="60" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="100" y="75" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">DetectedRoles</text>
+  <text x="100" y="90" text-anchor="middle" font-size="9" fill="#64748b">from RoleTracker</text>
+
+  <!-- Arrow 1 -->
+  <line x1="170" y1="80" x2="208" y2="80" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 2: Strategy -->
+  <rect x="210" y="50" width="140" height="60" rx="8" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="280" y="70" text-anchor="middle" font-size="11" font-weight="600" fill="#6d28d9">RoleBridging</text>
+  <text x="280" y="83" text-anchor="middle" font-size="11" font-weight="600" fill="#6d28d9">Strategy</text>
+  <text x="280" y="98" text-anchor="middle" font-size="9" fill="#64748b">maps behavior → role</text>
+
+  <!-- Arrow 2 -->
+  <line x1="350" y1="80" x2="388" y2="80" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 3: Suggestions -->
+  <rect x="390" y="50" width="140" height="60" rx="8" fill="#fefce8" stroke="#fde047" stroke-width="1.5"/>
+  <text x="460" y="70" text-anchor="middle" font-size="11" font-weight="600" fill="#a16207">RoleSuggestions</text>
+  <text x="460" y="90" text-anchor="middle" font-size="9" fill="#64748b">name + confidence</text>
+
+  <!-- Arrow 3: down to policy -->
+  <line x1="460" y1="110" x2="460" y2="148" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 4: Policy -->
+  <rect x="370" y="150" width="180" height="80" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="460" y="172" text-anchor="middle" font-size="11" font-weight="600" fill="#c2410c">RoleBridgingPolicy</text>
+  <text x="460" y="192" text-anchor="middle" font-size="10" fill="#9a3412">ADVISORY</text>
+  <text x="460" y="206" text-anchor="middle" font-size="10" fill="#9a3412">AUTO_ABOVE_THRESHOLD</text>
+  <text x="460" y="220" text-anchor="middle" font-size="10" fill="#9a3412">AUTOMATIC</text>
+
+  <!-- Arrow 4: down to conflict -->
+  <line x1="460" y1="230" x2="460" y2="258" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 5: Conflict Resolution -->
+  <rect x="370" y="260" width="180" height="50" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="460" y="282" text-anchor="middle" font-size="11" font-weight="600" fill="#991b1b">Conflict Resolution</text>
+  <text x="460" y="298" text-anchor="middle" font-size="9" fill="#64748b">exclusive positions: highest wins</text>
+
+  <!-- Arrow 5: down to topology -->
+  <line x1="460" y1="310" x2="460" y2="338" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+  <!-- Step 6: Applied -->
+  <rect x="370" y="340" width="180" height="44" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="460" y="358" text-anchor="middle" font-size="11" font-weight="600" fill="#15803d">TopologyDescriptor</text>
+  <text x="460" y="374" text-anchor="middle" font-size="9" fill="#64748b">declared roles updated</text>
+
+  <!-- Oscillation protection sidebar -->
+  <rect x="30" y="160" width="300" height="130" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="180" y="182" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">Oscillation Protection</text>
+
+  <text x="45" y="205" font-size="10" fill="#475569">Promote threshold:  minConfidence = 0.8</text>
+  <text x="45" y="222" font-size="10" fill="#475569">Demote threshold:   demotionConfidence = 0.5</text>
+  <text x="45" y="239" font-size="10" fill="#475569">Hold period:        minHoldCycles = 3</text>
+
+  <rect x="45" y="252" width="270" height="24" rx="4" fill="#fef9c3" stroke="#fde047" stroke-width="0.5"/>
+  <text x="180" y="268" text-anchor="middle" font-size="9" fill="#854d0e">Hysteresis band [0.5 .. 0.8] prevents flip-flopping</text>
+
+  <!-- Dashed line connecting sidebar to policy -->
+  <line x1="330" y1="210" x2="368" y2="195" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+</svg>
