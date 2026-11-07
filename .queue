@@ -1,7 +1,7 @@
 # Work Plan — main
 
 ## State
-branch: 
+branch: issue-1294-conductor-supervisor-overlap
 status: active
 project-sha: 
 date: 
@@ -18,6 +18,11 @@ flyway-next-v:
 - [x] casehubio/engine#1309 — TeamDetector suppress promoted agents
 - [x] casehubio/engine#1310 — Add GROUP_CHANNEL to CommunicationMode
 - [ ] casehubio/engine#1294 — resolve Conductor SUPERVISOR overlap ← active
+  - [x] Batch 1: Marker+type-hierarchy
+    - [x] Task 1: Create SupervisorGateBehavior and wire OversightGateService
+    - [x] Task 2: Wire ConductorInboxManager and add runtime-core tests
+  - [x] Batch 2: Javadoc-cross-refs
+    - [x] Task 3: Update Javadoc on PlatformRole and ActionRiskClassifier
 - [ ] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
 - [ ] casehubio/engine#1290 — TransitionPolicy graduated topology transition
 - [ ] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
