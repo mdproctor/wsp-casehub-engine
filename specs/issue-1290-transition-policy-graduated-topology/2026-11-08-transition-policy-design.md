@@ -61,7 +61,7 @@ public sealed interface TransitionTrigger
 }
 ```
 
-**Threshold** — fires when a named metric crosses a value. Metric names are application-defined (e.g., "swarm.size", "coordination.efficiency"). The engine does not prescribe the metric namespace.
+**Threshold** — fires when a named metric reaches or exceeds the value. Metric names are application-defined (e.g., "swarm.size", "coordination.efficiency"). The engine does not prescribe the metric namespace. The direction is always "at or above" — for "at or below" triggers, the TopologyProvider implementation inverts the metric (e.g., "coordination.inefficiency" rather than a directional flag on the trigger).
 
 **Time** — fires after a duration elapses from the topology's activation. The engine tracks activation time; the TopologyProvider evaluates against it.
 
