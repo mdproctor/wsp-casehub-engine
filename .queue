@@ -20,11 +20,11 @@ flyway-next-v:
 - [x] casehubio/engine#1294 — resolve Conductor SUPERVISOR overlap
 - [x] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
 - [ ] casehubio/engine#1290 — TransitionPolicy graduated topology transition ← active
-  - [ ] Batch 1: Vocabulary
-    - [ ] Task 1: TransitionTrigger + TransitionStrategy
-    - [ ] Task 2: TransitionPolicy record
-  - [ ] Batch 2: SPI + Cleanup
-    - [ ] Task 3: TopologyProvider extension + GRADUATED removal
+  - [x] Batch 1: Vocabulary
+    - [x] Task 1: TransitionTrigger + TransitionStrategy
+    - [x] Task 2: TransitionPolicy record
+  - [x] Batch 2: SPI + Cleanup
+    - [x] Task 3: TopologyProvider extension + GRADUATED removal
 - [ ] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
 - [ ] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
 - [ ] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
