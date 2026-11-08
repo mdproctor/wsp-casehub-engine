@@ -1,7 +1,7 @@
 # Work Plan — main
 
 ## State
-branch: issue-1290-transition-policy-graduated-topology
+branch: 
 status: active
 project-sha: 
 date: 
@@ -19,12 +19,7 @@ flyway-next-v:
 - [x] casehubio/engine#1310 — Add GROUP_CHANNEL to CommunicationMode
 - [x] casehubio/engine#1294 — resolve Conductor SUPERVISOR overlap
 - [x] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
-- [ ] casehubio/engine#1290 — TransitionPolicy graduated topology transition ← active
-  - [x] Batch 1: Vocabulary
-    - [x] Task 1: TransitionTrigger + TransitionStrategy
-    - [x] Task 2: TransitionPolicy record
-  - [x] Batch 2: SPI + Cleanup
-    - [x] Task 3: TopologyProvider extension + GRADUATED removal
-- [ ] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
+- [x] casehubio/engine#1290 — TransitionPolicy graduated topology transition
+- [ ] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract ← active
 - [ ] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
 - [ ] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
