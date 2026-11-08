@@ -2,31 +2,37 @@
 
 ## Last Session
 
-Completed #1314 (per-agent stigmergy observation feed and write-back SPI). Full brainstorming → design → implementation → close cycle:
+Working on #1304 (bridge DecisionLoopEvent metrics into SwarmTelemetry LLM fields). Cross-repo implementation spanning engine and agency repos.
 
-- Added `sources: Set<String>` to `PerceivedSignal` for multi-agent attribution
-- Created `AgentObservationProvider` SPI (pull-based read: case-scoped signals, agent-scoped observations)
-- Created `AgentWriteBack` SPI (signal deposits, observation appends with locking, context writes deferred to agency#361)
-- Default implementations in runtime-core delegating to `SignalRegistry`/`ObservationRegistry`
-- CDI wiring via `@DefaultBean` producers in `SpiDefaultBeans`
-- Enriched `INTEREST_CONVERGENCE` events with `watchingAgents: Set<String>` attribution
-- Created #1315 (RAS consolidation audit) — deferred architectural question about what signal infrastructure should move to casehub-ras
+### Engine (casehubio/engine#1304) — branch `issue-1304-bridge-decision-loop-metrics`
+- Created `AgentLlmStatsProvider` SPI in `api/src/main/java/io/casehub/api/spi/stigmergy/`
+- Modified `SwarmTelemetryCollector` to accept optional provider, query it instead of hardcoded zeros
+- Added 3 new tests: provider supplies stats, null provider preserves zeros, per-agent stats
+- All engine tests pass
 
-Landed as `01e8c8a27` on main. Branch stamped. Issue closed. Blog entry written and revised: "Closing the Stigmergy Loop."
+### Agency (casehubio/agency#444) — committed to main
+- Added `loopEventSink(Consumer<DecisionLoopEvent>)` builder method to `SwarmCoordinatorBuilder`
+- Replaced hardcoded `e -> {}` with configurable sink (default no-op for backward compat)
+- Created `LlmTelemetryAccumulator` in `engine-adapter-core` implementing both `Consumer<DecisionLoopEvent>` and `AgentLlmStatsProvider`
+- All accumulator tests pass (5/5). Builder tests verified clean via IDE diagnostics (pre-existing `CuriosityDrive` error in `AgencyBeans.java` blocks `agency` module compilation)
+
+### Design Decisions
+- Self-review caught that `AbstractExecutionDriver` and `ExecutionEventListener` operate on the standard five-phase loop path, while `DecisionLoopEvent` is emitted inside coordination topologies (`CentralisedTopology`) which bypass the driver. The accumulator is wired directly as the `loopEventSink` consumer, not through the driver's listener chain.
+- `CaseContextChangedEventHandler` not changed — null provider = zeros, correct until coordination topologies are integrated with the engine runtime.
+
+### Pre-existing Blocker
+`AgencyBeans.java:305` has a `CuriosityDrive` constructor mismatch that blocks compilation of the `agency` module. Builder tests in that module cannot run via Maven or IntelliJ. The `engine-adapter` module compiles and tests fine independently.
 
 ## Immediate Next Step
 
-Pick up #1304 (bridge DecisionLoopEvent metrics into SwarmTelemetry LLM fields). This is the last implementation issue before epic #1281 (Swarm Mechanical Enforcement Layer) can close. It wires agency's decision loop metrics (token usage, latency, decision counts) into engine's `SwarmTelemetry` model.
+Run `work end` on the engine branch to close #1304. This is the last issue before epic #1281 (Swarm Mechanical Enforcement Layer) can close.
 
 ## Queue Status
 
-Epic #1281 sub-issues: all complete except #1304. Queue on main tracks this.
+Epic #1281 sub-issues: all complete except #1304 (in progress on branch).
 
 ## References
 
-- `specs/issue-1314-stigmergy-observation-spi/2026-11-08-stigmergy-observation-spi-design.md`
-- `specs/issue-1314-stigmergy-observation-spi/decisions.md` (D1–D8)
-- `plans/2026-11-08-stigmergy-observation-spi.md`
-- `docs/blog/2026-11-08-mdp01-closing-the-stigmergy-loop.md`
-- casehubio/engine#1315 — RAS consolidation audit (new, open)
-- casehubio/engine#1304 — next issue
+- `specs/issue-1304-bridge-decision-loop-metrics/2026-11-08-bridge-decision-loop-metrics-design.md`
+- `specs/issue-1304-bridge-decision-loop-metrics/decisions.md` (D1–D4, D1-D2 revised after self-review)
+- `plans/2026-11-08-bridge-decision-loop-metrics.md`
