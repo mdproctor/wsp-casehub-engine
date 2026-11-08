@@ -1,7 +1,7 @@
 # Work Plan — main
 
 ## State
-branch: issue-1297-coordination-driver-spi
+branch: 
 status: active
 project-sha: 
 date: 
@@ -20,11 +20,6 @@ flyway-next-v:
 - [x] casehubio/engine#1294 — resolve Conductor SUPERVISOR overlap
 - [x] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
 - [x] casehubio/engine#1290 — TransitionPolicy graduated topology transition
-- [ ] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract ← active
-  - [x] Batch 1: Vocabulary
-    - [x] Task 1: CoordinationTask + DelegationAssignment + DelegationOutcome
-    - [x] Task 2: CoordinationResult + CoordinationLifecycleEvent
-  - [x] Batch 2: SPI + Wiring
-    - [x] Task 3: CoordinatorBehavior + CoordinationDriver + NoOp + wiring
-- [ ] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
+- [x] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
+- [ ] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract ← active
 - [ ] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
