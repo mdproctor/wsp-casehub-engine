@@ -9,40 +9,30 @@
 
 The infrastructure for this bridge was partially designed: `ExecutionEventListener.onDecisionLoopEvent()` exists as a default no-op method, and `SwarmCoordinatorBuilder.buildTopology()` passes a no-op `loopEventSink` with the comment "wired at execution layer." Neither was completed.
 
+## Execution Path Constraint
+
+`DecisionLoopEvent` is emitted inside coordination topologies (`CentralisedTopology` → `DecisionLoopFactory` → `AgentDecisionLoop`). This is a separate execution path from the standard `ExecutionModel` → `AbstractExecutionDriver` loop. The driver's `notifyXxx` pattern and `ExecutionEventListener` operate on the driver path only — they never see coordination topology events.
+
+The `loopEventSink` is captured at topology construction time by `SwarmCoordinatorBuilder.buildTopology()`, not at driver execution time. The accumulator must be wired directly as the `loopEventSink` consumer, not through the driver's listener chain.
+
 ## Design
 
 ### Architecture
 
-Three layers, each with a clear responsibility:
-
 ```
 DecisionLoopFactory                    (agency-core: emits events)
   └─ loopEventSink Consumer
-       └─ AbstractExecutionDriver      (agency-core: routes to listeners)
-            └─ notifyDecisionLoopEvent
-                 └─ CheckpointingListener  (engine-adapter-core: accumulates)
-                      └─ AgentLlmStatsProvider SPI  (engine-api: contract)
-                           └─ SwarmTelemetryCollector  (engine-runtime: consumes)
+       └─ LlmTelemetryAccumulator     (engine-adapter-core: accumulates)
+            ├─ implements Consumer<DecisionLoopEvent>
+            └─ implements AgentLlmStatsProvider  (engine-api: SPI contract)
+                 └─ SwarmTelemetryCollector       (engine-runtime: consumes)
 ```
 
 ### Agency Changes (casehubio/agency#444)
 
-**1. `AbstractExecutionDriver` — add `notifyDecisionLoopEvent`**
+**1. `SwarmCoordinatorBuilder` — accept external `loopEventSink`**
 
-Add a protected method following the existing `notifyXxx` pattern:
-
-```java
-protected void notifyDecisionLoopEvent(ExecutionModel<T> model,
-                                        DecisionLoopEvent event) {
-    for (var listener : model.listeners()) {
-        listener.onDecisionLoopEvent(event);
-    }
-}
-```
-
-**2. `SwarmCoordinatorBuilder` — accept external `loopEventSink`**
-
-Replace the hardcoded `e -> {}` with a builder-configurable `Consumer<DecisionLoopEvent>`. Default remains no-op for backward compatibility. The execution layer provides the real sink.
+Add a builder field and method:
 
 ```java
 private Consumer<DecisionLoopEvent> loopEventSink = e -> {};
@@ -53,55 +43,39 @@ public SwarmCoordinatorBuilder loopEventSink(Consumer<DecisionLoopEvent> sink) {
 }
 ```
 
-Pass `this.loopEventSink` instead of `e -> {}` in `buildTopology()`.
+In `buildTopology()`, replace the hardcoded `e -> {}` with `this.loopEventSink`.
 
-**3. `CentralisedTopology` — propagate `loopEventSink`**
+**2. `CentralisedTopology` — no change needed**
 
-The `loopEventSink` parameter already flows through `CentralisedTopology` into `DecisionLoopFactory.create()`. No change needed if `SwarmCoordinatorBuilder` passes the real sink. Verify the parameter propagation path.
-
-**4. Execution layer wiring**
-
-Where the `ExecutionModel` is constructed with its listener list and the topology is built, wire the `loopEventSink` to call `notifyDecisionLoopEvent`. The exact wiring point depends on how `SwarmCoordinatorBuilder` is invoked — likely in `PatternWorkerFunctionHandler` or the pattern execution setup in `engine-adapter-core`.
+The `loopEventSink` parameter already flows through `CentralisedTopology` into `DecisionLoopFactory.create()`. Once `SwarmCoordinatorBuilder` passes a real sink, the propagation works.
 
 ### Engine-Adapter Changes (casehubio/agency — engine-adapter-core module)
 
-**5. `CheckpointingListener` — accumulate LLM stats**
+**3. `LlmTelemetryAccumulator` — new class**
 
-Add a `ConcurrentHashMap<String, LlmAccumulator>` keyed by agentId. Override `onDecisionLoopEvent`:
+A standalone accumulator that serves as both the `loopEventSink` consumer and the `AgentLlmStatsProvider` implementation:
 
 ```java
-@Override
-public void onDecisionLoopEvent(DecisionLoopEvent event) {
-    if (event instanceof DecisionLoopEvent.ReasoningCompleted rc) {
-        accumulators.computeIfAbsent(rc.agentId(), k -> new LlmAccumulator())
-                    .record(rc.tokensConsumed(), rc.latencyMs());
+package io.casehub.engine.agentic;
+
+public class LlmTelemetryAccumulator
+        implements Consumer<DecisionLoopEvent>, AgentLlmStatsProvider {
+
+    private final UUID caseId;
+    private final ConcurrentHashMap<String, LlmAccumulator> accumulators = new ConcurrentHashMap<>();
+
+    public LlmTelemetryAccumulator(UUID caseId) {
+        this.caseId = caseId;
     }
-}
-```
 
-Where `LlmAccumulator` is a private inner class:
-
-```java
-private static class LlmAccumulator {
-    private int invocationCount;
-    private long tokensConsumed;
-    private long totalLatencyMs;
-
-    void record(long tokens, long latencyMs) {
-        invocationCount++;
-        tokensConsumed += tokens;
-        totalLatencyMs += latencyMs;
+    @Override
+    public void accept(DecisionLoopEvent event) {
+        if (event instanceof DecisionLoopEvent.ReasoningCompleted rc) {
+            accumulators.computeIfAbsent(rc.agentId(), k -> new LlmAccumulator())
+                        .record(rc.tokensConsumed(), rc.latencyMs());
+        }
     }
-}
-```
 
-**6. `CheckpointingListener` — implement `AgentLlmStatsProvider`**
-
-Have `CheckpointingListener` implement the engine SPI:
-
-```java
-public class CheckpointingListener implements ExecutionEventListener, AgentLlmStatsProvider {
-    // ...
     @Override
     public AgentLlmStats getStats(UUID caseId, String agentId) {
         var acc = accumulators.get(agentId);
@@ -111,12 +85,38 @@ public class CheckpointingListener implements ExecutionEventListener, AgentLlmSt
             acc.tokensConsumed,
             Duration.ofMillis(acc.totalLatencyMs));
     }
+
+    private static class LlmAccumulator {
+        private int invocationCount;
+        private long tokensConsumed;
+        private long totalLatencyMs;
+
+        void record(long tokens, long latencyMs) {
+            invocationCount++;
+            tokensConsumed += tokens;
+            totalLatencyMs += latencyMs;
+        }
+    }
 }
 ```
 
+**4. Wiring at topology construction**
+
+Wherever `SwarmCoordinatorBuilder` is invoked to create a coordination topology for the engine, the caller creates an `LlmTelemetryAccumulator` and passes it:
+
+```java
+var accumulator = new LlmTelemetryAccumulator(caseId);
+var topology = Patterns.swarm()
+    .agentProvider(provider)
+    .loopEventSink(accumulator)
+    .buildTopology();
+```
+
+The same `accumulator` instance is passed to `SwarmTelemetryCollector` as the `AgentLlmStatsProvider`. The accumulator bridges the two systems: it receives events from the coordination topology and provides stats to the engine's telemetry collector.
+
 ### Engine Changes (casehubio/engine#1304)
 
-**7. `AgentLlmStatsProvider` SPI in `engine/api`**
+**5. `AgentLlmStatsProvider` SPI in `engine/api`**
 
 ```java
 package io.casehub.api.spi.stigmergy;
@@ -132,7 +132,7 @@ public interface AgentLlmStatsProvider {
 }
 ```
 
-**8. `SwarmTelemetryCollector` — consume stats**
+**6. `SwarmTelemetryCollector` — consume stats**
 
 Add `AgentLlmStatsProvider` as a constructor parameter (nullable for backward compatibility):
 
@@ -161,21 +161,29 @@ result.add(new SwarmTelemetry(
     llmStats.totalLatency()));
 ```
 
+**7. Update `CaseContextChangedEventHandler` — inject provider**
+
+Where `SwarmTelemetryCollector` is instantiated (at line 1482-1488), pass the `AgentLlmStatsProvider` if available. When no coordination topology is active, pass null (falls back to zeros).
+
 ### Testing
 
-- **`SwarmTelemetryCollectorTest`** — extend existing tests to verify LLM fields are populated when a provider is supplied, and remain zero when provider is null.
-- **`CheckpointingListenerTest`** — add tests for `onDecisionLoopEvent` accumulation: single event, multiple events for same agent, multiple agents, zero-valued events.
-- **`AbstractExecutionDriverTest`** — verify `notifyDecisionLoopEvent` calls all listeners.
+- **`SwarmTelemetryCollectorTest`** — extend to verify LLM fields are populated when a provider is supplied, and remain zero when provider is null.
+- **`LlmTelemetryAccumulatorTest`** — new test: single event, multiple events per agent, multiple agents, zero-valued events, `getStats` for unknown agent returns ZERO.
+- **`SwarmCoordinatorBuilderTest`** — verify custom `loopEventSink` is propagated to the topology.
 
 ### Thread Safety
 
-`CheckpointingListener` is used within a single execution — the `AbstractExecutionDriver` runs sequentially through iterations. The accumulator does not need to be thread-safe unless concurrent agent dispatch changes. Use `ConcurrentHashMap` for the map (agents may be dispatched concurrently within an iteration) but the `LlmAccumulator` fields can use simple `+=` since each agent's decision loop runs sequentially.
+`LlmTelemetryAccumulator` uses `ConcurrentHashMap` for thread-safe per-agent lookup. Each agent's `LlmAccumulator` is accessed from that agent's decision loop, which runs sequentially — no concurrent writes to the same accumulator instance.
 
 ### Backward Compatibility
 
 - `SwarmTelemetryCollector` accepts null `llmStatsProvider` (falls back to zeros) — existing callers unaffected.
 - `SwarmCoordinatorBuilder.loopEventSink()` defaults to no-op — existing topology construction unchanged.
-- `ExecutionEventListener.onDecisionLoopEvent()` already has a default no-op — existing listeners unaffected.
+
+### What This Does NOT Change
+
+- `AbstractExecutionDriver` — coordination topologies bypass the driver entirely. Adding `notifyDecisionLoopEvent` to the driver is out of scope (it would only serve the standard five-phase loop path, which doesn't emit decision loop events).
+- `ExecutionEventListener.onDecisionLoopEvent()` — remains available for future use but is not part of this bridge. The coordination topology path has its own event routing.
 
 ## References
 
@@ -184,7 +192,7 @@ result.add(new SwarmTelemetry(
 - `DecisionLoopEvent.java:61-77` — `ReasoningCompleted` definition
 - `DecisionLoopFactory.java:60-76` — `budgetBridge` that emits `ReasoningCompleted`
 - `SwarmCoordinatorBuilder.java:132` — no-op `loopEventSink` with "wired at execution layer" comment
-- `AbstractExecutionDriver.java:229-298` — existing `notifyXxx` pattern
-- `ExecutionEventListener.java:29` — existing unused `onDecisionLoopEvent` method
-- `CheckpointingListener.java:32-101` — engine-adapter bridge listener
-- `MetricsListener.java:133` — only listener currently overriding `onDecisionLoopEvent`
+- `CentralisedTopology.java:47` — coordination topology that captures `loopEventSink`
+- `CheckpointingListener.java:32-101` — engine-adapter bridge listener (NOT used for this bridge — different execution path)
+- `PatternWorkerFunctionHandler.java:91-98` — standard path creates `CheckpointingListener` for `ExecutionModel`
+- `CaseContextChangedEventHandler.java:1482-1488` — where `SwarmTelemetryCollector` is instantiated

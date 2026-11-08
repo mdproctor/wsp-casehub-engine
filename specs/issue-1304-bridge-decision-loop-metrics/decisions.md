@@ -1,27 +1,27 @@
 ## D1: Overall bridging approach
 
-**Choice:** Approach A — Complete the intended ExecutionEventListener wiring path
+**Choice:** Approach B — Direct accumulator as `loopEventSink` consumer
 **Alternatives:**
-- Approach B (Direct accumulator) — Simpler short-term but bypasses listener architecture, creates parallel event path
+- Approach A (ExecutionEventListener wiring) — Initially selected, but self-review found that `AbstractExecutionDriver` and `ExecutionEventListener` operate on the standard five-phase loop path, while `DecisionLoopEvent` is emitted inside coordination topologies (`CentralisedTopology`), which bypass the driver entirely. The two paths never intersect.
 - Approach C (Extend AgentCounters) — Fewer new types but couples StigmergyCoordinator to LLM semantics, widens its surface
-**Rationale:** The `onDecisionLoopEvent` method already exists on `ExecutionEventListener` but is never called. The `loopEventSink` comment ("wired at execution layer") proves this was the intended design. Completing it follows the established `notifyXxx` pattern in `AbstractExecutionDriver` and enables future listeners to observe decision loop events.
-**Trade-offs:** Touches more files across two repos than Approach B. Requires changes to `AbstractExecutionDriver`, `CentralisedTopology`, and `SwarmCoordinatorBuilder` in agency.
-**Sources:** `AbstractExecutionDriver.java:229-298` (notify pattern), `SwarmCoordinatorBuilder.java:132` (no-op loopEventSink comment), `ExecutionEventListener.java:29` (existing unused method)
-**Exploration:** quick
-**Status:** captured
+**Rationale:** The `loopEventSink` is captured at topology construction time inside `CentralisedTopology`, not at driver execution time. A direct `Consumer<DecisionLoopEvent>` accumulator is the only mechanism that can receive events from this path. The accumulator also implements `AgentLlmStatsProvider` to bridge to the engine side.
+**Trade-offs:** Does not enable future `ExecutionEventListener` implementations to observe decision loop events (that would require separate work on the driver path). Coordination topologies have their own event routing.
+**Sources:** `SwarmCoordinatorBuilder.java:132` (no-op loopEventSink), `CentralisedTopology.java:47` (coordination topology), `AbstractExecutionDriver.java:229-298` (driver path — confirmed separate from topology path)
+**Exploration:** quick → revised after self-review
+**Status:** revised
 
 ## D2: Accumulator location
 
-**Choice:** Extend CheckpointingListener with `onDecisionLoopEvent` override
+**Choice:** New standalone `LlmTelemetryAccumulator` in `engine-adapter-core`
 **Alternatives:**
-- New LlmStatsListener — Cleaner SRP but adds another listener to wire and discover
+- Extend CheckpointingListener — Initially selected, but self-review found `CheckpointingListener` is an `ExecutionEventListener` wired into `ExecutionModel.listeners()` via `PatternWorkerFunctionHandler`. It operates on the standard driver path. Coordination topologies (where `DecisionLoopEvent` is emitted) bypass this listener entirely.
 - Engine SPI impl — Clean boundary but still requires engine-adapter implementation
-**Rationale:** `CheckpointingListener` already bridges agency execution events to engine persistence. It handles `onActivation`, `onAgentResult`, `onTermination`. Adding LLM stats accumulation keeps all engine-adapter bridging in one class.
-**Trade-offs:** `CheckpointingListener` grows in responsibility. If future event types need accumulation, it may need splitting.
-**Sources:** `CheckpointingListener.java:32-101` (current implementation)
-**Exploration:** quick
-**Depends on:** D1 (listener wiring approach)
-**Status:** captured
+**Rationale:** The accumulator needs to implement both `Consumer<DecisionLoopEvent>` (to serve as the `loopEventSink`) and `AgentLlmStatsProvider` (to expose stats to the engine). `CheckpointingListener` is on the wrong execution path. A standalone class in `engine-adapter-core` is the natural home — it bridges agency events to engine types.
+**Trade-offs:** One new class rather than extending an existing one. But the separation is architecturally correct — coordination topology events and driver lifecycle events are distinct concerns.
+**Sources:** `CheckpointingListener.java:32-101` (driver path only), `PatternWorkerFunctionHandler.java:91-98` (where CheckpointingListener is wired)
+**Exploration:** quick → revised after self-review
+**Depends on:** D1 (direct accumulator approach)
+**Status:** revised
 
 ## D3: Engine-side stats access
 
