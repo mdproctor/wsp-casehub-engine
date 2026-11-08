@@ -1,12 +1,12 @@
-# Work Plan — main
+# Work Plan — 
 
 ## State
-branch: 
+branch: issue-1304-bridge-decision-loop-metrics
+issue-repo: casehubio/engine
 status: active
+covers: 1304
 project-sha: 
 date: 
-issue-repo: casehubio/engine
-covers: 1281
 design-repo: 
 design-section-hashes: 
 flyway-next-v: 
@@ -22,4 +22,9 @@ flyway-next-v:
 - [x] casehubio/engine#1290 — TransitionPolicy graduated topology transition
 - [x] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
 - [ ] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract ← active
+  - [ ] Batch 1: Engine SPI and Collector
+    - [ ] Task 1: AgentLlmStatsProvider SPI + SwarmTelemetryCollector integration
+  - [ ] Batch 2: Agency builder + accumulator
+    - [ ] Task 2: SwarmCoordinatorBuilder loopEventSink builder method
+    - [ ] Task 3: LlmTelemetryAccumulator
 - [ ] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
