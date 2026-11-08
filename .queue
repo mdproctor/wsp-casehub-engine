@@ -1,7 +1,7 @@
 # Work Plan — Work Plan —
 
 ## State
-branch: issue-1304-bridge-decision-loop-metrics
+branch: 
 issue-repo: casehubio/engine
 status: active
 covers: 1304
@@ -21,10 +21,5 @@ flyway-next-v:
 - [x] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
 - [x] casehubio/engine#1290 — TransitionPolicy graduated topology transition
 - [x] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
-- [ ] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract ← active
-  - [x] Batch 1: Engine SPI and Collector
-    - [x] Task 1: AgentLlmStatsProvider SPI + SwarmTelemetryCollector integration
-  - [x] Batch 2: Agency builder + accumulator
-    - [x] Task 2: SwarmCoordinatorBuilder loopEventSink builder method
-    - [x] Task 3: LlmTelemetryAccumulator
-- [ ] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
+- [x] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
+- [x] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
