@@ -17,8 +17,8 @@
 - Partial delegation — only delegate function invocation + schema validation, keep timeout in engine handler
 - No delegation / just split — avoid cross-repo dependency, rework timeout but don't add casehub-worker-runtime
 **Rationale:** Eliminates duplicated execution concerns. Worker executor already handles timeout, retry, schema validation, OTel — reimplementing these in the engine is maintenance burden and divergence risk.
-**Trade-offs:** New Maven dependency (casehub-worker-runtime) in engine runtime module. Worker executor returns `Uni<WorkerResult>` — on virtual thread, call `.await().indefinitely()`.
-**Sources:** `DefaultWorkerExecutor.java` (worker repo — Guard, SchemaValidator, OTel), virtual-thread protocol PP-20260723-c4c1cf
+**Trade-offs:** New Maven dependency (casehub-worker-runtime) in engine runtime module. Worker executor returns `Uni<WorkerResult>` — on virtual thread, call `.await().indefinitely()`. Worker executor's `liftToUni()` passes `null` as WorkerScope — engine handler must wrap the Worker's function to capture the engine-created WorkerRuntime before delegation.
+**Sources:** `DefaultWorkerExecutor.java` (worker repo — Guard, SchemaValidator, OTel, liftToUni:133-140), virtual-thread protocol PP-20260723-c4c1cf, `WorkerRuntimeFactory.java`
 **Exploration:** quick
 **Depends on:** D1 (Worker + Capability available on the interface)
 
