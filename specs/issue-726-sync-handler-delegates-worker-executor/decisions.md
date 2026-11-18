@@ -57,3 +57,14 @@
 **Sources:** `DefaultWorkerExecutor.java:72-80` (handler iteration), issue #726 §4
 **Exploration:** quick
 **Depends on:** D2 (full delegation model), D3 (Sync handler is the delegation point)
+
+## D6: ExchangeProcessor delegation — extend worker executor's liftToUni()
+
+**Choice:** Add `ExchangeProcessor` branch to worker repo's `DefaultWorkerExecutor.liftToUni()` so the engine can delegate ExchangeProcessor execution alongside Sync. Included in this issue.
+**Alternatives:**
+- Defer ExchangeProcessor delegation — keep ExchangeProcessor execution in the engine handler (virtual thread submit + future.get), only delegate Sync. Avoids cross-repo worker change but leaves ExchangeProcessor as a special case.
+**Rationale:** ExchangeProcessor follows the same BiFunction pattern as Sync. Deferring creates a split where Sync gets timeout/retry/schema/OTel from the worker executor but ExchangeProcessor reimplements timeout in the engine. The worker repo change is small (one branch in a switch).
+**Trade-offs:** Adds a commit to casehub-worker repo. Worker repo must be updated and published before the engine can use it.
+**Sources:** `DefaultWorkerExecutor.java` (worker repo, liftToUni:133-140), `SyncAgentWorkerFunctionHandler.java:134-141`
+**Exploration:** quick
+**Depends on:** D2 (delegation model), D5 (handler-internal delegation)
