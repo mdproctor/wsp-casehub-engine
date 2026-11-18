@@ -1,17 +1,3 @@
-# Work Plan — Work Plan —
-
-## State
-branch: 
-issue-repo: casehubio/engine
-status: active
-covers: 1304
-project-sha: 
-date: 
-design-repo: 
-design-section-hashes: 
-flyway-next-v: 
-
-## Queue
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
 - [x] casehubio/engine#1308 — Add onTopologyChanged to AgentWorkLifecycleListener
@@ -23,3 +9,14 @@ flyway-next-v:
 - [x] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
 - [x] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
 - [x] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
+
+## State
+branch: issue-726-sync-handler-delegates-worker-executor
+issue-repo: casehubio/engine
+status: active
+covers: 1301
+project-sha: 
+date: 
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
