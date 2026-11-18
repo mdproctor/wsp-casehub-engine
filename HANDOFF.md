@@ -2,37 +2,64 @@
 
 ## Last Session
 
-Working on #1304 (bridge DecisionLoopEvent metrics into SwarmTelemetry LLM fields). Cross-repo implementation spanning engine and agency repos.
+Closed #726 — engine Sync handler delegates to casehub-worker WorkerExecutor. Cross-repo work spanning engine, worker, and agency repos.
 
-### Engine (casehubio/engine#1304) — branch `issue-1304-bridge-decision-loop-metrics`
-- Created `AgentLlmStatsProvider` SPI in `api/src/main/java/io/casehub/api/spi/stigmergy/`
-- Modified `SwarmTelemetryCollector` to accept optional provider, query it instead of hardcoded zeros
-- Added 3 new tests: provider supplies stats, null provider preserves zeros, per-agent stats
-- All engine tests pass
+### What Landed
 
-### Agency (casehubio/agency#444) — committed to main
-- Added `loopEventSink(Consumer<DecisionLoopEvent>)` builder method to `SwarmCoordinatorBuilder`
-- Replaced hardcoded `e -> {}` with configurable sink (default no-op for backward compat)
-- Created `LlmTelemetryAccumulator` in `engine-adapter-core` implementing both `Consumer<DecisionLoopEvent>` and `AgentLlmStatsProvider`
-- All accumulator tests pass (5/5). Builder tests verified clean via IDE diagnostics (pre-existing `CuriosityDrive` error in `AgencyBeans.java` blocks `agency` module compilation)
+4 commits on engine main (SHA `5bd1280da`):
+
+1. **Interface change:** `WorkerFunctionHandler.execute()` and engine's `WorkerExecutor.execute()` now accept `Worker` + `Capability` instead of decomposed fields (`WorkerFunction`, `int timeoutMs`). All 7 handler implementations updated.
+2. **ExecutionPolicy enrichment:** `WorkerExecutionOrchestrator` applies the engine's default timeout to the Worker's ExecutionPolicy before passing to handlers. Handlers always see a concrete timeout.
+3. **Handler split + delegation:** `SyncAgentWorkerFunctionHandler` split into `SyncWorkerFunctionHandler` (delegates to `io.casehub.worker.runtime.WorkerExecutor` for timeout, retry, schema validation, OTel) and `AgentWorkerFunctionHandler` (keeps engine-local execution with invoker and protocol metadata).
+
+### Cross-Repo Commits
+
+- **casehub-worker** (main): `042b0cb` — ExchangeProcessor support in `DefaultWorkerExecutor.liftToUni()`
+- **casehub-agency** (main): `6d8aeaa5` — PatternWorkerFunctionHandler mechanical signature update
 
 ### Design Decisions
-- Self-review caught that `AbstractExecutionDriver` and `ExecutionEventListener` operate on the standard five-phase loop path, while `DecisionLoopEvent` is emitted inside coordination topologies (`CentralisedTopology`) which bypass the driver. The accumulator is wired directly as the `loopEventSink` consumer, not through the driver's listener chain.
-- `CaseContextChangedEventHandler` not changed — null provider = zeros, correct until coordination topologies are integrated with the engine runtime.
 
-### Pre-existing Blocker
-`AgencyBeans.java:305` has a `CuriosityDrive` constructor mismatch that blocks compilation of the `agency` module. Builder tests in that module cannot run via Maven or IntelliJ. The `engine-adapter` module compiles and tests fine independently.
+- Virtual-thread protocol (PP-20260723-c4c1cf) adapted the original issue's approach: `.await().indefinitely()` on virtual thread instead of `runSubscriptionOn()` wrappers.
+- `WorkerExecutionContext` no longer exists (replaced by WorkerScope parameter passing). `PolicyEnforcer` not used (worker executor uses SmallRye Guard directly).
+- Function wrapping bridges engine WorkerRuntime into worker executor without API changes — the handler wraps the Worker's function in a closure that captures the engine-created runtime.
+- Agent handler keeps its own `future.get()` timeout — AgentWorkerFunction has no `WorkerFunction.Sync` fn() for the worker executor to lift.
 
-## Immediate Next Step
+### Blog
 
-Run `work end` on the engine branch to close #1304. This is the last issue before epic #1281 (Swarm Mechanical Enforcement Layer) can close.
+"The Handler That Stopped Reimplementing" — covers execution-concern delegation, function wrapping, and the handler split. SVG diagrams. Promoted to `docs/blog/`.
+
+### Follow-Up Issues Filed
+
+| # | Title | Scale | Complexity |
+|---|-------|-------|------------|
+| 1325 | REINVOKED mode test coverage for SyncWorkerFunctionHandler | XS | Low |
+| 1326 | Integration test for default timeout enrichment path | XS | Low |
+| 1327 | Drop redundant `outputProjection` param from engine WorkerExecutor | XS | Low |
+| 1328 | AgentWorkerFunctionHandler — Guard-based timeout and OTel | S | Med |
+
+### Code Review Findings Addressed
+
+- Stale Javadoc on `WorkerFunctionHandler` updated to reflect delegating vs direct timeout
+- `PersistentWorkerFunctionHandler` FQN imports cleaned up
+- Input type validation duplication documented as intentional (engine exception is more specific)
 
 ## Queue Status
 
-Epic #1281 sub-issues: all complete except #1304 (in progress on branch).
+4 items remaining in queue: #1325, #1326, #1327, #1328 (all follow-ups from this session).
+
+## Unpublished
+
+Engine has 4 unpublished commits on main. Workspace has 9 unpublished commits. Neither has been pushed to remote.
+
+## Pre-Existing State
+
+- Engine has stashed pre-existing changes from prior work: `git stash list` shows `stash@{0}` (pre-work-end) and `stash@{1}` (pre-726). These are unrelated API/rest/persistence modifications from a different session.
+- Workspace has stashed pre-existing blog modifications: 2 blog entries with uncommitted edits.
 
 ## References
 
-- `specs/issue-1304-bridge-decision-loop-metrics/2026-11-08-bridge-decision-loop-metrics-design.md`
-- `specs/issue-1304-bridge-decision-loop-metrics/decisions.md` (D1–D4, D1-D2 revised after self-review)
-- `plans/2026-11-08-bridge-decision-loop-metrics.md`
+- `docs/specs/issue-726-sync-handler-delegates-worker-executor/2026-11-18-sync-handler-delegates-worker-executor-design.md`
+- `docs/specs/issue-726-sync-handler-delegates-worker-executor/decisions.md` (D1–D6)
+- `plans/2026-11-18-sync-handler-delegates-worker-executor.md`
+- `docs/blog/2026-11-18-mdp01-the-handler-that-stopped-reimplementing.md`
+- PP-20260723-c4c1cf — virtual-thread handler convention
