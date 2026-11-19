@@ -1,10 +1,10 @@
 # Work Plan —
 
 ## State
-branch: issue-726-sync-handler-delegates-worker-executor
+branch: issue-1331-auto-discovery-classpath-yaml
 issue-repo: casehubio/engine
 status: active
-covers: 1301
+covers: casehubio/engine#1325
 project-sha: 
 date: 
 design-repo: 
@@ -23,7 +23,18 @@ flyway-next-v:
 - [x] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
 - [x] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
 - [x] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
-- [ ] casehubio/engine#1325 — REINVOKED test coverage
-- [ ] casehubio/engine#1326 — integration test timeout enrichment
+- [x] casehubio/engine#1325 — REINVOKED test coverage
+- [ ] casehubio/engine#1326 — integration test timeout enrichment ← active
+  - [x] Batch 1: Full-Pipeline Auto-Discovery
+    - [x] Task 1: Make deriveConventionPath public
+    - [x] Task 2: Enhance CaseYamlRegistrar with full pipeline
 - [ ] casehubio/engine#1327 — drop redundant outputProjection
 - [ ] casehubio/engine#1328 — agent handler Guard and OTel
+- [ ] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
+- [ ] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
+- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
+
+## Deferred
+- [ ] integration test timeout enrichment (S / Low) []
+- [ ] drop redundant outputProjection (S / Low) []
+- [ ] agent handler Guard and OTel (S / Low) []
