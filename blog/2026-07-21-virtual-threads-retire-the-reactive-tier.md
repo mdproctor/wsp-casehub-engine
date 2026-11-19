@@ -1,3 +1,12 @@
+---
+layout: post
+title: "Virtual Threads: Retiring the Reactive Tier"
+date: 2026-07-21
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
+---
+
 # Virtual Threads: Retiring the Reactive Tier
 
 The CaseHub engine has 152 files importing Mutiny's `Uni`. Every `@ConsumeEvent` handler returns `Uni<Void>`, chains operations with `.chain()`, handles errors with `.onFailure().recoverWithUni()`, and fans out parallel work with `Uni.combine().all().unis()`. All of them already run on worker threads — `blocking = true` on every annotation. The reactive machinery adds complexity without protecting IO threads, because we're not on IO threads.

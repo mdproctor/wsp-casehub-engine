@@ -4,6 +4,8 @@ date: 2026-06-14
 slug: the-bridge-and-the-try-catch-that-lied
 projects: [casehub-engine]
 tags: [casehub, quarkus, cdi, bridge-module, qhorus]
+entry_type: note
+subtype: diary
 ---
 
 The foundation constraint is simple: `casehub-qhorus` and `casehub-work` are peer Foundation modules. Neither can depend on the other. But consumer apps often need both — a message arrives on a qhorus channel and should become a WorkItem. Without a bridge, every consumer writes the same wiring.

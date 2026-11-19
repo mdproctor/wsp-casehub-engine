@@ -3,6 +3,9 @@ layout: post
 title: "Teaching the Engine Who Should Handle This"
 date: 2026-07-29
 categories: casehub engine routing
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
 ---
 
 Most workflow engines assign human tasks the same way they did twenty years ago: a queue, a round-robin, maybe a role-based filter. The task appears in someone's inbox. Whether that person is the right person — whether they've handled this kind of work before, whether they're already overloaded, whether the case context makes one reviewer more appropriate than another — is left to the humans to figure out.

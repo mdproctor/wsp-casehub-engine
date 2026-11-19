@@ -1,3 +1,12 @@
+---
+layout: post
+title: "The Schema Already Knew"
+date: 2026-06-21
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
+---
+
 # The Schema Already Knew
 
 The YAML schema for agent model configuration had `baseUrl` on `OpenAiModel` since the schema was written. The generated Java class had `getBaseUrl()` and `setBaseUrl()`. The LangChain4j builder accepted `baseUrl(String)`. Every layer knew about it — except the one layer that matters: `OpenAiChatModelProvider`, which silently dropped the field on the floor.

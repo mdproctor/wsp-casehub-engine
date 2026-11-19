@@ -1,6 +1,8 @@
 ---
 type: diary
 tags: [multi-agent, convergence, spi, architecture]
+entry_type: article
+projects: [casehubio/engine]
 ---
 
 # When Should the Swarm Stop?

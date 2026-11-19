@@ -3,6 +3,9 @@ title: Teaching Agents to Notice Their Own Behaviour
 date: 2026-08-05
 author: Mark Proctor
 tags: [casehub, engine, eidos, behavioural-contracts, routing, compliance]
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
 ---
 
 # Teaching Agents to Notice Their Own Behaviour

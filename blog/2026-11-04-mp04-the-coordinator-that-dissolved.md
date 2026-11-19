@@ -1,3 +1,11 @@
+---
+layout: post
+title: "The Coordinator That Dissolved"
+date: 2026-11-04
+entry_type: article
+projects: [casehubio/engine]
+---
+
 # The Coordinator That Dissolved
 
 Every multi-agent system grows a coordinator. A class that holds routing, aggregation, provisioning, budgets, prompt sections, termination — a gravitational well for every concern that touches coordination. Ours was called `LlmSwarmCoordinator`. Nine fields, one prompt-assembly method, accessor methods for the rest.

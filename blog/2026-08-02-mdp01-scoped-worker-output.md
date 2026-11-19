@@ -3,6 +3,9 @@ title: "When Workers Won't Shut Up: Intermediate Output in Long-Running Scopes"
 date: 2026-08-02
 author: Mark Proctor
 tags: [casehub, engine, lifecycle-scopes, architecture]
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
 ---
 
 Most workflow engines treat worker execution as a simple request-response: dispatch a task, get a result, apply it, move on. That model works until you need a worker that stays alive for the duration of a compound or an entire case — monitoring a data feed, maintaining a conversation, accumulating state across multiple context changes. These workers produce output *while they're still running*, and the engine needs somewhere to put it.

@@ -1,3 +1,12 @@
+---
+layout: post
+title: "The Factory That Forgot"
+date: 2026-06-17
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
+---
+
 # The Factory That Forgot
 
 The failure cascade landed today — four issues, one branch, seven functional commits. WorkerOutcome sealed type, OutcomePolicy on bindings, structured failure state at `_outcomes.<bindingName>`, agent exclusion before routing, and failure goals producing COMPLETED instead of FAULTED. The design went through three rounds of review before implementation started.

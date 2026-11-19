@@ -1,3 +1,12 @@
+---
+layout: post
+title: "The CI That Cried Wolf"
+date: 2026-06-05
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
+---
+
 # The CI That Cried Wolf
 
 Twenty-four hours chasing a test hang that didn't exist.

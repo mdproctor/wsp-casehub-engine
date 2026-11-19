@@ -1,3 +1,12 @@
+---
+layout: post
+title: "When Records Replace Classes"
+date: 2026-06-24
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
+---
+
 # When Records Replace Classes
 
 The worker primitives migration — Worker, Capability, WorkerFunction, WorkerResult, WorkerOutcome, and three governance types — moved from mutable classes in engine-api to Java records in two foundation dependencies. The change touched every module in the engine. What made it interesting wasn't the scale but what the record contract enforced that the class contract didn't.

@@ -6,6 +6,8 @@ type: diary
 projects: [casehub-engine]
 tags: [persistence, spi, dual-stack, convention]
 series: issue-651-cross-repo-blocker-batch
+entry_type: note
+subtype: diary
 ---
 
 # Two Canonicals, One Convention

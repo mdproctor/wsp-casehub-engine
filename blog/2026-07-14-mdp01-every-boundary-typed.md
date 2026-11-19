@@ -1,3 +1,12 @@
+---
+layout: post
+title: "Every Boundary Typed"
+date: 2026-07-14
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
+---
+
 # Every Boundary Typed
 
 The ContextBridge protocol landed for workers a few weeks ago. It gave us typed input — `.<AmlTransaction>fn().apply(txn -> txn.riskScore())` — with compile-time safety and runtime bridge resolution. Good foundation. But signals were still `Map<String, Object>` going into the working layer, and SubCase context passing was hardcoded JQ with no lambda path. Two of the five boundary points were untyped. That inconsistency was rippling through the platform.

@@ -2,6 +2,9 @@
 title: "The Flat Map That Grew Three Dimensions"
 date: 2026-06-10
 tags: [casehub-engine, blackboard, memory, design]
+entry_type: note
+subtype: diary
+projects: [casehubio/engine]
 ---
 
 The CaseContext in casehub-engine has been, since the beginning, a flat `Map<String, Object>`. Workers write their output into it, the engine writes its signals — `actionGateRejected`, `workItemEscalated`, whatever — and domain initialization data lands there too. One namespace for everything.

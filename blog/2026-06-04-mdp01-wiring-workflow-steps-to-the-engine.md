@@ -4,6 +4,8 @@ date: 2026-06-04
 author: mdp
 tags: [casehub-engine, quarkus-flow, serverless-workflow, architecture]
 projects: casehub-engine
+entry_type: note
+subtype: diary
 ---
 
 Engine#206 has been on the list for a while: when a `Worker` runs a Serverless Workflow, the steps inside it have no way to dispatch other casehub workers. The workflow executes in quarkus-flow's execution environment, which knows nothing about the engine. You can build a YAML workflow that does HTTP calls, listens for events, and branches on conditions — but you can't call `analyze-document` and wait for the engine to schedule it, run it, and come back with a result. Sequential orchestration via workflow was structurally blocked.

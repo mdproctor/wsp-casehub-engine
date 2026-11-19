@@ -5,6 +5,8 @@ author: Mark Proctor
 type: diary
 projects: [casehub-engine]
 tags: [routing, spi, architecture, platform-coherence]
+entry_type: note
+subtype: diary
 ---
 
 # One Convention, Not Seven
