@@ -2,64 +2,49 @@
 
 ## Last Session
 
-Closed #726 — engine Sync handler delegates to casehub-worker WorkerExecutor. Cross-repo work spanning engine, worker, and agency repos.
+Closed all 4 follow-up issues from #726 code review: #1325, #1326, #1327, #1328. All work committed directly to main (XS follow-ups, no feature branch). Published to origin.
 
 ### What Landed
 
-4 commits on engine main (SHA `5bd1280da`):
+5 commits on engine main (SHA range `784ee30ed`..`80fca5a07`):
 
-1. **Interface change:** `WorkerFunctionHandler.execute()` and engine's `WorkerExecutor.execute()` now accept `Worker` + `Capability` instead of decomposed fields (`WorkerFunction`, `int timeoutMs`). All 7 handler implementations updated.
-2. **ExecutionPolicy enrichment:** `WorkerExecutionOrchestrator` applies the engine's default timeout to the Worker's ExecutionPolicy before passing to handlers. Handlers always see a concrete timeout.
-3. **Handler split + delegation:** `SyncAgentWorkerFunctionHandler` split into `SyncWorkerFunctionHandler` (delegates to `io.casehub.worker.runtime.WorkerExecutor` for timeout, retry, schema validation, OTel) and `AgentWorkerFunctionHandler` (keeps engine-local execution with invoker and protocol metadata).
-
-### Cross-Repo Commits
-
-- **casehub-worker** (main): `042b0cb` — ExchangeProcessor support in `DefaultWorkerExecutor.liftToUni()`
-- **casehub-agency** (main): `6d8aeaa5` — PatternWorkerFunctionHandler mechanical signature update
-
-### Design Decisions
-
-- Virtual-thread protocol (PP-20260723-c4c1cf) adapted the original issue's approach: `.await().indefinitely()` on virtual thread instead of `runSubscriptionOn()` wrappers.
-- `WorkerExecutionContext` no longer exists (replaced by WorkerScope parameter passing). `PolicyEnforcer` not used (worker executor uses SmallRye Guard directly).
-- Function wrapping bridges engine WorkerRuntime into worker executor without API changes — the handler wraps the Worker's function in a closure that captures the engine-created runtime.
-- Agent handler keeps its own `future.get()` timeout — AgentWorkerFunction has no `WorkerFunction.Sync` fn() for the worker executor to lift.
+1. **#1325 — REINVOKED test coverage:** 3 tests for the previously untested REINVOKED execution path in `SyncWorkerFunctionHandler` — accumulated state round-trip, binding lock release on success, lock release on failure.
+2. **#1326 — Timeout enrichment integration test:** Verifies `WorkerExecutionConfig.withEffectiveTimeout()` enrichment propagates through `wrapFunction` to the platform executor. Captures the Worker at the platform executor and asserts its ExecutionPolicy has the enriched default timeout.
+3. **#1327 — Drop redundant `outputProjection` param:** Removed `String outputProjection` from `WorkerExecutor.execute()`. `DefaultWorkerExecutor` now reads from `capability.outputProjection()` directly. Interface simplified from 6 args to 5. 4 files updated.
+4. **#1328 — Agent handler Guard/OTel decision:** Closed with decision: keep as-is. Agent invocations have richer observability (token counts, cost, latency), their own timeout, and retry would be harmful (LLM calls cost money). Rationale documented in the issue comment.
+5. **Hook fix:** Removed `--no-verify` bypass advice from pre-push hooks (engine + workspace) — it triggered `canonical_sync.py`'s retired-hook detection, blocking all publishes.
 
 ### Blog
 
-"The Handler That Stopped Reimplementing" — covers execution-concern delegation, function wrapping, and the handler split. SVG diagrams. Promoted to `docs/blog/`.
+"After the Split: What the Edges Revealed" — covers what code review surfaced from the handler split: untested REINVOKED mode, redundant parameter, and the deliberate boundary decision for agent handlers. SVG diagram. At `docs/blog/2026-11-19-mdp01-after-the-split-what-the-edges-revealed.md`.
 
-### Follow-Up Issues Filed
+### Code Review Findings Filed
 
 | # | Title | Scale | Complexity |
 |---|-------|-------|------------|
-| 1325 | REINVOKED mode test coverage for SyncWorkerFunctionHandler | XS | Low |
-| 1326 | Integration test for default timeout enrichment path | XS | Low |
-| 1327 | Drop redundant `outputProjection` param from engine WorkerExecutor | XS | Low |
-| 1328 | AgentWorkerFunctionHandler — Guard-based timeout and OTel | S | Med |
+| 1329 | Remove dead 30_000 timeout fallback from AgentWorkerFunctionHandler | XS | Low |
+| 1330 | Add outputProjection integration test through Capability path | XS | Low |
 
-### Code Review Findings Addressed
+Finding #1329: The orchestrator always enriches `ExecutionPolicy` before dispatch, making the agent handler's `30_000`ms hardcoded fallback unreachable.
 
-- Stale Javadoc on `WorkerFunctionHandler` updated to reflect delegating vs direct timeout
-- `PersistentWorkerFunctionHandler` FQN imports cleaned up
-- Input type validation duplication documented as intentional (engine exception is more specific)
+Finding #1330: After #1327, `Capability.outputProjection()` is never null (`Objects.requireNonNull` in compact constructor). The timeout test passes because `applyOutputSchema` short-circuits on null *output*, not on the projection string — but no test verifies the non-null JQ evaluation path through the new code.
 
 ## Queue Status
 
-4 items remaining in queue: #1325, #1326, #1327, #1328 (all follow-ups from this session).
+Queue drained. No remaining items. #1329 and #1330 are open on GitHub for future work.
 
-## Unpublished
+## Published
 
-Engine has 4 unpublished commits on main. Workspace has 9 unpublished commits. Neither has been pushed to remote.
+Engine: 5 commits pushed to origin (SHA `80fca5a07`).
+Workspace: 1 commit pushed to origin (SHA `ffd06a63`).
 
 ## Pre-Existing State
 
-- Engine has stashed pre-existing changes from prior work: `git stash list` shows `stash@{0}` (pre-work-end) and `stash@{1}` (pre-726). These are unrelated API/rest/persistence modifications from a different session.
-- Workspace has stashed pre-existing blog modifications: 2 blog entries with uncommitted edits.
+- Engine has unstaged changes from prior sessions across api, rest, persistence modules. These are NOT from this session — they predate #726 work. Some may be stashed changes that were popped; `git stash list` may still show older stashes.
+- Workspace is on branch `feat/306-lipsync-warmup-delegation` (not main). Has 1 commit on that branch (hook fix). The workspace main was published but the feature branch was not.
 
 ## References
 
-- `docs/specs/issue-726-sync-handler-delegates-worker-executor/2026-11-18-sync-handler-delegates-worker-executor-design.md`
-- `docs/specs/issue-726-sync-handler-delegates-worker-executor/decisions.md` (D1–D6)
-- `plans/2026-11-18-sync-handler-delegates-worker-executor.md`
-- `docs/blog/2026-11-18-mdp01-the-handler-that-stopped-reimplementing.md`
-- PP-20260723-c4c1cf — virtual-thread handler convention
+- `docs/blog/2026-11-19-mdp01-after-the-split-what-the-edges-revealed.md`
+- `docs/blog/2026-11-18-mdp01-the-handler-that-stopped-reimplementing.md` (prior session)
+- `docs/specs/issue-726-sync-handler-delegates-worker-executor/` (prior session)
