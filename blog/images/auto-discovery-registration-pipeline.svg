@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-auto">
+      <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="720" height="420" fill="#fafafa" rx="8"/>
+
+  <!-- Title -->
+  <text x="360" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#222">Startup Registration Order — Precedence by Priority</text>
+
+  <!-- Priority 10: CDI CaseHub beans -->
+  <rect x="30" y="50" width="300" height="80" rx="6" fill="#e8f4e8" stroke="#4a9" stroke-width="1.5"/>
+  <text x="40" y="72" font-weight="bold" fill="#2a7" font-size="12">Priority 10</text>
+  <text x="40" y="92" font-weight="bold" fill="#333">DefaultCaseDefinitionRegistry</text>
+  <text x="40" y="110" fill="#555" font-size="12">Iterates Instance&lt;CaseHub&gt; CDI beans</text>
+  <text x="40" y="124" fill="#555" font-size="12">→ Explicit Java classes registered first</text>
+
+  <!-- Priority 150: Jandex scan -->
+  <rect x="30" y="145" width="300" height="70" rx="6" fill="#e8ecf4" stroke="#68a" stroke-width="1.5"/>
+  <text x="40" y="167" font-weight="bold" fill="#468" font-size="12">Priority 150</text>
+  <text x="40" y="187" font-weight="bold" fill="#333">CaseHubClassRegistrar</text>
+  <text x="40" y="205" fill="#555" font-size="12">Jandex scan for non-CDI CaseHub subclasses</text>
+
+  <!-- Priority 200: YAML auto-discovery (enhanced) -->
+  <rect x="30" y="230" width="300" height="100" rx="6" fill="#fff3e0" stroke="#e8a" stroke-width="2"/>
+  <text x="40" y="252" font-weight="bold" fill="#c74" font-size="12">Priority 200 — Enhanced</text>
+  <text x="40" y="272" font-weight="bold" fill="#333">CaseYamlRegistrar</text>
+  <text x="40" y="290" fill="#555" font-size="12">Scans casehub/*.yaml on classpath</text>
+  <text x="40" y="304" fill="#555" font-size="12">Full pipeline: expressions + workers + agents</text>
+  <text x="40" y="318" fill="#555" font-size="12">Convention overlay merge (-overrides)</text>
+
+  <!-- Registry dedup -->
+  <rect x="400" y="130" width="290" height="80" rx="6" fill="#f5f0ff" stroke="#96a" stroke-width="1.5"/>
+  <text x="410" y="155" font-weight="bold" fill="#639">CaseDefinitionRegistry</text>
+  <text x="410" y="175" fill="#555" font-size="12">Dedup by CaseKey(ns, name, version)</text>
+  <text x="410" y="193" fill="#555" font-size="12">First registration wins → explicit beans prevail</text>
+
+  <!-- Arrows to registry -->
+  <line x1="330" y1="90" x2="395" y2="155" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="330" y1="175" x2="395" y2="168" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="330" y1="275" x2="395" y2="185" stroke="#555" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- Before/After callout -->
+  <rect x="400" y="260" width="290" height="100" rx="6" fill="#fff" stroke="#ccc" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="410" y="282" font-weight="bold" fill="#666" font-size="12">Before (simple load)</text>
+  <text x="410" y="300" fill="#999" font-size="11">JQ-only · no worker providers · no agents</text>
+  <text x="410" y="322" font-weight="bold" fill="#c74" font-size="12">After (full pipeline)</text>
+  <text x="410" y="340" fill="#555" font-size="11">All expression engines · FlowWorkerFunctionProvider</text>
+  <text x="410" y="354" fill="#555" font-size="11">AgentProvider · overlay composition</text>
+
+  <!-- Footer -->
+  <text x="360" y="400" text-anchor="middle" fill="#888" font-size="11">Zero-Java apps: YAML on classpath → fully-wired case definition. No Java class needed.</text>
+</svg>
