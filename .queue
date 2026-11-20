@@ -1,3 +1,17 @@
+# Work Plan —
+
+## State
+branch: 
+issue-repo: casehubio/engine
+status: active
+covers: casehubio/engine#1328
+project-sha: 
+date: 
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
 - [x] casehubio/engine#1308 — Add onTopologyChanged to AgentWorkLifecycleListener
@@ -14,22 +28,12 @@
   - [x] Batch 1: Full-Pipeline Auto-Discovery
     - [x] Task 1: Make deriveConventionPath public
     - [x] Task 2: Enhance CaseYamlRegistrar with full pipeline
-- [ ] casehubio/engine#1327 — drop redundant outputProjection        ← active
-- [ ] casehubio/engine#1328 — agent handler Guard and OTel
+- [ ] casehubio/engine#1327 — drop redundant outputProjection ← done on issue-1331-auto-discovery-classpath-yaml
+- [ ] casehubio/engine#1328 — agent handler Guard and OTel ← active
 - [ ] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
 - [ ] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
 - [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
-
-## State
-branch: issue-1332-json-collection-spi-adapter
-issue-repo: casehubio/engine
-status: active
-covers: casehubio/engine#1327
-project-sha: 
-date: 
-design-repo: 
-design-section-hashes: 
-flyway-next-v: 
+- [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
