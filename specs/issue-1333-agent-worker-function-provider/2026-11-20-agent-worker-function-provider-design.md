@@ -35,7 +35,14 @@ slot → AgentRegistry.findById(slot, tenancyId)
 
 The `WorkerAgentInvoker` constructor already accepts all the pieces (`AgentProvider`, `systemPrompt`, `model`, `userMessageTemplate`, transformers). The new code constructs it at execution time from the resolved descriptor rather than at YAML parse time.
 
-**Optional YAML overrides** (model, userMessage, inputProjection, outputProjection) are stored alongside the slot reference and applied on top of the descriptor-derived defaults at execution time.
+**`AgentWorkerFunction` structure change:** The existing record `AgentWorkerFunction(WorkerAgentInvoker invoker)` gains a new construction path. Two modes, distinguished by which fields are populated:
+
+- **Eager mode** (existing): `invoker` is non-null, `slot` is null. Used by Java API when the caller supplies a pre-built invoker. Existing tests and code paths unchanged.
+- **Deferred mode** (new): `slot` is non-null, `invoker` is null. The handler resolves the invoker at execution time from the slot. Used by `AgentWorkerFunctionProvider` and by Java API callers who want slot-based resolution.
+
+A new `AgentSlotConfig` record holds the slot reference plus optional overrides (model, userMessageTemplate, inputProjection, outputProjection). `AgentWorkerFunction` becomes `AgentWorkerFunction(WorkerAgentInvoker invoker, AgentSlotConfig slotConfig)` with factory methods `AgentWorkerFunction.eager(invoker)` and `AgentWorkerFunction.ofSlot(slot)`.
+
+**Optional overrides** (model, userMessage, inputProjection, outputProjection) are stored in `AgentSlotConfig` and applied on top of the descriptor-derived defaults at execution time.
 
 ### 2. AgentWorkerFunctionProvider
 
