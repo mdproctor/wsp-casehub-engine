@@ -11,18 +11,15 @@
 - [x] casehubio/engine#1299 — ProtocolEnforcement SPI MODERATOR contract
 - [x] casehubio/engine#1325 — REINVOKED test coverage
 - [x] casehubio/engine#1326 — integration test timeout enrichment
-  - [x] Batch 1: Full-Pipeline Auto-Discovery
-    - [x] Task 1: Make deriveConventionPath public
-    - [x] Task 2: Enhance CaseYamlRegistrar with full pipeline
 - [x] casehubio/engine#1327 — drop redundant outputProjection
-- [ ] casehubio/engine#1328 — agent handler Guard and OTel        ← active
-- [ ] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
-- [ ] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
-- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
+- [x] casehubio/engine#1328 — agent handler Guard and OTel
+- [x] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
+- [x] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
+- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch        ← active
 - [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
 
 ## State
-branch: 
+branch: issue-1333-agent-worker-function-provider
 issue-repo: casehubio/engine
 status: active
 covers: casehubio/engine#1328
