@@ -2,49 +2,39 @@
 
 ## Last Session
 
-Closed all 4 follow-up issues from #726 code review: #1325, #1326, #1327, #1328. All work committed directly to main (XS follow-ups, no feature branch). Published to origin.
+Implemented #1331 (auto-discovery YAML registration), brainstormed #1332 (CollectionStore platform SPI — created slot 226 for cross-repo work), scaffolded #1333 (agent worker function provider).
 
 ### What Landed
 
-5 commits on engine main (SHA range `784ee30ed`..`80fca5a07`):
+Branch `issue-1331-auto-discovery-classpath-yaml` landed on main (2 commits):
 
-1. **#1325 — REINVOKED test coverage:** 3 tests for the previously untested REINVOKED execution path in `SyncWorkerFunctionHandler` — accumulated state round-trip, binding lock release on success, lock release on failure.
-2. **#1326 — Timeout enrichment integration test:** Verifies `WorkerExecutionConfig.withEffectiveTimeout()` enrichment propagates through `wrapFunction` to the platform executor. Captures the Worker at the platform executor and asserts its ExecutionPolicy has the enriched default timeout.
-3. **#1327 — Drop redundant `outputProjection` param:** Removed `String outputProjection` from `WorkerExecutor.execute()`. `DefaultWorkerExecutor` now reads from `capability.outputProjection()` directly. Interface simplified from 6 args to 5. 4 files updated.
-4. **#1328 — Agent handler Guard/OTel decision:** Closed with decision: keep as-is. Agent invocations have richer observability (token counts, cost, latency), their own timeout, and retry would be harmful (LLM calls cost money). Rationale documented in the issue comment.
-5. **Hook fix:** Removed `--no-verify` bypass advice from pre-push hooks (engine + workspace) — it triggered `canonical_sync.py`'s retired-hook detection, blocking all publishes.
+1. **feat(#1331):** Enhanced `CaseYamlRegistrar` with full pipeline loading — injected `ExpressionEngineRegistry`, `WorkerFunctionProviderRegistry`, `@YamlMapper ObjectMapper`, and `AgentProvider`. Uses `CaseDefinitionYamlMapper.load(JsonNode, ...)` for full worker/expression wiring. Added overlay composition via convention path (`-overrides` suffix). Made `YamlCaseHub.deriveConventionPath()` public.
+2. **test(#1331):** Overlay composition test verifying convention-path merging. Promoted specs and blog to `docs/`.
 
-### Blog
+### Design Outcome — #1332 (CollectionStore)
 
-"After the Split: What the Edges Revealed" — covers what code review surfaced from the handler split: untested REINVOKED mode, redundant parameter, and the deliberate boundary decision for agent handlers. SVG diagram. At `docs/blog/2026-11-19-mdp01-after-the-split-what-the-edges-revealed.md`.
+The brainstorming surfaced a platform-level design: a `CollectionStore` SPI (typed document CRUD + concurrency over named collections). Not JSON-specific — JSON is a serialization detail of one backend. Cases and app data (customers, orders, lookups) share the same data layer, enabling natural joins. Full cross-repo implementation in slot 226 (`/Users/mdproctor/claude/casehub/slots/226` — repos: engine, parent, pages).
 
-### Code Review Findings Filed
+### Issues Filed
 
 | # | Title | Scale | Complexity |
 |---|-------|-------|------------|
-| 1329 | Remove dead 30_000 timeout fallback from AgentWorkerFunctionHandler | XS | Low |
-| 1330 | Add outputProjection integration test through Capability path | XS | Low |
+| 1336 | Integration test: verify auto-discovered YAML wires do: block workers via FlowWorkerFunctionProvider | XS | Low |
 
-Finding #1329: The orchestrator always enriches `ExecutionPolicy` before dispatch, making the agent handler's `30_000`ms hardcoded fallback unreachable.
+### Blog
 
-Finding #1330: After #1327, `Capability.outputProjection()` is never null (`Objects.requireNonNull` in compact constructor). The timeout test passes because `applyOutputSchema` short-circuits on null *output*, not on the projection string — but no test verifies the non-null JQ evaluation path through the new code.
+"The YAML That Didn't Need a Class" — at `docs/blog/2026-11-20-mdp01-the-yaml-that-didnt-need-a-class.md`.
 
-## Queue Status
+## Active Work
 
-Queue drained. No remaining items. #1329 and #1330 are open on GitHub for future work.
-
-## Published
-
-Engine: 5 commits pushed to origin (SHA `80fca5a07`).
-Workspace: 1 commit pushed to origin (SHA `ffd06a63`).
+Branch `issue-1333-agent-worker-function-provider` scaffolded. Next session: brainstorm and implement `call: agent` worker function provider for eidos dispatch + `agent-task:` binding resolver. Issue spans engine and eidos.
 
 ## Pre-Existing State
 
-- Engine has unstaged changes from prior sessions across api, rest, persistence modules. These are NOT from this session — they predate #726 work. Some may be stashed changes that were popped; `git stash list` may still show older stashes.
-- Workspace is on branch `feat/306-lipsync-warmup-delegation` (not main). Has 1 commit on that branch (hook fix). The workspace main was published but the feature branch was not.
+Engine has stashed changes from prior sessions (multiple stash entries). These predate all current work and are NOT part of any active branch.
 
 ## References
 
-- `docs/blog/2026-11-19-mdp01-after-the-split-what-the-edges-revealed.md`
-- `docs/blog/2026-11-18-mdp01-the-handler-that-stopped-reimplementing.md` (prior session)
-- `docs/specs/issue-726-sync-handler-delegates-worker-executor/` (prior session)
+- `docs/specs/issue-1331-auto-discovery-classpath-yaml/2026-11-19-case-auto-discovery-design.md`
+- `docs/blog/2026-11-20-mdp01-the-yaml-that-didnt-need-a-class.md`
+- Slot 226: `/Users/mdproctor/claude/casehub/slots/226` (#1332 CollectionStore)
