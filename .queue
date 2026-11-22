@@ -1,7 +1,7 @@
 # Work Plan —
 
 ## State
-branch: 
+branch: main
 issue-repo: casehubio/engine
 status: active
 covers: casehubio/engine#1339
@@ -33,6 +33,13 @@ flyway-next-v:
 - [x] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
 - [x] casehubio/engine#1338 — YAML parser for agent-task binding target
 - [ ] casehubio/engine#1339 — agent-task runtime dispatch handler ← active
+  - [ ] Batch 1: Foundation
+    - [ ] Task 1: Create DeferredAgentConfig sealed hierarchy
+    - [ ] Task 2: Refactor AgentWorkerFunction and update callers
+  - [ ] Batch 2: Dispatch
+    - [ ] Task 3: Add model field to AgentTaskTarget
+    - [ ] Task 4: Implement executeByCapability in handler
+    - [ ] Task 5: BindingExecutorResolver + synthetic Worker + collision protection
 - [ ] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring
 - [ ] casehubio/engine#1341 — Integration test timeout enrichment
 - [ ] casehubio/engine#1342 — Drop redundant outputProjection
