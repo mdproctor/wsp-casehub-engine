@@ -1,3 +1,17 @@
+# Work Plan —
+
+## State
+branch: issue-1333-agent-worker-function-provider
+issue-repo: casehubio/engine
+status: active
+covers: casehubio/engine#1328
+project-sha: 
+date: 
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
 - [x] casehubio/engine#1308 — Add onTopologyChanged to AgentWorkLifecycleListener
@@ -15,19 +29,16 @@
 - [x] casehubio/engine#1328 — agent handler Guard and OTel
 - [x] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
 - [x] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
-- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch        ← active
+- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch ← active
+  - [x] Batch 1: Foundation
+    - [x] Task 1: AgentSlotConfig and dual-mode AgentWorkerFunction
+    - [x] Task 2: AgentTaskTarget binding target
+  - [x] Batch 2: Provider and Handler
+    - [x] Task 3: AgentWorkerFunctionProvider
+    - [x] Task 4: Extend handler for slot resolution
+  - [x] Batch 3: Migration
+    - [x] Task 5: Remove inline agent fallback
 - [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
-
-## State
-branch: issue-1333-agent-worker-function-provider
-issue-repo: casehubio/engine
-status: active
-covers: casehubio/engine#1328
-project-sha: 
-date: 
-design-repo: 
-design-section-hashes: 
-flyway-next-v: 
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
