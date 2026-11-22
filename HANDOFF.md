@@ -34,9 +34,9 @@ Branch `issue-1333-agent-worker-function-provider` — 8 commits (6 feature + 2 
 
 ## Active Work
 
-#1333 is marked done on branch `issue-1333-agent-worker-function-provider`. Not yet landed on main — needs `work end` to land, squash, and close.
+#1333 and #1336 are marked done on branch `issue-1333-agent-worker-function-provider`. Not yet landed on main — next session should run `work end` to land, squash, and close both.
 
-Next in queue: #1336 (integration test: auto-discovered YAML wires do: block workers), then #1338, #1339, #1340.
+#1338 is the next active item. Branch creation for #1338 failed during scaffold (stacking conflict — current branch already exists). Running `work end` first will land the done items and clear the branch, after which `work start` or `work continue` will create #1338's branch cleanly.
 
 ## Pre-Existing State
 
