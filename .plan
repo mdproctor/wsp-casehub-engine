@@ -13,3 +13,5 @@ flyway-next-v: unknown
 
 ## Queue
 - [ ] casehubio/engine#1332 — Issue #1332 ← active
+- [ ] casehubio/engine#1348 — CaseInstanceQuery count omits free-text filter
+- [ ] casehubio/engine#1349 — DataStore document collection silently ignores filter ops
