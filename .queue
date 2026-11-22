@@ -4,7 +4,7 @@
 branch: 
 issue-repo: casehubio/engine
 status: active
-covers: casehubio/engine#1333
+covers: casehubio/engine#1332
 project-sha: 
 date: 
 design-repo: 
@@ -28,8 +28,8 @@ flyway-next-v:
 - [x] casehubio/engine#1327 — drop redundant outputProjection
 - [x] casehubio/engine#1328 — agent handler Guard and OTel
 - [x] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
-- [x] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
-- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch ← active
+- [ ] casehubio/engine#1332 — JSON collection SPI adapter for case persistence ← active
+- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch 
 - [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
 
 ## Deferred
