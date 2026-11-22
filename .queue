@@ -39,6 +39,9 @@ flyway-next-v:
   - [x] Batch 3: Migration
     - [x] Task 5: Remove inline agent fallback
 - [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
+- [ ] casehubio/engine#1338 — YAML parser for agent-task binding target
+- [ ] casehubio/engine#1339 — agent-task runtime dispatch handler
+- [ ] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
