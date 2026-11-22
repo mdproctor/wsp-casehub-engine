@@ -12,52 +12,63 @@
 
 ## D2: Config type for capability-based resolution
 
-**Choice:** Extend AgentSlotConfig with optional capability and domain fields. Handler branches: slot present → query by slot; capability present → query by capability+domain.
+**Choice:** Sealed `DeferredAgentConfig` interface with `SlotConfig` and `CapabilityConfig` record subtypes. `AgentWorkerFunction.slotConfig()` becomes `deferredConfig()` returning `DeferredAgentConfig`. Handler pattern-matches on the config type.
 **Alternatives:**
-- New AgentCapabilityConfig record — cleaner separation but introduces a parallel type hierarchy with duplicated fields (model, userMessageTemplate, projections).
-- Sealed DeferredAgentConfig interface — most type-safe but requires refactoring AgentWorkerFunction and AgentWorkerFunctionHandler for a sealed hierarchy. Heavy for two variants.
-**Rationale:** AgentSlotConfig already carries all the execution config fields. Adding two optional fields (capability, domain) is minimal change. The handler already has a deferred path that checks `agent.isDeferred()` — adding a branch within that path is natural.
-**Trade-offs:** AgentSlotConfig becomes overloaded — slot-based and capability-based configs share one type. A validation invariant is needed (exactly one of slot/capability must be non-null). This is an acceptable trade-off: fewer types to maintain, single deferred execution path with a branch.
-**Sources:** AgentSlotConfig.java:20-29, AgentWorkerFunctionHandler.java:102-106 (isDeferred check)
-**Exploration:** quick
+- Extend AgentSlotConfig with optional capability/domain fields — creates a 10-field record with mutual exclusion invariants, breaks existing `requireNonNull(slot)` contract, naming lie ("SlotConfig" with no slot).
+- New AgentCapabilityConfig record (no sealed hierarchy) — cleaner separation but no compile-time exhaustiveness, duplicates fields.
+**Rationale:** Sealed interfaces with records are the platform's idiomatic approach to discriminated dispatch (see `BindingTarget` with 7 permits). The compiler's exhaustiveness check in the handler's branch prevents missed variants. Each subtype is self-documenting with only its relevant fields.
+**Trade-offs:** Requires refactoring `AgentWorkerFunction` and `AgentWorkerFunctionHandler` — `slotConfig()` → `deferredConfig()`, handler gets a pattern match. This is trivially scoped and improves type safety.
+**Sources:** AgentSlotConfig.java:20-29, BindingTarget.java:27-34 (sealed interface precedent), AgentWorkerFunctionHandler.java:102-106
+**Exploration:** quick → revised after decision review R1-02
 **Depends on:** D1 (synthetic Worker uses this config)
-**Status:** captured
+**Status:** revised
 
 ## D3: Synthetic Worker creation point
 
-**Choice:** CaseDefinition converter — when a binding has AgentTaskTarget, generate the synthetic Worker in the YAML-to-CaseDefinition conversion step. Worker is in the definition from the start.
+**Choice:** CaseDefinition converter — when a binding has AgentTaskTarget, generate the synthetic Worker in the YAML-to-CaseDefinition conversion step. Synthetic Worker creation utility is a public static method accessible to programmatic CaseDefinition construction.
 **Alternatives:**
 - WorkerFunctionProvider — providers work from raw YAML worker nodes, not from binding targets. Would need a different trigger mechanism that breaks the provider contract.
 - Post-registration hook — scan bindings after CaseDefinition is registered and add synthetic Workers. Requires mutable worker list and late-binding lifecycle complexity.
 **Rationale:** The converter already creates Workers from YAML (convertWorkers method) and resolves binding targets (resolveTarget method). Adding synthetic Worker creation alongside target resolution keeps the lifecycle simple: by the time CaseDefinition is registered, all Workers exist.
-**Trade-offs:** Couples synthetic Worker creation to the YAML conversion path. Programmatic CaseDefinition construction would need to create synthetic Workers separately. Acceptable because YAML is the primary authoring path.
+**Trade-offs:** Couples synthetic Worker creation to the YAML conversion path. Programmatic CaseDefinition construction calls the public utility method directly. Naming convention `__agent-task__<bindingName>` uses a reserved prefix — the converter validates no user-authored Worker uses `__agent-task__` prefix, failing fast on collision.
 **Sources:** YamlCaseDefinitionConverter.java:857-875 (resolveTarget), YamlCaseDefinitionConverter.java:497-612 (convertWorkers)
-**Exploration:** quick
+**Exploration:** quick → updated after decision review R1-05, R1-06
 **Depends on:** D1 (synthetic Worker approach), D2 (config type)
-**Status:** captured
+**Status:** revised
 
 ## D4: Input/output mapping source
 
-**Choice:** Use AgentTaskTarget's ExpressionEvaluator fields directly. The handler reads mappings from the BindingTarget itself (passed through the synthetic Worker's metadata or as evaluator references), not from AgentSlotConfig's JQ string fields.
+**Choice:** Use AgentTaskTarget's ExpressionEvaluator fields, carried through `CapabilityConfig`. Evaluation uses `ExpressionEngineRegistry.transform(evaluator, input)`, not direct evaluator method calls. The handler injects `ExpressionEngineRegistry`.
 **Alternatives:**
-- Convert to JQ strings in config — extract JQ expressions from AgentTaskTarget's evaluators and store as strings in AgentSlotConfig's existing inputProjection/outputProjection fields. Reuses existing path but couples to JQ and loses evaluator type information.
-- Support both paths — AgentSlotConfig carries optional evaluators alongside optional JQ strings. Handler checks evaluators first, falls back to JQ strings. Most flexible but most complex, violates YAGNI.
-**Rationale:** AgentTaskTarget already carries typed ExpressionEvaluator instances (inputMapping/outputMapping). These are richer than raw JQ strings — they support the ExpressionEngineRegistry's type system. Converting to strings would lose type information and couple to JQ.
-**Trade-offs:** The handler needs access to the original AgentTaskTarget or its evaluators at execution time. This means either the synthetic Worker carries the evaluators, or the handler looks up the binding target from the execution context. Slight increase in handler complexity.
-**Sources:** AgentTaskTarget.java:44-50 (evaluator fields), AgentSlotConfig.java:24-25 (JQ string fields)
-**Exploration:** quick
-**Depends on:** D2 (config carries capability+domain, not mappings)
-**Status:** captured
+- Convert to JQ strings in config — extract JQ expressions from AgentTaskTarget's evaluators and store as strings. Reuses existing path but couples to JQ and loses evaluator type information.
+- Direct evaluator.evaluate(node) — `ExpressionEvaluator` has no such method; evaluation requires the registry. This was an error in the original design.
+**Rationale:** AgentTaskTarget carries typed ExpressionEvaluator instances. `ExpressionEngineRegistry` is the platform's standard evaluation path (used by `DefaultWorkerExecutor.applyOutputSchema()` and `DefaultWorkOrchestrator.transformAsMap()`). Injecting it into the handler is consistent.
+**Trade-offs:** Adds `ExpressionEngineRegistry` as a new dependency to `AgentWorkerFunctionHandler`. Acceptable — it's already a runtime-tier bean used by the executor.
+**Sources:** AgentTaskTarget.java:44-50, ExpressionEngineRegistry (platform API), DefaultWorkerExecutor.java:92 (existing usage pattern)
+**Exploration:** quick → updated after decision review R1-03
+**Depends on:** D2 (CapabilityConfig carries evaluators)
+**Status:** revised
 
 ## D5: Match selection strategy
 
-**Choice:** String enum field on AgentTaskTarget (matchStrategy, nullable, default "first"). Values: "first" (default), "best-domain", "round-robin". Interpreted by the handler at dispatch time.
+**Choice:** Delegate to existing `AgentSelector` SPI (specifically `EngineAwareAgentSelector` in production). No `matchStrategy` field on `AgentTaskTarget`. The handler queries `AgentRegistry.find()`, then delegates to `AgentSelector.select(candidates, SelectionContext)` for health probing, trust scoring, and routing strategy composition.
 **Alternatives:**
-- SPI interface (AgentMatchSelector) — CDI-discovered named implementations. Most extensible but heavy for three known strategies. Adds a new SPI where a switch statement suffices.
-- Functional on AgentSlotConfig — Function<List<AgentMatch>, AgentMatch> selector. Flexible but not serialisable from YAML, breaks the config's value-object semantics.
-**Rationale:** A string field is serialisable from YAML, doesn't require new types, and is extensible by adding new string values without changing the type hierarchy. The handler interprets the string with a switch — straightforward and testable.
-**Trade-offs:** No compile-time exhaustiveness check on strategy values. Invalid strategy strings are runtime errors. Acceptable because strategies are a small, stable set and validation can be added at parse time.
-**Sources:** AgentTaskTarget.java:22-97 (builder pattern), AgentRegistry.java:22 (find returns ordered list)
-**Exploration:** quick
-**Depends on:** D1 (dispatch model determines where strategy is applied)
+- String matchStrategy field on AgentTaskTarget — reinvents the platform's selection pipeline. Bypasses health probing (`CapabilityHealth.probe()`), trust scoring (`TrustScoreSource`), CDI-extensible routing strategies (`LeastLoaded`, `TrustWeighted`, `Semantic`), and org-aware escalation.
+- SPI interface per binding — over-engineered for a problem the platform already solves.
+**Rationale:** The platform has a layered selection architecture: `AgentRegistry.find()` → `EngineAwareAgentSelector` (health probing + `AgentRoutingStrategy` + trust + org-aware dispatch). This pipeline handles `Selected`, `NoneQualified`, and `Escalated` outcomes. Composing with it gives the capability path the same selection quality as every other dispatch path.
+**Trade-offs:** The handler needs to inject `AgentSelector` and handle the `AgentSelection` sealed hierarchy (Selected/NoneQualified/Escalated). This is more code than `matches.get(0)` but correct — capability matching is inherently ambiguous and needs selection intelligence.
+**Sources:** AgentSelector.java:5-7, EngineAwareAgentSelector.java:42-78, AgentSelection.java:3-22, SelectionContext.java:5-21, AgentRoutingStrategy.java:46-61
+**Exploration:** quick → revised after decision review R1-01
+**Depends on:** D1 (dispatch model determines where selection runs)
+**Status:** revised
+
+## D6: Model override for capability-based path
+
+**Choice:** `AgentTaskTarget` gains an optional `model` field. When present, it overrides the agent descriptor's model in the `WorkerAgentInvoker`. Parity with slot-based mode where `AgentSlotConfig.model()` can override the descriptor.
+**Alternatives:**
+- No model override — defer to agent descriptor. Creates a capability gap vs slot-based mode that may surprise users.
+**Rationale:** Binding authors may need to specify a model for cost or latency reasons regardless of which agent is selected. This is a one-field addition to the builder.
+**Trade-offs:** None significant — the invoker already supports model overrides.
+**Sources:** AgentWorkerFunctionHandler.java:122 (slot path model override), AgentTaskTarget.java builder
+**Exploration:** quick (surfaced by decision review R1-07)
 **Status:** captured
