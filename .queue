@@ -1,10 +1,10 @@
 # Work Plan —
 
 ## State
-branch: main
+branch: 
 issue-repo: casehubio/engine
 status: active
-covers: casehubio/engine#1339
+covers: casehubio/engine#1333
 project-sha: 
 date: 
 design-repo: 
@@ -29,21 +29,8 @@ flyway-next-v:
 - [x] casehubio/engine#1328 — agent handler Guard and OTel
 - [x] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
 - [x] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
-- [x] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
-- [x] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
-- [x] casehubio/engine#1338 — YAML parser for agent-task binding target
-- [ ] casehubio/engine#1339 — agent-task runtime dispatch handler ← active
-  - [ ] Batch 1: Foundation
-    - [ ] Task 1: Create DeferredAgentConfig sealed hierarchy
-    - [ ] Task 2: Refactor AgentWorkerFunction and update callers
-  - [ ] Batch 2: Dispatch
-    - [ ] Task 3: Add model field to AgentTaskTarget
-    - [ ] Task 4: Implement executeByCapability in handler
-    - [ ] Task 5: BindingExecutorResolver + synthetic Worker + collision protection
-- [ ] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring
-- [ ] casehubio/engine#1341 — Integration test timeout enrichment
-- [ ] casehubio/engine#1342 — Drop redundant outputProjection
-- [ ] casehubio/engine#1343 — Agent handler Guard and OTel
+- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch ← active
+- [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
