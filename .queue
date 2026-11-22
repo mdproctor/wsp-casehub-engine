@@ -1,17 +1,3 @@
-# Work Plan —
-
-## State
-branch: 
-issue-repo: casehubio/engine
-status: active
-covers: casehubio/engine#1339
-project-sha: 
-date: 
-design-repo: 
-design-section-hashes: 
-flyway-next-v: 
-
-## Queue
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
 - [x] casehubio/engine#1308 — Add onTopologyChanged to AgentWorkLifecycleListener
@@ -29,7 +15,7 @@ flyway-next-v:
 - [x] casehubio/engine#1328 — agent handler Guard and OTel
 - [x] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
 - [x] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
-- [ ] casehubio/engine#1333 — call agent worker function provider for eidos dispatch ← done on issue-1333-agent-worker-function-provider
+- [x] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
   - [x] Batch 1: Foundation
     - [x] Task 1: AgentSlotConfig and dual-mode AgentWorkerFunction
     - [x] Task 2: AgentTaskTarget binding target
@@ -40,8 +26,19 @@ flyway-next-v:
     - [x] Task 5: Remove inline agent fallback
 - [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers ← done on issue-1333-agent-worker-function-provider
 - [ ] casehubio/engine#1338 — YAML parser for agent-task binding target ← done on issue-1333-agent-worker-function-provider
-- [ ] casehubio/engine#1339 — agent-task runtime dispatch handler ← active
+- [ ] casehubio/engine#1339 — agent-task runtime dispatch handler        ← active
 - [ ] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring
+
+## State
+branch: 
+issue-repo: casehubio/engine
+status: active
+covers: casehubio/engine#1339
+project-sha: 
+date: 
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
