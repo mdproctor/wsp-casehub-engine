@@ -3,21 +3,27 @@
 **Issue:** casehubio/engine#1332
 **Branch:** issue-1332-collection-store-spi
 **Date:** 2026-11-22
+**Revised:** Post-review — incorporated naming collision analysis (qhorus), Jackson dependency note, defensive copy contract, extract-from-JsonCollectionStore strategy
 
 ## Overview
 
 A platform-level data persistence SPI that any application built on CaseHub can use. The SPI abstracts collection-based record storage with optional schema descriptors, supporting both schema-less document storage (simple apps) and schema-ful typed storage (complex apps) behind the same contract.
 
-The engine's `CaseInstanceRepository` becomes one adapter over this SPI. Neocortex storage modules (memory, mindmap, cognitive-observability) are future migration targets. End-user applications get a first-class persistence API for free.
+The engine's `CaseInstanceRepository` becomes one adapter over this SPI. Neocortex storage modules (memory, mindmap, cognitive-observability) and qhorus' 20+ per-entity stores are future migration targets. End-user applications get a first-class persistence API.
 
 ## Motivation
 
 The platform currently has fragmented storage:
-- Engine: domain-specific SPIs (`CaseInstanceRepository`, `EventLogRepository`, `PlanItemStore`) with per-database implementations (in-memory, JPA, Spring JPA)
-- Pages: concrete `JsonCollectionStore` class coupled to SQLite — not an SPI
-- Neocortex: four independent SQLite-backed stores, each with their own connection pooling and migration
+- **Engine:** domain-specific SPIs (`CaseInstanceRepository`, `EventLogRepository`, `PlanItemStore`) with per-database implementations (in-memory, JPA, Spring JPA)
+- **Pages:** concrete `JsonCollectionStore` class coupled to SQLite — not an SPI
+- **Neocortex:** four independent SQLite-backed stores, each with their own connection pooling and migration
+- **Qhorus:** 20+ per-entity store SPIs (`ChannelStore`, `MessageStore`, `InstanceStore`, `DataStore`, etc.), each with in-memory, JPA, and Spring implementations
 
 This fragmentation means every new persistence need requires a new SPI, new implementations, and new CDI wiring. A unified DataStore SPI eliminates this — consumers work with collections of records, implementations handle physical storage.
+
+### Why CaseInstanceRepository, not CaseInstanceCache
+
+`CaseInstanceCache` (the SPI named in issue #1332) is a 4-method in-memory L1 cache sitting in front of `CaseInstanceRepository`. The runtime pattern is: writes go through the repository first, then the cache. Backing only the cache with persistent storage doesn't give durable persistence — the repository data remains volatile. For YAML-only apps that need data to survive restarts, the adapter must target `CaseInstanceRepository` (the actual persistence SPI with tenant isolation, versioning, and query support).
 
 ## SPI Contract
 
@@ -26,6 +32,10 @@ This fragmentation means every new persistence need requires a new SPI, new impl
 `io.casehub.platform.api.data` in `casehub-platform-api`.
 
 Distinct from the existing `io.casehub.platform.api.datasource` package, which is a reactive event stream SPI (subscribe to typed data sources). DataStore is CRUD persistence, not event streaming.
+
+**Naming note:** The name `DataStore` temporarily collides with `io.casehub.qhorus.api.store.DataStore` (a single-entity store for `SharedData`). Qhorus' `DataStore` is a migration target for the platform DataStore SPI — during that migration, the qhorus-specific interface will be removed and its functionality served by a registered collection. The platform-level name takes precedence as the long-term canonical interface.
+
+**Jackson dependency:** Adding `ObjectNode` to platform-api introduces the first external dependency on a module that is currently zero-dep pure Java. Jackson is a universal dependency across the platform (every consumer already has it), and `ObjectNode` is the platform's de facto interchange format. The dependency is accepted as the pragmatic choice over alternatives (`jakarta.json.JsonObject`, custom `Record` type, `Map<String, Object>`) that would add indirection without clear benefit.
 
 ### Core Interfaces
 
@@ -67,6 +77,8 @@ public interface DataCollection {
     List<ObjectNode> search(String text, DataContext ctx);
 }
 ```
+
+**Defensive copy contract:** All `ObjectNode` values returned by `get()`, `query()`, and `search()` are independent copies. Consumers may mutate returned nodes freely without affecting store state. Implementations must not return shared references to internal storage.
 
 ### DataContext
 
@@ -218,6 +230,10 @@ public class CollectionNotFoundException extends DataStoreException { ... }
 
 ## Implementations
 
+### Implementation Strategy: Extract from JsonCollectionStore
+
+The document-backed implementation is not built from scratch — it is extracted from the existing `JsonCollectionStore` in pages' `data-json` module. `JsonCollectionStore` already provides: SQLite-backed JSON document storage, tenant isolation, optimistic concurrency (`_version` column), system fields, merge strategies, and collection scoping. The extraction refactors this proven code to implement the new `DataStore` SPI interface.
+
 ### Document-Backed (SQLite)
 
 Single `data_records` table:
@@ -236,7 +252,7 @@ CREATE TABLE data_records (
 );
 ```
 
-All records stored as JSON blobs regardless of schema descriptors. Filtering and sorting happen in the application layer (read all, filter in Java). Suitable for simple apps with modest data volumes.
+All records stored as JSON blobs. Filtering uses SQLite's `json_extract()` for field-based queries (not read-all-filter-in-Java). Suitable for simple apps with modest data volumes.
 
 FTS support via SQLite FTS5 virtual table (created on-demand when an `IndexType.FULLTEXT` descriptor is registered).
 
@@ -289,7 +305,7 @@ public class DataStoreCaseInstanceRepository implements CaseInstanceRepository {
             .map(CaseInstanceMapper::fromRecord);
     }
 
-    // ... remaining CaseInstanceRepository methods
+    // ... remaining CaseInstanceRepository methods delegate similarly
 }
 ```
 
@@ -299,6 +315,7 @@ Bidirectional mapping between `CaseInstance` domain object and `ObjectNode` reco
 - Primitive fields: `uuid`, `version`, `state`, `actorId`, `createdAt`
 - Complex fields: `caseMetaModel` (namespace/name/version), `caseContext`, `contextSnapshot`
 - Collections: `labels`, `types`, `exchangeHeaders`
+- Enum fields: `state` (CaseStatus) stored as string, converted back via `CaseStatus.valueOf()`
 
 ### CaseInstanceSchema
 
@@ -345,7 +362,7 @@ public class PersistenceDataStoreBeans {
 
 ### DataStoreContractTest
 
-Abstract base class in `casehub-platform-api` (or a test-support module):
+Abstract base class in a test-support module:
 
 ```java
 public abstract class DataStoreContractTest {
@@ -365,6 +382,7 @@ public abstract class DataStoreContractTest {
     @Test void registered_collection_honorsFieldTypes() { ... }
     @Test void systemFields_injectedOnRead_strippedOnWrite() { ... }
     @Test void relations_crossCollectionReference() { ... }
+    @Test void returnedNodes_areDefensiveCopies() { ... }
 }
 ```
 
@@ -377,30 +395,45 @@ The existing `CaseInstanceRepositoryContractTest` gains a new concrete runner in
 ## Module Dependencies
 
 ```
-casehub-platform-api          (SPI interfaces, zero external deps except Jackson)
+casehub-platform-api          (SPI interfaces + Jackson dependency)
   ↑
-casehub-data-sqlite           (document-backed + table-backed SQLite impls)
+casehub-data-sqlite           (document-backed + table-backed SQLite impls,
+                               extracted from pages' JsonCollectionStore)
   ↑
 casehub-engine persistence-datastore  (CaseInstanceRepository adapter)
 ```
 
 `casehub-data-sqlite` is a new standalone module — not part of engine, not part of pages. It implements the platform DataStore SPI using SQLite. Any repo can depend on it.
 
+## Platform Consolidation Roadmap
+
+This SPI is the foundation for consolidating per-entity storage across the platform:
+
+| Repo | Current state | Migration target |
+|------|--------------|------------------|
+| **Engine** | CaseInstanceRepository, EventLogRepository, PlanItemStore (3+ SPIs, each with in-memory/JPA/Spring impls) | Domain adapters over DataStore |
+| **Qhorus** | 20+ per-entity store SPIs (ChannelStore, MessageStore, etc.), each with in-memory/JPA/Spring impls | Registered collections with schema descriptors |
+| **Neocortex** | 4 independent SQLite stores (memory, mindmap, observability, pages) | DataStore collections (simple cases); dedicated stores for graph-heavy mindmap |
+| **Pages** | Concrete JsonCollectionStore | Extracted as DataStore SPI reference implementation |
+
+This issue delivers the SPI + first adapter. Each row above is a follow-up epic.
+
 ## Scope Boundaries
 
 **In scope (this issue):**
 1. `DataStore` SPI interfaces in `casehub-platform-api`
-2. Document-backed SQLite implementation
+2. Document-backed SQLite implementation (extracted from JsonCollectionStore)
 3. Table-backed SQLite implementation
 4. In-memory implementation (tests)
 5. `CaseInstanceRepository` adapter in engine
 6. Contract tests for both DataStore and the adapter
 
 **Out of scope (follow-up issues):**
+- Qhorus store consolidation (20+ per-entity SPIs → DataStore collections)
 - Neocortex storage migration (memory, mindmap, cognitive-observability)
 - DataSource SPI abstraction (abstract away SQLite dependency)
-- Pages refactor (make pages use DataStore instead of JsonCollectionStore)
-- Shared SQLite infrastructure unification (pages + neocortex connection pooling)
+- Pages refactor (make pages consume DataStore instead of JsonCollectionStore directly)
+- Companion engine SPI adapters (EventLogRepository, CaseMetaModelRepository, PlanItemStore)
 
 ## References
 
@@ -412,6 +445,7 @@ casehub-engine persistence-datastore  (CaseInstanceRepository adapter)
 - `CaseInstanceQuery` — engine/common-core/src/main/java/.../spi/query/CaseInstanceQuery.java
 - `CaseInstanceRepositoryContractTest` — engine/common-core/src/test/java/.../spi/CaseInstanceRepositoryContractTest.java
 - `JsonCollectionStore` — pages/backend/data-json/src/main/java/.../json/JsonCollectionStore.java
+- `DataStore` (qhorus) — qhorus/api/src/main/java/.../api/store/DataStore.java (migration target)
 - `PersistenceMemoryBeans` — engine/persistence-memory/src/main/java/.../PersistenceMemoryBeans.java
 - Neocortex storage modules: memory-sqlite, mindmap-sqlite, cognitive-observability-sqlite
 - `io.casehub.platform.api.datasource` — existing reactive data stream SPI (separate concern)
