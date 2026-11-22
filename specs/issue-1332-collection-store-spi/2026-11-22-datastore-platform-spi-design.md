@@ -3,7 +3,7 @@
 **Issue:** casehubio/engine#1332
 **Branch:** issue-1332-collection-store-spi
 **Date:** 2026-11-22
-**Revised:** Round 2 — retargeted from DataStore platform SPI to focused CaseInstanceRepository adapter over JsonCollectionStore
+**Revised:** Round 3 — cross-tenant via direct SQL, initMaxId optimization, resource limits documented
 
 ## Overview
 
@@ -41,23 +41,23 @@ public class JsonCollectionCaseInstanceRepository
     implements CaseInstanceRepository, CrossTenantCaseInstanceRepository {
 
     private final JsonCollectionStore store;
+    private final SqliteConnectionFactory connectionFactory;
     private final EventLogRepository eventLogRepository;
     private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String APP_ID = "engine";
     private static final String COLLECTION = "case_instances";
     private final AtomicLong idSeq = new AtomicLong(0);
-    private final String defaultTenantId;
     private CaseContextRecoveryStrategy recoveryStrategy;
 
     @Inject
     public JsonCollectionCaseInstanceRepository(
             JsonCollectionStore store,
-            EventLogRepository eventLogRepository,
-            @ConfigProperty(name = "casehub.tenant.default", defaultValue = "default")
-            String defaultTenantId) {
+            SqliteConnectionFactory connectionFactory,
+            EventLogRepository eventLogRepository) {
         this.store = store;
+        this.connectionFactory = connectionFactory;
         this.eventLogRepository = eventLogRepository;
-        this.defaultTenantId = defaultTenantId;
         this.idSeq.set(initMaxId());
     }
 
@@ -120,14 +120,32 @@ public class JsonCollectionCaseInstanceRepository
         }
     }
 
-    // CrossTenantCaseInstanceRepository — no tenant filter
+    // CrossTenantCaseInstanceRepository — direct SQL without tenant filter
     @Override
     public Optional<CaseInstance> findByUuid(UUID uuid) {
         rwLock.readLock().lock();
         try {
-            return store.get(new DataContext(defaultTenantId), APP_ID, COLLECTION,
-                           uuid.toString())
-                .map(CaseInstanceMapper::fromRecord);
+            String sql = "SELECT data, _version, created_at, updated_at "
+                + "FROM json_documents "
+                + "WHERE app_id = ? AND collection = ? AND doc_id = ?";
+            try (Connection conn = connectionFactory.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, APP_ID);
+                ps.setString(2, COLLECTION);
+                ps.setString(3, uuid.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return Optional.empty();
+                    ObjectNode doc = (ObjectNode) MAPPER.readTree(rs.getString("data"));
+                    doc.put("_id", uuid.toString());
+                    doc.put("_version", rs.getInt("_version"));
+                    doc.put("_created_at", rs.getString("created_at"));
+                    doc.put("_updated_at", rs.getString("updated_at"));
+                    return Optional.of(CaseInstanceMapper.fromRecord(doc));
+                }
+            } catch (Exception e) {
+                throw new RuntimeException(
+                    "Cross-tenant lookup failed for " + uuid + ": " + e.getMessage(), e);
+            }
         } finally {
             rwLock.readLock().unlock();
         }
@@ -243,10 +261,18 @@ public class JsonCollectionCaseInstanceRepository
     }
 
     private long initMaxId() {
-        return store.listAll(defaultTenantId, APP_ID, COLLECTION).stream()
-            .map(CaseInstanceMapper::fromRecord)
-            .mapToLong(ci -> ci.id != null ? ci.id : 0)
-            .max().orElse(0);
+        String sql = "SELECT MAX(CAST(json_extract(data, '$.id') AS INTEGER)) "
+            + "FROM json_documents WHERE app_id = ? AND collection = ?";
+        try (Connection conn = connectionFactory.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, APP_ID);
+            ps.setString(2, COLLECTION);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : 0;
+            }
+        } catch (SQLException e) {
+            return 0;
+        }
     }
 }
 ```
@@ -257,7 +283,7 @@ public class JsonCollectionCaseInstanceRepository
 
 **Write lock for atomicity:** `updateStateAndAppendEvent` uses a `ReentrantReadWriteLock` (identical pattern to `InMemoryCaseInstanceRepository`) for cross-operation atomicity. Event log persistence is delegated to the injected `EventLogRepository` (which remains in-memory by default). For YAML-only single-instance deployments, process-level locking is sufficient.
 
-**CrossTenantCaseInstanceRepository in same class:** Matches the `InMemoryCaseInstanceRepository` pattern — both interfaces implemented by one class. For YAML-only (single-tenant), the cross-tenant `findByUuid(UUID)` queries with the configured default tenant.
+**CrossTenantCaseInstanceRepository via direct SQL:** Matches the `InMemoryCaseInstanceRepository` pattern — both interfaces implemented by one class. The cross-tenant `findByUuid(UUID)` uses direct SQL against `SqliteConnectionFactory` with no `tenant_id` filter (`WHERE app_id = ? AND collection = ? AND doc_id = ?`), enabling true cross-tenant lookup. This correctly passes `CrossTenantCaseInstanceRepositoryContractTest.findByUuid_findsAcrossTenants()` which creates cases in separate tenants. Tenant-scoped operations continue to use `JsonCollectionStore` (which always applies `WHERE tenant_id = ?`).
 
 **Uses domain-typed CaseInstanceQuery directly:** No generic `Filter/Query` abstraction. The repository methods accept `CaseInstanceQuery` with typed `CaseStatus` and string fields — query/filter logic is in the adapter, identical to `InMemoryCaseInstanceRepository`.
 
@@ -293,12 +319,11 @@ public class PersistenceJsonBeans {
     @ApplicationScoped
     JsonCollectionCaseInstanceRepository jsonCollectionCaseInstanceRepository(
             JsonCollectionStore store,
+            SqliteConnectionFactory connectionFactory,
             EventLogRepository eventLogRepository,
-            Instance<CaseContextRecoveryStrategy> recoveryStrategy,
-            @ConfigProperty(name = "casehub.tenant.default", defaultValue = "default")
-            String defaultTenantId) {
+            Instance<CaseContextRecoveryStrategy> recoveryStrategy) {
         JsonCollectionCaseInstanceRepository repo =
-            new JsonCollectionCaseInstanceRepository(store, eventLogRepository, defaultTenantId);
+            new JsonCollectionCaseInstanceRepository(store, connectionFactory, eventLogRepository);
         if (recoveryStrategy.isResolvable()) {
             repo.setRecoveryStrategy(recoveryStrategy.get());
         }
@@ -315,7 +340,7 @@ The CDI wiring mirrors `PersistenceMemoryBeans`: same constructor dependencies (
 
 ### Tenancy
 
-`CaseInstanceRepository` methods take `tenancyId` as an explicit parameter — no ambient context needed. The `defaultTenantId` is only used for `CrossTenantCaseInstanceRepository.findByUuid(UUID)` (no tenant parameter) and `initMaxId()` on startup. For YAML-only single-tenant deployments, this is a fixed value via `@ConfigProperty`.
+`CaseInstanceRepository` methods take `tenancyId` as an explicit parameter — no ambient context needed. `CrossTenantCaseInstanceRepository.findByUuid(UUID)` and `initMaxId()` use direct SQL without a tenant filter, so no `defaultTenantId` configuration is required. The adapter works correctly in both single-tenant and multi-tenant deployments.
 
 ## Module Dependencies
 
@@ -324,11 +349,12 @@ casehub-engine common-core          (CaseInstanceRepository, CrossTenantCaseInst
                                      EventLogRepository SPIs)
   ↑
 casehub-pages data-json             (JsonCollectionStore, MergeStrategy, DataContext)
+casehub-pages pages-sqlite          (SqliteConnectionFactory — for cross-tenant direct SQL)
   ↑
 casehub-engine persistence-json     (CaseInstanceRepository adapter)
 ```
 
-No new platform-api types. No Jackson dependency added to platform-api. The `persistence-json` module depends on pages' `data-json` directly — a one-directional dependency (pages has no dependency on engine). The `data-json` module is effectively a standalone JSON document storage library.
+No new platform-api types. No Jackson dependency added to platform-api. The `persistence-json` module depends on pages' `data-json` and `pages-sqlite` — a one-directional dependency (pages has no dependency on engine). `SqliteConnectionFactory` (`@ApplicationScoped`, HikariCP-pooled) is the same connection factory that `JsonCollectionStore` uses internally, ensuring cross-tenant queries hit the same database.
 
 ## Testing
 
@@ -338,6 +364,18 @@ No new platform-api types. No Jackson dependency added to platform-api. The `per
 - **Atomicity test:** Verify `updateStateAndAppendEvent` persists case state and delegates event log append within the write lock boundary.
 - **CDI wiring test:** Verify that with `persistence-json` on the classpath, `CaseInstanceRepository` injection resolves to `JsonCollectionCaseInstanceRepository` rather than `InMemoryCaseInstanceRepository`.
 - **Restart persistence test:** Create case, simulate restart (new repository instance against same SQLite DB), verify case is recoverable via `findByUuid`.
+
+## Resource Limits
+
+`JsonCollectionStore` enforces three hard limits (from `JsonCollectionStore.java` lines 25-27):
+
+| Limit | Value | Impact |
+|-------|-------|--------|
+| `MAX_DOC_SIZE` | 1 MB per document | Case instances with large `contextSnapshot` or `exchangeHeaders` will fail on `save()`/`update()` with `MutationException("DOC_TOO_LARGE")`. The in-memory implementation has no size limit. |
+| `MAX_DOCS_PER_COLLECTION` | 100,000 per tenant+app+collection | Caps the total number of case instances per tenant. Sufficient for YAML-only helpdesk use cases. The in-memory implementation has no count limit. |
+| `MAX_COLLECTIONS_PER_APP` | 50 | Not relevant — the adapter uses a single fixed collection (`case_instances`). |
+
+These limits are caller-visible behavioral differences from the in-memory implementation. The 1 MB document size limit is the most likely to surface in practice — `contextSnapshot` on complex cases can grow large. If this becomes a constraint, the adapter can strip non-essential fields from the serialized document or the limit can be raised in a pages change.
 
 ## Scope Boundaries
 
@@ -377,5 +415,7 @@ GitHub issues to file:
 - `CaseTimeoutEnforcer` — engine/resilience-core/src/main/java/.../timeout/CaseTimeoutEnforcer.java (cache.getAll() line 74)
 - `JsonCollectionStore` — pages/backend/data-json/src/main/java/.../json/JsonCollectionStore.java
 - `DataContext` — pages/backend/data/src/main/java/.../data/DataContext.java (`record DataContext(String tenantId)`)
+- `SqliteConnectionFactory` — pages/backend/pages-sqlite/src/main/java/.../sqlite/SqliteConnectionFactory.java (`@ApplicationScoped`, HikariCP-pooled)
+- `CrossTenantCaseInstanceRepositoryContractTest` — engine/common-core/src/test/java/.../spi/CrossTenantCaseInstanceRepositoryContractTest.java
 - `PersistenceMemoryBeans` — engine/persistence-memory/src/main/java/.../PersistenceMemoryBeans.java
 - `CaseRecoveryService` — engine/runtime-core/src/main/java/.../recovery/CaseRecoveryService.java (cache-then-repository pattern)
