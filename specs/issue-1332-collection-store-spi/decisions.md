@@ -1,4 +1,4 @@
-# Design Decisions — #1332 CollectionStore Platform SPI
+# Design Decisions — #1332 DataStore Platform SPI
 
 ## D1: SPI approach — Rich Collection SPI with Schema Descriptors
 
@@ -40,18 +40,18 @@
 
 ## D3: SPI home — casehub-platform-api
 
-**Choice:** `io.casehub.platform.data` package in `casehub-platform-api`.
+**Choice:** `io.casehub.platform.api.data` package in `casehub-platform-api`.
 
 **Alternatives:**
-- New `casehub-data-api` module — avoids growing platform-api but adds another dependency coordinate for every consumer
+- New `casehub-data-api` module — avoids growing platform-api but adds another dependency coordinate for every consumer. `platform-api-scope` protocol suggests this for domain SPIs without confirmed cross-repo adoption.
 - Engine repo initially — limits adoption by other repos (pages, neocortex) and requires graduation later
 
-**Rationale:** platform-api is zero-dep pure Java, any repo can depend on it. Consistent with existing platform abstractions (Path, Preferences, EndpointRegistry). The data SPI is a platform concern, not an engine concern.
+**Rationale:** Cross-repo need is confirmed: engine (CaseInstanceRepository), qhorus (20+ per-entity stores), neocortex (4 SQLite stores), and pages (JsonCollectionStore) all implement the same pattern. This overrides the protocol's "start where the first consumer lives" guidance — the first consumer is the platform itself, not a single repo. Consistent with existing platform abstractions (Path, Preferences, EndpointRegistry).
 
-**Trade-offs:** platform-api grows larger. Acceptable — the data SPI is a core platform capability, not a niche addition.
+**Trade-offs:** Introduces Jackson as platform-api's first external dependency (for ObjectNode). Accepted because Jackson is a universal dependency across the platform.
 
 **Depends on:** D1 (SPI approach)
-**Exploration:** quick
+**Exploration:** quick → revised after review (R1-02, R1-03)
 **Status:** captured
 
 ## D4: Scope — SPI + two implementations + engine adapter
@@ -75,11 +75,27 @@
 **Choice:** `DataStore` as the core SPI interface. `DataCollection` for collection access. `DataContext` for tenant context.
 
 **Alternatives:**
-- `CollectionStore` — more specific but risks confusion with `java.util.Collection`
+- `CollectionStore` — more specific, avoids qhorus collision, but risks confusion with `java.util.Collection`
 - `RecordStore` — implies flat key-value without relational/query capabilities
 
-**Rationale:** Generic name matches the platform's role. Clean, no implementation leakage. Consistent with the aspiration that this serves end-user applications as a first-class data persistence API.
+**Rationale:** Generic name matches the platform's role as the canonical data persistence SPI. The temporary naming collision with `io.casehub.qhorus.api.store.DataStore` is accepted — qhorus' `DataStore` is a migration target that will be removed when qhorus adopts the platform SPI. Design for the end state, not the transitional conflict.
 
 **Depends on:** D1 (SPI approach)
-**Exploration:** quick
+**Exploration:** quick → revised after review (R1-01, qhorus analysis)
+**Status:** captured
+
+## D6: Qhorus DataStore collision — design for end state
+
+**Choice:** Keep `DataStore` as the platform name. Qhorus' `DataStore` interface is a migration target, not a peer. During qhorus migration, its 20+ per-entity store SPIs (including `DataStore`) will be replaced by registered collections on the platform DataStore SPI.
+
+**Alternatives:**
+- Rename platform SPI to avoid collision — compromises the best long-term name for a temporary conflict
+- Rename qhorus' DataStore now — creates unnecessary churn before migration
+
+**Rationale:** Qhorus has 20+ per-entity store SPIs (ChannelStore, MessageStore, InstanceStore, DataStore, etc.), each with in-memory, JPA, and Spring implementations. This is the exact per-entity SPI proliferation pattern that Keycloak consolidated. The platform DataStore SPI is designed to subsume all of these. Naming it around qhorus' current interface would embed a transitional compromise into the platform's canonical API.
+
+**Trade-offs:** Temporary import ambiguity during the migration period — any class importing both `io.casehub.platform.api.data.DataStore` and `io.casehub.qhorus.api.store.DataStore` needs qualified names. Accepted as a short-term cost.
+
+**Depends on:** D5 (Naming)
+**Exploration:** deep-analysis (qhorus codebase investigation)
 **Status:** captured
