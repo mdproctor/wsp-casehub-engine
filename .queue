@@ -1,19 +1,5 @@
-# Work Plan —
-
-## State
-branch: 
-issue-repo: casehubio/engine
-status: active
-project-sha: 
-date: 
-design-repo: 
-design-section-hashes: 
-flyway-next-v: 
-covers: casehubio/engine#1338
-
-## Queue
-- [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers ← done on issue-1343-agent-handler-guard-otel
-- [ ] casehubio/engine#1338 — YAML parser for agent-task binding target ← active
+- [x] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
+- [ ] casehubio/engine#1338 — YAML parser for agent-task binding target        ← active
 - [ ] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
@@ -39,6 +25,17 @@ covers: casehubio/engine#1338
 - [x] casehubio/engine#1343 — Agent handler Guard and OTel
 - [ ] casehubio/engine#1352 — reconcile FlowWorkerFunctionProvider CDI wiring
 - [ ] casehubio/engine#1353 — codegen auto-emit JsonProperty for renamed fields
+
+## State
+branch: 
+issue-repo: casehubio/engine
+status: active
+covers: casehubio/engine#1338
+project-sha: 
+date: 
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
