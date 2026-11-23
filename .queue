@@ -1,7 +1,7 @@
 # Work Plan —
 
 ## State
-branch: issue-1343-agent-handler-guard-otel
+branch: 
 issue-repo: casehubio/engine
 status: active
 project-sha: 
@@ -9,11 +9,11 @@ date:
 design-repo: 
 design-section-hashes: 
 flyway-next-v: 
-covers: casehubio/engine#1295
+covers: casehubio/engine#1338
 
 ## Queue
-- [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers ← active
-- [ ] casehubio/engine#1338 — YAML parser for agent-task binding target
+- [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers ← done on issue-1343-agent-handler-guard-otel
+- [ ] casehubio/engine#1338 — YAML parser for agent-task binding target ← active
 - [ ] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
