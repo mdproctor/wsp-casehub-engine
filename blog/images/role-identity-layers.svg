@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Eidos layer -->
+  <rect x="40" y="20" width="640" height="80" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="60" y="48" font-size="13" font-weight="700" fill="#1e40af">Eidos — Identity Governance</text>
+  <text x="60" y="70" font-size="11" fill="#1e3a5f">RoleChangePolicy</text>
+  <text x="220" y="70" font-size="11" fill="#1e3a5f">RoleDeclaration</text>
+  <text x="370" y="70" font-size="11" fill="#1e3a5f">RoleProfile</text>
+  <text x="510" y="70" font-size="11" fill="#1e3a5f">AgentDescriptor.roleProfile()</text>
+  <text x="60" y="88" font-size="10" fill="#64748b">Declared role capabilities + governance policy</text>
+
+  <!-- Engine layer -->
+  <rect x="40" y="130" width="640" height="80" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="60" y="158" font-size="13" font-weight="700" fill="#92400e">Engine — Detection + Coordination Vocabulary</text>
+  <text x="60" y="180" font-size="11" fill="#78350f">DetectedRole</text>
+  <text x="180" y="180" font-size="11" fill="#78350f">RoleBridgingStrategy</text>
+  <text x="360" y="180" font-size="11" fill="#78350f">RoleSuggestion</text>
+  <text x="500" y="180" font-size="11" fill="#78350f">AgentRole</text>
+  <text x="600" y="180" font-size="11" fill="#78350f">StructuralRole</text>
+  <text x="60" y="198" font-size="10" fill="#64748b">Behavioral signals → suggestions via SPI</text>
+
+  <!-- Agency layer -->
+  <rect x="40" y="240" width="640" height="80" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="60" y="268" font-size="13" font-weight="700" fill="#166534">Agency — Orchestration + Enforcement</text>
+  <text x="60" y="290" font-size="11" fill="#14532d">BridgedRoleState</text>
+  <text x="220" y="290" font-size="11" fill="#14532d">HiveTopology (bridging logic)</text>
+  <text x="460" y="290" font-size="11" fill="#14532d">TopologyContext</text>
+  <text x="60" y="308" font-size="10" fill="#64748b">Applies policy, resolves conflicts, tracks state</text>
+
+  <!-- Arrows -->
+  <line x1="360" y1="100" x2="360" y2="128" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="368" y="118" font-size="9" fill="#64748b">depends on</text>
+
+  <line x1="360" y1="210" x2="360" y2="238" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="368" y="228" font-size="9" fill="#64748b">depends on</text>
+
+  <line x1="560" y1="240" x2="560" y2="102" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="568" y="170" font-size="9" fill="#94a3b8">consumes policy</text>
+</svg>
