@@ -1,17 +1,3 @@
-# Work Plan —
-
-## State
-branch: 
-issue-repo: casehubio/engine
-status: active
-covers: 
-project-sha: 
-date: 
-design-repo: 
-design-section-hashes: 
-flyway-next-v: 
-
-## Queue
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
 - [x] casehubio/engine#1308 — Add onTopologyChanged to AgentWorkLifecycleListener
@@ -32,7 +18,7 @@ flyway-next-v:
 - [x] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
 - [x] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
 - [x] casehubio/engine#1338 — YAML parser for agent-task binding target
-- [ ] casehubio/engine#1339 — agent-task runtime dispatch handler ← done on issue-1339-agent-task-dispatch
+- [x] casehubio/engine#1339 — agent-task runtime dispatch handler
   - [ ] Batch 1: Foundation
     - [ ] Task 1: Create DeferredAgentConfig sealed hierarchy
     - [ ] Task 2: Refactor AgentWorkerFunction and update callers
@@ -40,10 +26,20 @@ flyway-next-v:
     - [ ] Task 3: Add model field to AgentTaskTarget
     - [ ] Task 4: Implement executeByCapability in handler
     - [ ] Task 5: BindingExecutorResolver + synthetic Worker + collision protection
-- [ ] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring ← done on issue-1340-slot-agent-worker-cdi-test
-- [ ] casehubio/engine#1341 — Integration test timeout enrichment ← done on issue-1341-integration-test-timeout
-- [ ] casehubio/engine#1342 — Drop redundant outputProjection ← done on issue-1342-drop-redundant-output-proj
-- [ ] casehubio/engine#1343 — Agent handler Guard and OTel ← done on issue-1343-agent-handler-guard-otel
+- [x] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring
+- [x] casehubio/engine#1341 — Integration test timeout enrichment
+- [x] casehubio/engine#1342 — Drop redundant outputProjection
+- [x] casehubio/engine#1343 — Agent handler Guard and OTel
+
+## State
+branch: 
+issue-repo: casehubio/engine
+status: drained
+project-sha: 
+date: 
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
