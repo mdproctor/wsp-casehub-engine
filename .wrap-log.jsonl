@@ -5,3 +5,4 @@
 {"ts": "2026-11-23T10:25:37.851859+00:00", "mode": "wrap", "action": "garden_feedback", "step": "", "steps_executed": [], "error": ""}
 {"ts": "2026-11-23T10:25:42.554375+00:00", "mode": "wrap", "action": "notes", "step": "", "steps_executed": [], "error": ""}
 {"ts": "2026-11-23T10:25:51.081306+00:00", "mode": "wrap", "action": "handoff_write", "step": "", "steps_executed": [], "error": ""}
+{"ts": "2026-11-23T10:26:42.775572+00:00", "mode": "wrap", "action": "complete", "step": "", "steps_executed": ["wip_commit"], "error": ""}
