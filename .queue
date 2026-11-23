@@ -1,10 +1,24 @@
+# Work Plan —
+
+## State
+branch: 
+issue-repo: casehubio/engine
+status: active
+project-sha: 
+date: 
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+covers: casehubio/engine#1295
+
+## Queue
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
 - [x] casehubio/engine#1308 — Add onTopologyChanged to AgentWorkLifecycleListener
 - [x] casehubio/engine#1309 — TeamDetector suppress promoted agents
 - [x] casehubio/engine#1310 — Add GROUP_CHANNEL to CommunicationMode
 - [x] casehubio/engine#1294 — resolve Conductor SUPERVISOR overlap
-- [x] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
+- [ ] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI ← active
 - [x] casehubio/engine#1290 — TransitionPolicy graduated topology transition
 - [x] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
 - [x] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
@@ -16,30 +30,13 @@
 - [x] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
 - [x] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
 - [x] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
-- [x] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
-- [x] casehubio/engine#1338 — YAML parser for agent-task binding target
+- [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
+- [ ] casehubio/engine#1338 — YAML parser for agent-task binding target
 - [x] casehubio/engine#1339 — agent-task runtime dispatch handler
-  - [ ] Batch 1: Foundation
-    - [ ] Task 1: Create DeferredAgentConfig sealed hierarchy
-    - [ ] Task 2: Refactor AgentWorkerFunction and update callers
-  - [ ] Batch 2: Dispatch
-    - [ ] Task 3: Add model field to AgentTaskTarget
-    - [ ] Task 4: Implement executeByCapability in handler
-    - [ ] Task 5: BindingExecutorResolver + synthetic Worker + collision protection
 - [x] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring
 - [x] casehubio/engine#1341 — Integration test timeout enrichment
 - [x] casehubio/engine#1342 — Drop redundant outputProjection
 - [x] casehubio/engine#1343 — Agent handler Guard and OTel
-
-## State
-branch: 
-issue-repo: casehubio/engine
-status: drained
-project-sha: 
-date: 
-design-repo: 
-design-section-hashes: 
-flyway-next-v: 
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
