@@ -1,7 +1,7 @@
 # Work Plan —
 
 ## State
-branch: 
+branch: issue-1343-agent-handler-guard-otel
 issue-repo: casehubio/engine
 status: active
 project-sha: 
@@ -12,13 +12,15 @@ flyway-next-v:
 covers: casehubio/engine#1295
 
 ## Queue
+- [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers ← active
+- [ ] casehubio/engine#1338 — YAML parser for agent-task binding target
+- [ ] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
 - [x] casehubio/engine#1305 — Issue #1305
 - [x] casehubio/engine#1306 — TopologyProvider must be agent-scoped
 - [x] casehubio/engine#1308 — Add onTopologyChanged to AgentWorkLifecycleListener
 - [x] casehubio/engine#1309 — TeamDetector suppress promoted agents
 - [x] casehubio/engine#1310 — Add GROUP_CHANNEL to CommunicationMode
 - [x] casehubio/engine#1294 — resolve Conductor SUPERVISOR overlap
-- [ ] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI ← active
 - [x] casehubio/engine#1290 — TransitionPolicy graduated topology transition
 - [x] casehubio/engine#1297 — CoordinationDriver SPI COORDINATOR contract
 - [x] casehubio/engine#1298 — EvaluationProtocol SPI JUDGE contract
@@ -30,13 +32,13 @@ covers: casehubio/engine#1295
 - [x] casehubio/engine#1331 — Case engine auto-discovery scan classpath YAML and register CaseHub beans
 - [x] casehubio/engine#1332 — JSON collection SPI adapter for case persistence
 - [x] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
-- [ ] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
-- [ ] casehubio/engine#1338 — YAML parser for agent-task binding target
 - [x] casehubio/engine#1339 — agent-task runtime dispatch handler
 - [x] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring
 - [x] casehubio/engine#1341 — Integration test timeout enrichment
 - [x] casehubio/engine#1342 — Drop redundant outputProjection
 - [x] casehubio/engine#1343 — Agent handler Guard and OTel
+- [ ] casehubio/engine#1352 — reconcile FlowWorkerFunctionProvider CDI wiring
+- [ ] casehubio/engine#1353 — codegen auto-emit JsonProperty for renamed fields
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
