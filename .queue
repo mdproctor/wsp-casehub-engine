@@ -1,10 +1,10 @@
 # Work Plan —
 
 ## State
-branch: main
+branch: 
 issue-repo: casehubio/engine
 status: active
-covers: casehubio/engine#1339
+covers: 
 project-sha: 
 date: 
 design-repo: 
@@ -32,7 +32,7 @@ flyway-next-v:
 - [x] casehubio/engine#1333 — call agent worker function provider for eidos dispatch
 - [x] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
 - [x] casehubio/engine#1338 — YAML parser for agent-task binding target
-- [ ] casehubio/engine#1339 — agent-task runtime dispatch handler ← active
+- [ ] casehubio/engine#1339 — agent-task runtime dispatch handler ← done on issue-1339-agent-task-dispatch
   - [ ] Batch 1: Foundation
     - [ ] Task 1: Create DeferredAgentConfig sealed hierarchy
     - [ ] Task 2: Refactor AgentWorkerFunction and update callers
@@ -40,10 +40,10 @@ flyway-next-v:
     - [ ] Task 3: Add model field to AgentTaskTarget
     - [ ] Task 4: Implement executeByCapability in handler
     - [ ] Task 5: BindingExecutorResolver + synthetic Worker + collision protection
-- [ ] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring
-- [ ] casehubio/engine#1341 — Integration test timeout enrichment
-- [ ] casehubio/engine#1342 — Drop redundant outputProjection
-- [ ] casehubio/engine#1343 — Agent handler Guard and OTel
+- [ ] casehubio/engine#1340 — Integration test slot-based agent worker CDI wiring ← done on issue-1340-slot-agent-worker-cdi-test
+- [ ] casehubio/engine#1341 — Integration test timeout enrichment ← done on issue-1341-integration-test-timeout
+- [ ] casehubio/engine#1342 — Drop redundant outputProjection ← done on issue-1342-drop-redundant-output-proj
+- [ ] casehubio/engine#1343 — Agent handler Guard and OTel ← done on issue-1343-agent-handler-guard-otel
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
