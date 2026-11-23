@@ -4,7 +4,7 @@
 branch: 
 issue-repo: casehubio/engine
 status: active
-covers: casehubio/engine#1352
+covers: casehubio/engine#1353
 project-sha: 
 date: 
 design-repo: 
@@ -37,8 +37,8 @@ flyway-next-v:
 - [x] casehubio/engine#1341 — Integration test timeout enrichment
 - [x] casehubio/engine#1342 — Drop redundant outputProjection
 - [x] casehubio/engine#1343 — Agent handler Guard and OTel
-- [ ] casehubio/engine#1352 — reconcile FlowWorkerFunctionProvider CDI wiring ← active
-- [ ] casehubio/engine#1353 — codegen auto-emit JsonProperty for renamed fields
+- [ ] casehubio/engine#1352 — reconcile FlowWorkerFunctionProvider CDI wiring ← done on issue-1295-detected-role-bridging-spi
+- [ ] casehubio/engine#1353 — codegen auto-emit JsonProperty for renamed fields ← active
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
