@@ -1,22 +1,27 @@
 # Session Handover — 2026-11-23
 
-**Branch:** `main` (all done items landed)
+**Branch:** `main` (queue drained)
 **Slot:** 228 (engine + agency + eidos)
-**Next issue:** casehubio/engine#1352
 
 ## What happened
 
-Housekeeping session: landed #1338 and #1295 via work-end ceremony. Squashed
-3 eidos WIP commits into 1 (`feat(api): add RoleProfile, RoleDeclaration,
-RoleChangePolicy`). Promoted blog entry to project repo. All repos now on
-main with clean state.
+1. Landed #1338 (YAML parser for agent-task binding target), #1295 (DetectedRole
+   AgentRole bridging SPI), and #1352 (FlowWorkerFunctionProvider CDI wiring) via
+   work-end ceremony. Squashed 3 eidos WIP commits into 1 for the role governance
+   types.
+2. Implemented #1353 (codegen auto-emit `@JsonProperty` for Java keyword field
+   renames) — single conditional in `RecordEmitter.buildAnnotations()` with a
+   keyword guard. 4 new tests. All 1770 api tests pass.
+3. Blog entry written: "The keyword the codegen forgot."
 
 ## Queue state
 
-- #1352 — reconcile FlowWorkerFunctionProvider CDI wiring (next, not started)
-- #1353 — codegen auto-emit JsonProperty for renamed fields (queued)
+Queue is fully drained. The deferred section has 3 items:
+- integration test timeout enrichment (S / Low)
+- drop redundant outputProjection (S / Low)
+- agent handler Guard and OTel (S / Low)
 
 ## What to do next
 
-Start #1352 with `work start` or `work continue`. The issue hasn't been
-picked up yet — read it and brainstorm before implementing.
+Queue is empty. Either add new issues with `plan_manager.py append` or use
+`work find` to discover and populate the queue.
