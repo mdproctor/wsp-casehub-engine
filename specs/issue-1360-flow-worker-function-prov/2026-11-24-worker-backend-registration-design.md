@@ -130,9 +130,10 @@ public class CaseHubRegistry {
 ```
 
 **Registration flow:**
-1. `CaseYamlRegistrar.register()` loads the `CaseDefinition` as today
-2. After calling `caseDefinitionRegistry.registerCaseDefinition(definition)`, it creates a `CaseHub` wrapper and registers it in `CaseHubRegistry`
-3. The wrapper needs `CaseHubRuntime` to delegate operations — inject it into `CaseYamlRegistrar`
+1. `DefaultCaseDefinitionRegistry.registerCaseDefinition(definition)` runs as today
+2. After successful registration, it checks `CaseHubRegistry` — if no CaseHub exists for this definition's name, it auto-creates one and registers it
+3. `registerKnownDefinitions()` (CDI `CaseHub` beans at startup) also registers each explicit CaseHub into the registry
+4. `CaseHubRegistry` becomes the universal lookup for all CaseHub instances, regardless of origin (YAML, annotations, programmatic)
 
 **CaseHub wrapper:** Since `CaseHub` is an abstract class with `@Inject CaseHubRuntime runtime` (field injection), a non-CDI-managed subclass can't use field injection. Options:
 
@@ -195,7 +196,7 @@ UUID caseId = helpdesk.startCase(inputData);
 |--------|--------|-----------|
 | `FlowWorkerFunctionProvider` CDI wiring fix | `engine-support-core` / `flow` | Where the provider lives |
 | `AgentWorkerFunctionProvider` widening | `engine-support-core` | Where the provider lives |
-| `CaseHubRegistry` | `runtime` | Needs `CaseHubRuntime`, close to `CaseYamlRegistrar` |
+| `CaseHubRegistry` | `runtime` | Needs `CaseHubRuntime`, close to `DefaultCaseDefinitionRegistry` |
 | `CaseHub` runtime setter | `api` | Small API change to enable non-CDI usage |
 
 ## Protocols

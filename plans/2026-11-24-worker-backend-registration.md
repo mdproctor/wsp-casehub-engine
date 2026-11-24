@@ -434,15 +434,15 @@ while keeping the no-arg constructor for CDI subclasses.
 Refs #1362"
 ```
 
-### Task 4: Create CaseHubRegistry and wire into CaseYamlRegistrar
+### Task 4: Create CaseHubRegistry and wire into DefaultCaseDefinitionRegistry
 
 **Files:**
 - Create: `runtime/src/main/java/io/casehub/engine/runtime/engine/CaseHubRegistry.java`
-- Modify: `runtime/src/main/java/io/casehub/engine/runtime/bootstrap/CaseYamlRegistrar.java:38-87`
+- Modify: `runtime/src/main/java/io/casehub/engine/runtime/engine/DefaultCaseDefinitionRegistry.java`
 - Test: `runtime/src/test/java/io/casehub/engine/runtime/engine/CaseHubRegistryTest.java`
 
 **Interfaces:**
-- Consumes: `CaseHub(CaseHubRuntime)` constructor (from Task 3), `CaseDefinition.getName()`, `CaseDefinitionRegistry.registerCaseDefinition(CaseDefinition)`, `CaseDefinitionRegistry.findByName(String)`
+- Consumes: `CaseHub(CaseHubRuntime)` constructor (from Task 3), `CaseDefinition.getName()`, `DefaultCaseDefinitionRegistry.registerCaseDefinition(CaseDefinition)`
 - Produces: `CaseHubRegistry` with `register(String, CaseHub)`, `get(String) → Optional<CaseHub>`, `all() → Collection<CaseHub>`
 
 - [ ] **Step 1: Write failing tests for CaseHubRegistry**
@@ -565,9 +565,9 @@ TESTCONTAINERS_RYUK_DISABLED=true mvn clean test -pl runtime -Dtest=CaseHubRegis
 ```
 Expected: All 4 tests PASS.
 
-- [ ] **Step 5: Wire CaseHubRegistry into CaseYamlRegistrar**
+- [ ] **Step 5: Wire CaseHubRegistry into DefaultCaseDefinitionRegistry**
 
-Use `ide_edit_member` on `CaseYamlRegistrar`:
+Use `ide_edit_member` on `DefaultCaseDefinitionRegistry`:
 
 Add fields:
 ```java
@@ -575,28 +575,31 @@ Add fields:
 @Inject CaseHubRuntime caseHubRuntime;
 ```
 
-In `register()` method, after `caseDefinitionRegistry.registerCaseDefinition(definition)` (line 80), add:
+In `registerCaseDefinition(CaseDefinition)`, after the definition is successfully registered, create a `CaseHub` entry if one doesn't already exist:
 
 ```java
-CaseHub hub =
-    new CaseHub(caseHubRuntime) {
-      private final CaseDefinition def = definition;
+// Auto-create CaseHub for definitions that don't have an explicit CaseHub bean
+if (caseHubRegistry.get(definition.getName()).isEmpty()) {
+  CaseHub hub =
+      new CaseHub(caseHubRuntime) {
+        private final CaseDefinition def = definition;
 
-      @Override
-      public CaseDefinition getDefinition() {
-        return def;
-      }
-    };
-caseHubRegistry.register(definition.getName(), hub);
+        @Override
+        public CaseDefinition getDefinition() {
+          return def;
+        }
+      };
+  caseHubRegistry.register(definition.getName(), hub);
+}
 ```
 
-- [ ] **Step 6: Verify coexistence with explicit CaseHub beans**
+In `registerKnownDefinitions()` (the `@Observes StartupEvent` method), after registering each CDI `CaseHub` bean's definition, also register the CaseHub bean itself in the registry — so both CDI-managed and auto-discovered hubs are findable via the same lookup:
 
-Both registration paths coexist:
-- `CaseYamlRegistrar` (classpath bootstrap, priority 200) registers definitions AND creates registry CaseHubs
-- `DefaultCaseDefinitionRegistry.registerKnownDefinitions()` (StartupEvent, priority 10) registers definitions from CDI `CaseHub` beans
+```java
+caseHubRegistry.register(hub.getDefinition().getName(), hub);
+```
 
-`CaseDefinitionRegistry.registerCaseDefinition()` handles duplicate definitions (same namespace/name/version). The `CaseHubRegistry` only holds auto-discovered hubs — if an explicit `YamlCaseHub` subclass exists, consumers should use it directly via CDI injection, not via the registry. No dedup needed: the two lookups serve different consumers.
+This makes `CaseHubRegistry` the universal lookup for all CaseHub instances, regardless of origin. CDI-managed beans (explicit `YamlCaseHub` subclasses) are registered here AND available via CDI injection. Auto-discovered definitions (YAML, annotations, programmatic) get auto-created CaseHub entries here only.
 
 - [ ] **Step 7: Run the full runtime test suite**
 
@@ -610,11 +613,12 @@ Expected: All tests pass, no regressions.
 
 ```bash
 git add -A
-git commit -m "feat(#1362): add CaseHubRegistry and wire into CaseYamlRegistrar
+git commit -m "feat(#1362): add CaseHubRegistry and wire into DefaultCaseDefinitionRegistry
 
-CaseYamlRegistrar now creates a CaseHub instance for each auto-discovered
-YAML case definition and registers it in CaseHubRegistry. Consumers inject
-CaseHubRegistry and look up by name.
+DefaultCaseDefinitionRegistry auto-creates CaseHub entries for any
+registered definition that doesn't have an explicit CaseHub bean.
+Works for all registration paths: YAML, annotations, programmatic.
+Consumers inject CaseHubRegistry and look up by name.
 
 Closes #1362"
 ```
