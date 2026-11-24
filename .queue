@@ -36,12 +36,12 @@
   - [x] Batch 4: CaseHub registry
     - [x] Task 4: Create CaseHubRegistry and wire into CaseYamlRegistrar
 - [x] casehubio/engine#1361 — AgentWorkerFunctionHandler register as backend for capabilities when workers have agent blocks
-- [ ] casehubio/engine#1362 — CaseYamlRegistrar auto-create CaseHub beans from discovered case definitions ← done on issue-1360-flow-worker-function-prov
+- [x] casehubio/engine#1362 — CaseYamlRegistrar auto-create CaseHub beans from discovered case definitions
 
 ## State
 branch: 
 issue-repo: casehubio/engine
-status: active
+status: drained
 project-sha: 
 date: 
 design-repo: 
