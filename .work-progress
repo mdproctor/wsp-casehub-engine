@@ -1,6 +1,6 @@
 _run=end
 review_attempt=1
-last_yielded=item_finished
+last_yielded=handoff
 review=done
 review_produced=0
 diary_attempt=1
@@ -14,3 +14,19 @@ item_finished_answer=no
 _exec_ok:commit_queue=yes
 report_commit_queue=ok
 commit_queue=done
+_exec_ok:land=yes
+report_land=LANDED=casehubio/engine#1353; CLOSED_ITEM=casehubio/engine#1353 branch=issue-1295-detected-role-bridging-spi; CARRIED=wsp-casehub-engine:issue-1295-detected-role-bridging-spi commits=3; UNPUBLISHED=/Users/mdproctor/claude/casehub/engine commits=2
+land=done
+_exec_ok:promote_backlog=yes
+report_promote_backlog=PROMOTED_COUNT=0
+promote_backlog=done
+_exec_ok:publish=yes
+report_publish=PUBLISHED_COUNT=2
+publish=done
+_exec_ok:publish_blog=yes
+report_publish_blog=BLOG_PUBLISHED_COUNT=2
+publish_blog=done
+handoff_attempt=1
+handoff=done
+handoff_produced=1
+_run_complete=yes
