@@ -3,13 +3,13 @@
 ## State
 branch: main
 issue-repo: casehubio/engine
-status: active
+status: drained
+covers: casehubio/engine#1359
 project-sha: 
 date: 
 design-repo: 
 design-section-hashes: 
 flyway-next-v: 
-covers: casehubio/engine#1359
 
 ## Queue
 - [x] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
@@ -39,7 +39,7 @@ covers: casehubio/engine#1359
 - [x] casehubio/engine#1343 — Agent handler Guard and OTel
 - [x] casehubio/engine#1352 — reconcile FlowWorkerFunctionProvider CDI wiring
 - [x] casehubio/engine#1353 — codegen auto-emit JsonProperty for renamed fields
-- [ ] casehubio/engine#1359 — FlowWorkerFunctionProvider support do blocks as worker fragments
+- [x] casehubio/engine#1359 — FlowWorkerFunctionProvider support do blocks as worker fragments
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
