@@ -30,4 +30,4 @@ public class HelpdeskCaseHub extends YamlCaseHub {
 
 The fix is a `CaseHubRegistry` wired into `DefaultCaseDefinitionRegistry.registerCaseDefinition()`. When a definition is registered and no explicit `CaseHub` bean exists for it, the registry auto-creates one. This works for all registration paths — YAML, annotations, programmatic — not just the YAML registrar. A new protected constructor on `CaseHub` accepting `CaseHubRuntime` enables the non-CDI-managed instances.
 
-What this unblocks: `casehubio/examples#212` can drop its explicit `HelpdeskYamlCaseHub` subclass. A YAML file in `casehub/` is enough — workers with `do:` or `agent:` blocks dispatch, and the case runtime API is available via `CaseHubRegistry.get("helpdesk-ticket")`.
+What this unblocks: `casehubio/examples#212` can drop its explicit `HelpdeskYamlCaseHub` subclass. A YAML file in `casehub/` is enough — workers with `do:` or `agent:` blocks dispatch, and the case runtime API is available via `CaseHubRegistry.get("helpdesk-ticket")`.re
