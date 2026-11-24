@@ -1,10 +1,10 @@
 # Work Plan —
 
 ## State
-branch: issue-1360-flow-worker-function-prov
+branch: 
 issue-repo: casehubio/engine
 status: active
-covers: casehubio/engine#1360
+covers: 
 project-sha: 
 date: 
 design-repo: 
@@ -40,7 +40,7 @@ flyway-next-v:
 - [x] casehubio/engine#1352 — reconcile FlowWorkerFunctionProvider CDI wiring
 - [x] casehubio/engine#1353 — codegen auto-emit JsonProperty for renamed fields
 - [x] casehubio/engine#1359 — FlowWorkerFunctionProvider support do blocks as worker fragments
-- [ ] casehubio/engine#1360 — FlowWorkerFunctionProvider register as backend for capabilities when workers have do blocks ← active
+- [ ] casehubio/engine#1360 — FlowWorkerFunctionProvider register as backend for capabilities when workers have do blocks ← done on issue-1360-flow-worker-function-prov
   - [x] Batch 1: Flow wiring
     - [x] Task 1: Diagnose and fix FlowWorkerFunction parse dispatch wiring
   - [x] Batch 2: Agent provider
@@ -49,8 +49,8 @@ flyway-next-v:
     - [x] Task 3: Add protected constructor to CaseHub
   - [x] Batch 4: CaseHub registry
     - [x] Task 4: Create CaseHubRegistry and wire into CaseYamlRegistrar
-- [ ] casehubio/engine#1361 — AgentWorkerFunctionHandler register as backend for capabilities when workers have agent blocks
-- [ ] casehubio/engine#1362 — CaseYamlRegistrar auto-create CaseHub beans from discovered case definitions
+- [ ] casehubio/engine#1361 — AgentWorkerFunctionHandler register as backend for capabilities when workers have agent blocks ← done on issue-1360-flow-worker-function-prov
+- [ ] casehubio/engine#1362 — CaseYamlRegistrar auto-create CaseHub beans from discovered case definitions ← done on issue-1360-flow-worker-function-prov
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []
