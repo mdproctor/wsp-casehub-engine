@@ -1,3 +1,17 @@
+# Work Plan —
+
+## State
+branch: main
+issue-repo: casehubio/engine
+status: active
+project-sha: 
+date: 
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+covers: casehubio/engine#1359
+
+## Queue
 - [x] casehubio/engine#1336 — Integration test auto-discovered YAML wires do block workers
 - [x] casehubio/engine#1338 — YAML parser for agent-task binding target
 - [x] casehubio/engine#1295 — DetectedRole AgentRole bridging SPI
@@ -25,16 +39,7 @@
 - [x] casehubio/engine#1343 — Agent handler Guard and OTel
 - [x] casehubio/engine#1352 — reconcile FlowWorkerFunctionProvider CDI wiring
 - [x] casehubio/engine#1353 — codegen auto-emit JsonProperty for renamed fields
-
-## State
-branch: 
-issue-repo: casehubio/engine
-status: drained
-project-sha: 
-date: 
-design-repo: 
-design-section-hashes: 
-flyway-next-v: 
+- [ ] casehubio/engine#1359 — FlowWorkerFunctionProvider support do blocks as worker fragments
 
 ## Deferred
 - [ ] integration test timeout enrichment (S / Low) []

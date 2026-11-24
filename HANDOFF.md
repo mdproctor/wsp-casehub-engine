@@ -1,22 +1,23 @@
-# Session Handover — 2026-11-23
+# Session Handover — 2026-11-24
 
-**Branch:** `main` (all done items landed)
-**Slot:** 228 (engine + agency + eidos)
-**Next issue:** casehubio/engine#1352
+**Branch:** `main` (all done items landed and pushed)
+**Next issue:** casehubio/engine#1359
 
 ## What happened
 
-Housekeeping session: landed #1338 and #1295 via work-end ceremony. Squashed
-3 eidos WIP commits into 1 (`feat(api): add RoleProfile, RoleDeclaration,
-RoleChangePolicy`). Promoted blog entry to project repo. All repos now on
-main with clean state.
+Implemented #1351 (integration test + AgentTaskTarget event handler dispatch)
+and #1358 (same fix in SchedulerService). Code review found and fixed a thread
+safety issue in the concurrent binding dispatch path. Closed #1354 as already
+resolved. Wrote blog entry "The Last Fifteen Lines."
+
+Landed #1340, #1341, #1351, #1358 on main. All branches stamped as closed.
+Pushed to origin.
 
 ## Queue state
 
-- #1352 — reconcile FlowWorkerFunctionProvider CDI wiring (next, not started)
-- #1353 — codegen auto-emit JsonProperty for renamed fields (queued)
+- #1359 — FlowWorkerFunctionProvider: support do: blocks as worker fragments (active, not started)
 
 ## What to do next
 
-Start #1352 with `work start` or `work continue`. The issue hasn't been
-picked up yet — read it and brainstorm before implementing.
+Start #1359 with `work start`. Read the issue first — it's about supporting
+`do:` blocks as worker fragments in the serverless workflow integration.
