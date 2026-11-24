@@ -1,0 +1,22 @@
+<svg viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;font-family:system-ui,sans-serif">
+  <defs>
+    <marker id="arr1" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#475569"/></marker>
+  </defs>
+  <rect x="10" y="60" width="130" height="80" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="75" y="95" text-anchor="middle" font-size="13" fill="#334155" font-weight="600">Agent A</text>
+  <text x="75" y="115" text-anchor="middle" font-size="11" fill="#64748b">observes staleness</text>
+  <rect x="180" y="60" width="130" height="80" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="245" y="95" text-anchor="middle" font-size="13" fill="#334155" font-weight="600">Agent B</text>
+  <text x="245" y="115" text-anchor="middle" font-size="11" fill="#64748b">observes staleness</text>
+  <rect x="350" y="40" width="140" height="120" rx="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+  <text x="420" y="75" text-anchor="middle" font-size="13" fill="#0c4a6e" font-weight="600">Signal Registry</text>
+  <text x="420" y="95" text-anchor="middle" font-size="11" fill="#0369a1">deposit + decay</text>
+  <text x="420" y="115" text-anchor="middle" font-size="11" fill="#0369a1">reinforcement</text>
+  <text x="420" y="135" text-anchor="middle" font-size="12" fill="#0c4a6e" font-weight="600">→ consensus</text>
+  <rect x="540" y="60" width="130" height="80" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="605" y="95" text-anchor="middle" font-size="13" fill="#14532d" font-weight="600">Proposal</text>
+  <text x="605" y="115" text-anchor="middle" font-size="11" fill="#166534">goal formed</text>
+  <line x1="140" y1="100" x2="175" y2="100" stroke="#475569" stroke-width="1.5" marker-end="url(#arr1)"/>
+  <line x1="310" y1="100" x2="345" y2="100" stroke="#475569" stroke-width="1.5" marker-end="url(#arr1)"/>
+  <line x1="490" y1="100" x2="535" y2="100" stroke="#475569" stroke-width="1.5" marker-end="url(#arr1)"/>
+</svg>

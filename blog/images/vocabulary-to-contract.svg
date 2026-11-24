@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340">
+  <defs>
+    <marker id="arr-main" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8" fill="none" stroke="#636e72" stroke-width="1.5"/>
+    </marker>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="#e17055" stroke-width="1"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="#00b894" stroke-width="1"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: 'Inter', 'Helvetica Neue', sans-serif; }
+    .heading { font-size: 13px; font-weight: 600; fill: #636e72; }
+    .label { font-size: 11px; fill: #2d3436; font-weight: 500; }
+    .sublabel { font-size: 10px; fill: #636e72; }
+    .accent { font-size: 10px; fill: #d63031; font-weight: 600; }
+    .good { font-size: 10px; fill: #00b894; font-weight: 600; }
+  </style>
+
+  <!-- ===== BEFORE panel ===== -->
+  <text x="150" y="24" class="heading" text-anchor="middle">BEFORE</text>
+  <rect x="20" y="36" width="260" height="210" rx="8" fill="#fff5f5" stroke="#fab1a0" stroke-width="1.5"/>
+
+  <!-- SUPERVISOR — has SPI -->
+  <rect x="40" y="52" width="110" height="32" rx="4" fill="#ffeaa7" stroke="#fdcb6e"/>
+  <text x="95" y="73" class="label" text-anchor="middle">SUPERVISOR</text>
+  <text x="168" y="73" class="good">has SPI</text>
+
+  <!-- COORDINATOR — no contract -->
+  <rect x="40" y="96" width="110" height="32" rx="4" fill="#74b9ff" stroke="#0984e3"/>
+  <text x="95" y="117" class="label" text-anchor="middle">COORDINATOR</text>
+  <text x="168" y="117" class="accent">no contract</text>
+
+  <!-- JUDGE — no contract -->
+  <rect x="40" y="140" width="110" height="32" rx="4" fill="#a29bfe" stroke="#6c5ce7"/>
+  <text x="95" y="161" class="label" text-anchor="middle">JUDGE</text>
+  <text x="168" y="161" class="accent">no contract</text>
+
+  <!-- MODERATOR — no contract -->
+  <rect x="40" y="184" width="110" height="32" rx="4" fill="#fd79a8" stroke="#e84393"/>
+  <text x="95" y="205" class="label" text-anchor="middle">MODERATOR</text>
+  <text x="168" y="205" class="accent">no contract</text>
+
+  <!-- Bottom note -->
+  <path d="M 150 240 L 150 254" stroke="#e17055" stroke-width="1.5" fill="none" marker-end="url(#arr-red)"/>
+  <rect x="40" y="260" width="220" height="38" rx="4" fill="#ffebed" stroke="#fab1a0" stroke-dasharray="4,3"/>
+  <text x="150" y="278" class="sublabel" text-anchor="middle">behavior locked in agency / drafthouse</text>
+  <text x="150" y="292" class="sublabel" text-anchor="middle">no engine-level testable contract</text>
+
+  <!-- ===== Arrow between panels ===== -->
+  <path d="M 295 150 L 340 150" stroke="#636e72" stroke-width="2" fill="none" marker-end="url(#arr-main)"/>
+
+  <!-- ===== AFTER panel ===== -->
+  <text x="520" y="24" class="heading" text-anchor="middle">AFTER</text>
+  <rect x="360" y="36" width="340" height="210" rx="8" fill="#f0fff4" stroke="#81ecec" stroke-width="1.5"/>
+
+  <!-- SUPERVISOR — OversightGateService -->
+  <rect x="380" y="52" width="110" height="32" rx="4" fill="#ffeaa7" stroke="#fdcb6e"/>
+  <text x="435" y="73" class="label" text-anchor="middle">SUPERVISOR</text>
+  <text x="508" y="73" class="good">OversightGateService</text>
+
+  <!-- COORDINATOR — CoordinationDriver -->
+  <rect x="380" y="96" width="110" height="32" rx="4" fill="#74b9ff" stroke="#0984e3"/>
+  <text x="435" y="117" class="label" text-anchor="middle">COORDINATOR</text>
+  <text x="508" y="117" class="good">CoordinationDriver</text>
+
+  <!-- JUDGE — EvaluationProtocol -->
+  <rect x="380" y="140" width="110" height="32" rx="4" fill="#a29bfe" stroke="#6c5ce7"/>
+  <text x="435" y="161" class="label" text-anchor="middle">JUDGE</text>
+  <text x="508" y="161" class="good">EvaluationProtocol</text>
+
+  <!-- MODERATOR — ProtocolEnforcement -->
+  <rect x="380" y="184" width="110" height="32" rx="4" fill="#fd79a8" stroke="#e84393"/>
+  <text x="435" y="205" class="label" text-anchor="middle">MODERATOR</text>
+  <text x="508" y="205" class="good">ProtocolEnforcement</text>
+
+  <!-- Bottom note -->
+  <path d="M 530 240 L 530 254" stroke="#00b894" stroke-width="1.5" fill="none" marker-end="url(#arr-green)"/>
+  <rect x="410" y="260" width="240" height="38" rx="4" fill="#e6fff5" stroke="#81ecec" stroke-dasharray="4,3"/>
+  <text x="530" y="278" class="sublabel" text-anchor="middle">every role: marker → SPI → NoOp default</text>
+  <text x="530" y="292" class="sublabel" text-anchor="middle">testable, swappable, engine-owned</text>
+
+  <!-- Bottom annotation -->
+  <text x="360" y="328" class="sublabel" text-anchor="middle">The engine defines what each role mechanically means. Intelligence-layer repos provide the implementations.</text>
+</svg>

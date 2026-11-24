@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" width="800" height="400" font-family="system-ui, -apple-system, sans-serif">
+  <!-- Background -->
+  <rect width="800" height="400" fill="#ffffff"/>
+
+  <!-- Divider -->
+  <line x1="400" y1="30" x2="400" y2="380" stroke="#d0d0d0" stroke-width="1" stroke-dasharray="6,4"/>
+
+  <!-- LEFT PANEL: Case-scoped (before) -->
+  <text x="200" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="#777">Case-scoped (before)</text>
+
+  <!-- Case box -->
+  <rect x="60" y="50" width="280" height="180" rx="8" fill="#f5f5f5" stroke="#b0b0b0" stroke-width="1.5"/>
+  <text x="200" y="72" text-anchor="middle" font-size="12" font-weight="600" fill="#888">Case</text>
+
+  <!-- Agents inside case -->
+  <rect x="85" y="90" width="80" height="36" rx="6" fill="#e8e8e8" stroke="#999" stroke-width="1"/>
+  <text x="125" y="113" text-anchor="middle" font-size="11" fill="#666">Agent A</text>
+
+  <rect x="85" y="140" width="80" height="36" rx="6" fill="#e8e8e8" stroke="#999" stroke-width="1"/>
+  <text x="125" y="163" text-anchor="middle" font-size="11" fill="#666">Agent B</text>
+
+  <rect x="235" y="115" width="80" height="36" rx="6" fill="#e8e8e8" stroke="#999" stroke-width="1"/>
+  <text x="275" y="138" text-anchor="middle" font-size="11" fill="#666">Agent C</text>
+
+  <!-- Single arrow from case to topology -->
+  <line x1="200" y1="230" x2="200" y2="270" stroke="#999" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+
+  <!-- Topology result -->
+  <rect x="80" y="275" width="240" height="40" rx="6" fill="#eaeaea" stroke="#999" stroke-width="1"/>
+  <text x="200" y="300" text-anchor="middle" font-size="11" font-weight="500" fill="#666">TopologyDescriptor: CENTRALISED</text>
+
+  <!-- Label: same for all -->
+  <text x="200" y="340" text-anchor="middle" font-size="10" fill="#aaa" font-style="italic">Same topology for every agent</text>
+
+  <!-- RIGHT PANEL: Agent-scoped (after) -->
+  <text x="600" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="#2a7b9b">Agent-scoped (after)</text>
+
+  <!-- Hive Group box -->
+  <rect x="435" y="50" width="160" height="170" rx="8" fill="#e8f4f8" stroke="#5ba3c9" stroke-width="1.5"/>
+  <text x="515" y="72" text-anchor="middle" font-size="11" font-weight="600" fill="#3a8ab0">Hive Group</text>
+
+  <!-- Agent A in group -->
+  <rect x="455" y="88" width="80" height="36" rx="6" fill="#d0eaf5" stroke="#5ba3c9" stroke-width="1"/>
+  <text x="495" y="111" text-anchor="middle" font-size="11" fill="#2a6a8a">Agent A</text>
+
+  <!-- Agent B in group -->
+  <rect x="455" y="138" width="80" height="36" rx="6" fill="#d0eaf5" stroke="#5ba3c9" stroke-width="1"/>
+  <text x="495" y="161" text-anchor="middle" font-size="11" fill="#2a6a8a">Agent B</text>
+
+  <!-- Agent C outside group -->
+  <rect x="640" y="110" width="80" height="36" rx="6" fill="#e0f5e8" stroke="#5bb07a" stroke-width="1"/>
+  <text x="680" y="133" text-anchor="middle" font-size="11" fill="#2a7a4a">Agent C</text>
+
+  <!-- Arrow from Agent A to its topology -->
+  <path d="M 495 174 L 495 200 Q 495 210 490 210 L 490 260" fill="none" stroke="#5ba3c9" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- Arrow from Agent C to its topology -->
+  <path d="M 680 146 L 680 200 Q 680 210 675 210 L 675 260" fill="none" stroke="#5bb07a" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+
+  <!-- Topology result for grouped agents -->
+  <rect x="420" y="265" width="170" height="40" rx="6" fill="#d0eaf5" stroke="#5ba3c9" stroke-width="1"/>
+  <text x="505" y="283" text-anchor="middle" font-size="10" font-weight="500" fill="#2a6a8a">TopologyDescriptor:</text>
+  <text x="505" y="297" text-anchor="middle" font-size="10" font-weight="500" fill="#2a6a8a">CENTRALISED (group)</text>
+
+  <!-- Topology result for ungrouped agent -->
+  <rect x="610" y="265" width="170" height="40" rx="6" fill="#e0f5e8" stroke="#5bb07a" stroke-width="1"/>
+  <text x="695" y="283" text-anchor="middle" font-size="10" font-weight="500" fill="#2a7a4a">TopologyDescriptor:</text>
+  <text x="695" y="297" text-anchor="middle" font-size="10" font-weight="500" fill="#2a7a4a">DISTRIBUTED (default)</text>
+
+  <!-- Label -->
+  <text x="600" y="340" text-anchor="middle" font-size="10" fill="#5ba3c9" font-style="italic">Topology resolved per agent via group membership</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#999"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5ba3c9"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5bb07a"/>
+    </marker>
+  </defs>
+</svg>

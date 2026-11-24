@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#2563eb"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="720" height="420" fill="#fafaf9" rx="8"/>
+
+  <!-- Title -->
+  <text x="360" y="28" text-anchor="middle" font-size="15" font-weight="600" fill="#1e293b">AgentTaskTarget Dispatch Pipeline</text>
+
+  <!-- YAML binding -->
+  <rect x="30" y="50" width="140" height="44" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="100" y="68" text-anchor="middle" font-size="11" fill="#64748b">YAML binding</text>
+  <text x="100" y="83" text-anchor="middle" font-weight="600" fill="#1e293b">agent-task:</text>
+
+  <!-- Arrow -->
+  <line x1="170" y1="72" x2="210" y2="72" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Converter -->
+  <rect x="215" y="50" width="160" height="44" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="295" y="68" text-anchor="middle" font-size="11" fill="#3b82f6">CaseDefinition converter</text>
+  <text x="295" y="83" text-anchor="middle" font-weight="600" fill="#1e293b">synthetic Worker</text>
+
+  <!-- Arrow down from converter -->
+  <line x1="295" y1="94" x2="295" y2="130" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- BindingExecutorResolver -->
+  <rect x="215" y="135" width="160" height="36" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="295" y="158" text-anchor="middle" font-weight="500" fill="#1e293b">BindingExecutorResolver</text>
+
+  <!-- Arrow right -->
+  <line x1="375" y1="153" x2="415" y2="153" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ExecutorRef label -->
+  <text x="395" y="145" text-anchor="middle" font-size="10" fill="#64748b">__agent-task__</text>
+
+  <!-- WorkerExecutionOrchestrator -->
+  <rect x="420" y="135" width="180" height="36" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="510" y="158" text-anchor="middle" font-weight="500" fill="#1e293b">WorkerExecOrchestrator</text>
+
+  <!-- Arrow down -->
+  <line x1="510" y1="171" x2="510" y2="207" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- AgentWorkerFunctionHandler -->
+  <rect x="390" y="212" width="240" height="36" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="510" y="235" text-anchor="middle" font-weight="600" fill="#2563eb">AgentWorkerFunctionHandler</text>
+
+  <!-- Arrow down to two paths -->
+  <line x1="460" y1="248" x2="460" y2="278" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="560" y1="248" x2="560" y2="278" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- Left path: AgentRegistry -->
+  <rect x="360" y="283" width="140" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="430" y="301" text-anchor="middle" font-size="11" fill="#92400e">AgentRegistry</text>
+  <text x="430" y="314" text-anchor="middle" font-size="10" fill="#92400e">find(byCapability)</text>
+
+  <!-- Right path: AgentSelector -->
+  <rect x="510" y="283" width="140" height="36" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="580" y="301" text-anchor="middle" font-size="11" fill="#166534">AgentSelector</text>
+  <text x="580" y="314" text-anchor="middle" font-size="10" fill="#166534">health + trust + route</text>
+
+  <!-- Arrows down to result -->
+  <line x1="430" y1="319" x2="430" y2="345" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="580" y1="319" x2="580" y2="345" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- SystemPromptRenderer -->
+  <rect x="360" y="350" width="140" height="30" rx="6" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="430" y="370" text-anchor="middle" font-size="11" fill="#6d28d9">SystemPromptRenderer</text>
+
+  <!-- WorkerAgentInvoker -->
+  <rect x="510" y="350" width="140" height="30" rx="6" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="580" y="370" text-anchor="middle" font-size="11" fill="#6d28d9">WorkerAgentInvoker</text>
+
+  <!-- Arrow between render and invoker -->
+  <line x1="500" y1="365" x2="510" y2="365" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Result label -->
+  <text x="650" y="370" font-size="11" fill="#64748b">→ HandlerResult</text>
+
+  <!-- Legend -->
+  <rect x="30" y="135" width="12" height="12" rx="2" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="48" y="146" font-size="10" fill="#64748b">New (this work)</text>
+  <rect x="30" y="155" width="12" height="12" rx="2" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="48" y="166" font-size="10" fill="#64748b">Existing (unchanged)</text>
+</svg>

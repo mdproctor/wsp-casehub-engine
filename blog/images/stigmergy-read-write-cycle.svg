@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400">
+  <defs>
+    <marker id="arrowR" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4a5568"/>
+    </marker>
+    <marker id="arrowG" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#38a169"/>
+    </marker>
+    <marker id="arrowB" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#3182ce"/>
+    </marker>
+  </defs>
+
+  <style>
+    text { font-family: -apple-system, 'Segoe UI', sans-serif; }
+    .title { font-size: 16px; font-weight: 600; fill: #1a202c; }
+    .subtitle { font-size: 11px; fill: #718096; }
+    .label { font-size: 12px; fill: #2d3748; font-weight: 500; }
+    .detail { font-size: 10px; fill: #718096; }
+    .spi-label { font-size: 11px; fill: #2b6cb0; font-weight: 600; font-style: italic; }
+  </style>
+
+  <!-- Title -->
+  <text x="360" y="30" text-anchor="middle" class="title">Per-agent Stigmergy Read-Write Cycle</text>
+
+  <!-- Agency box -->
+  <rect x="30" y="60" width="280" height="300" rx="8" fill="#ebf8ff" stroke="#3182ce" stroke-width="1.5"/>
+  <text x="170" y="82" text-anchor="middle" class="label" style="font-size:13px">Agency</text>
+
+  <!-- Agent Decision Loop -->
+  <rect x="50" y="100" width="240" height="60" rx="6" fill="white" stroke="#90cdf4" stroke-width="1"/>
+  <text x="170" y="125" text-anchor="middle" class="label">AgentDecisionLoop</text>
+  <text x="170" y="142" text-anchor="middle" class="detail">per-agent LLM reasoner</text>
+
+  <!-- DecisionOutcome.WriteBack -->
+  <rect x="50" y="270" width="240" height="60" rx="6" fill="white" stroke="#90cdf4" stroke-width="1"/>
+  <text x="170" y="295" text-anchor="middle" class="label">DecisionOutcome.WriteBack</text>
+  <text x="170" y="312" text-anchor="middle" class="detail">signals + observations + context</text>
+
+  <!-- LLM reasoning -->
+  <rect x="90" y="185" width="160" height="50" rx="20" fill="#bee3f8" stroke="#63b3ed" stroke-width="1"/>
+  <text x="170" y="207" text-anchor="middle" class="label" style="font-size:11px">LLM reasons about</text>
+  <text x="170" y="222" text-anchor="middle" class="label" style="font-size:11px">agent's neighbourhood</text>
+
+  <!-- Arrows within agency -->
+  <line x1="170" y1="160" x2="170" y2="185" stroke="#4a5568" stroke-width="1.2" marker-end="url(#arrowR)"/>
+  <line x1="170" y1="235" x2="170" y2="270" stroke="#4a5568" stroke-width="1.2" marker-end="url(#arrowR)"/>
+
+  <!-- Engine box -->
+  <rect x="410" y="60" width="280" height="300" rx="8" fill="#f0fff4" stroke="#38a169" stroke-width="1.5"/>
+  <text x="550" y="82" text-anchor="middle" class="label" style="font-size:13px">Engine</text>
+
+  <!-- SignalRegistry -->
+  <rect x="430" y="100" width="240" height="50" rx="6" fill="white" stroke="#9ae6b4" stroke-width="1"/>
+  <text x="550" y="122" text-anchor="middle" class="label">SignalRegistry</text>
+  <text x="550" y="137" text-anchor="middle" class="detail">case-scoped pheromone signals</text>
+
+  <!-- ObservationRegistry -->
+  <rect x="430" y="170" width="240" height="50" rx="6" fill="white" stroke="#9ae6b4" stroke-width="1"/>
+  <text x="550" y="192" text-anchor="middle" class="label">ObservationRegistry</text>
+  <text x="550" y="207" text-anchor="middle" class="detail">agent-scoped observations</text>
+
+  <!-- WORKING context -->
+  <rect x="430" y="240" width="240" height="50" rx="6" fill="white" stroke="#9ae6b4" stroke-width="1"/>
+  <text x="550" y="262" text-anchor="middle" class="label">WORKING Context Layer</text>
+  <text x="550" y="277" text-anchor="middle" class="detail">case data mutations</text>
+
+  <!-- StigmergyCoordinator -->
+  <rect x="430" y="310" width="240" height="40" rx="6" fill="#c6f6d5" stroke="#68d391" stroke-width="1"/>
+  <text x="550" y="335" text-anchor="middle" class="label">StigmergyCoordinator</text>
+
+  <!-- Read path arrow (blue) -->
+  <path d="M 410,130 L 310,130" stroke="#3182ce" stroke-width="2" fill="none" marker-end="url(#arrowB)"/>
+  <text x="360" y="118" text-anchor="middle" class="spi-label">AgentObservation</text>
+  <text x="360" y="100" text-anchor="middle" class="spi-label">Provider</text>
+
+  <!-- Write path arrow (green) -->
+  <path d="M 290,300 L 410,195" stroke="#38a169" stroke-width="2" fill="none" marker-end="url(#arrowG)"/>
+  <text x="380" y="265" text-anchor="middle" class="spi-label">AgentWriteBack</text>
+</svg>
