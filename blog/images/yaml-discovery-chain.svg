@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#555"/>
+    </marker>
+  </defs>
+
+  <style>
+    .phase { fill: #f8f9fa; stroke: #dee2e6; rx: 6; }
+    .phase-active { fill: #e8f4fd; stroke: #4a9eca; rx: 6; }
+    .phase-new { fill: #e6f9e8; stroke: #3da54a; rx: 6; stroke-dasharray: 4,2; }
+    .label { font-weight: 600; fill: #333; }
+    .sublabel { fill: #666; font-size: 11px; }
+    .priority { font-weight: 700; fill: #4a9eca; font-size: 12px; }
+    .arrow-line { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    .title { font-size: 16px; font-weight: 700; fill: #222; }
+  </style>
+
+  <text x="360" y="28" text-anchor="middle" class="title">CaseHub Startup Discovery Chain</text>
+
+  <!-- Priority 10: CDI CaseHub beans -->
+  <rect x="20" y="50" width="660" height="52" class="phase"/>
+  <text x="40" y="72" class="priority">P10</text>
+  <text x="90" y="72" class="label">DefaultCaseDefinitionRegistry.registerKnownDefinitions()</text>
+  <text x="90" y="90" class="sublabel">CDI-managed CaseHub beans → definitions + CaseHubRegistry</text>
+
+  <!-- Priority 150: Jandex scan -->
+  <rect x="20" y="115" width="660" height="52" class="phase"/>
+  <text x="40" y="137" class="priority">P150</text>
+  <text x="90" y="137" class="label">CaseHubClassRegistrar</text>
+  <text x="90" y="155" class="sublabel">Jandex scan → non-CDI Java CaseHub subclasses → definitions only</text>
+
+  <!-- Priority ~2500: ClasspathBootstrap -->
+  <rect x="20" y="180" width="660" height="52" class="phase"/>
+  <text x="40" y="202" class="priority">P2500</text>
+  <text x="90" y="202" class="label">ClasspathBootstrap → CaseYamlRegistrar</text>
+  <text x="90" y="220" class="sublabel">Scan casehub/*.yaml → parse YAML → register CaseDefinition</text>
+
+  <!-- Priority 2600: YamlCaseHubDiscovery (NEW) -->
+  <rect x="20" y="245" width="660" height="52" class="phase-new"/>
+  <text x="40" y="267" class="priority">P2600</text>
+  <text x="90" y="267" class="label">YamlCaseHubDiscovery ← NEW</text>
+  <text x="90" y="285" class="sublabel">Fill gaps: create CaseHub for definitions without an explicit Java class</text>
+
+  <!-- Arrows -->
+  <line x1="350" y1="102" x2="350" y2="115" class="arrow-line"/>
+  <line x1="350" y1="167" x2="350" y2="180" class="arrow-line"/>
+  <line x1="350" y1="232" x2="350" y2="245" class="arrow-line"/>
+
+  <!-- Legend -->
+  <rect x="20" y="310" width="14" height="14" class="phase"/>
+  <text x="40" y="322" class="sublabel">Existing</text>
+  <rect x="110" y="310" width="14" height="14" class="phase-new"/>
+  <text x="130" y="322" class="sublabel">New (this session)</text>
+</svg>

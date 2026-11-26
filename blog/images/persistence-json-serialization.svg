@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 300" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <style>
+    .box { fill: #f8f9fa; stroke: #dee2e6; rx: 6; }
+    .box-stored { fill: #e6f9e8; stroke: #3da54a; rx: 6; }
+    .box-transient { fill: #fff3e0; stroke: #e69500; rx: 6; stroke-dasharray: 4,2; }
+    .label { font-weight: 600; fill: #333; }
+    .field { fill: #555; font-size: 11px; }
+    .title { font-size: 16px; font-weight: 700; fill: #222; }
+    .section-title { font-size: 12px; font-weight: 600; fill: #666; }
+    .arrow { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+  </style>
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#555"/>
+    </marker>
+  </defs>
+
+  <text x="350" y="28" text-anchor="middle" class="title">CaseInstance → JSON: What Survives</text>
+
+  <!-- CaseInstance (left) -->
+  <rect x="20" y="50" width="260" height="230" class="box"/>
+  <text x="150" y="72" text-anchor="middle" class="label">CaseInstance</text>
+
+  <!-- Stored fields -->
+  <text x="35" y="95" class="section-title">Serialized to JSON:</text>
+  <text x="35" y="113" class="field">uuid, state, version</text>
+  <text x="35" y="129" class="field">metaNamespace, metaName, metaVersion</text>
+  <text x="35" y="145" class="field">contextSnapshot (JsonNode)</text>
+  <text x="35" y="161" class="field">parentCaseId, parentPlanItemId</text>
+  <text x="35" y="177" class="field">actorId, labels, types, createdAt</text>
+
+  <!-- Transient fields -->
+  <text x="35" y="205" class="section-title">Transient (not stored):</text>
+  <text x="35" y="223" class="field" fill="#e69500">caseContext (lambda evaluators)</text>
+  <text x="35" y="239" class="field" fill="#e69500">stateLock (ReentrantLock)</text>
+  <text x="35" y="255" class="field" fill="#e69500">pendingActionGate, propagationContext</text>
+  <text x="35" y="271" class="field" fill="#e69500">waitingForWorkId, exchangeHeaders</text>
+
+  <!-- Arrow -->
+  <line x1="280" y1="130" x2="410" y2="130" class="arrow"/>
+  <text x="345" y="122" text-anchor="middle" class="section-title">put()</text>
+
+  <!-- CaseInstanceDocument (right) -->
+  <rect x="410" y="50" width="270" height="160" class="box-stored"/>
+  <text x="545" y="72" text-anchor="middle" class="label">CaseInstanceDocument</text>
+  <text x="545" y="90" text-anchor="middle" class="field">(stored in SQLite json_documents)</text>
+
+  <text x="425" y="115" class="field">uuid, state, version</text>
+  <text x="425" y="133" class="field">metaNamespace, metaName, metaVersion</text>
+  <text x="425" y="151" class="field">contextSnapshot</text>
+  <text x="425" y="169" class="field">parentCaseId, parentPlanItemId</text>
+  <text x="425" y="187" class="field">actorId, labels, types, createdAt</text>
+
+  <!-- Reconstruct arrow -->
+  <line x1="410" y1="175" x2="280" y2="175" class="arrow"/>
+  <text x="345" y="168" text-anchor="middle" class="section-title">get()</text>
+
+  <!-- Legend -->
+  <rect x="410" y="230" width="14" height="14" class="box-stored"/>
+  <text x="430" y="242" class="field">Persisted in SQLite</text>
+  <rect x="410" y="252" width="14" height="14" class="box-transient"/>
+  <text x="430" y="264" class="field">Transient — reconstructed at runtime</text>
+</svg>
