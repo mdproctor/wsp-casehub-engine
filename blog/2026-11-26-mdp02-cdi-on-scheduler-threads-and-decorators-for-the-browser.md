@@ -1,27 +1,29 @@
 ---
 layout: post
-title: "CDI on Quartz Threads, and Decorators for the Browser"
+title: "CDI on Scheduler Threads, and Decorators for the Browser"
 date: 2026-11-26
 entry_type: note
 subtype: diary
 projects: [casehubio/engine, casehubio/casehub-pages, casehubio/examples]
-tags: [cdi, quartz, decorators, typescript, push, event-driven]
+tags: [cdi, quartz, db-scheduler, scheduler-spi, decorators, typescript, push, event-driven]
 series: issue-212-yaml-helpdesk-apps
 ---
 
-# CDI on Quartz Threads, and Decorators for the Browser
+# CDI on Scheduler Threads, and Decorators for the Browser
 
-The YAML helpdesk lifecycle test existed but had never passed. The agent worker function tried to look up an eidos agent descriptor on a Quartz scheduler thread, hit `JpaAgentRegistry`, and died with a `ContextNotActiveException` — no CDI request context, no EntityManager session, no recovery.
+The YAML helpdesk lifecycle test existed but had never passed. The agent worker function tried to look up an eidos agent descriptor on a scheduler thread, hit `JpaAgentRegistry`, and died with a `ContextNotActiveException` — no CDI request context, no EntityManager session, no recovery.
 
-## The Quartz Problem
+## The Scheduler-Thread Problem
+
+The engine's scheduler is pluggable — `JobScheduler` and `WorkerExecutionManager` are SPIs in `common-core`, with both a Quartz backend and a db-scheduler backend. The db-scheduler implementation is `@Priority(10)` to Quartz's `@Priority(0)`, so it's actually the default when both are on the classpath. Both backends delegate to shared orchestrators (`WorkerExecutionOrchestrator`, `RetryOrchestrator`, etc.) that hold all the domain logic. The problem here isn't Quartz-specific — it's any background thread that lacks a CDI request context.
 
 The error message was deceptive. It said "Cannot use the EntityManager/Session" and pointed at the worker execution orchestrator. We initially suspected the ledger event captures — they're the usual suspects for EntityManager access on background threads, and the engine's own test modules all exclude them. We added the same exclusions. Same error.
 
-The stack trace told the real story. `AgentWorkerFunctionHandler.executeBySlot()` calls `JpaAgentRegistry.find()`, which calls `Session.createQuery()`. The JPA registry is `@ApplicationScoped` and auto-activated by `@IfBuildProperty` — it's the default when the reactive variant isn't enabled. On a request thread, the EntityManager proxy works fine. On a Quartz thread pool thread, there's no request context to activate the proxy.
+The stack trace told the real story. `AgentWorkerFunctionHandler.executeBySlot()` calls `JpaAgentRegistry.find()`, which calls `Session.createQuery()`. The JPA registry is `@ApplicationScoped` and auto-activated by `@IfBuildProperty` — it's the default when the reactive variant isn't enabled. On a request thread, the EntityManager proxy works fine. On a scheduler thread — whether from Quartz's thread pool or db-scheduler's polling executor — there's no request context to activate the proxy.
 
-![JpaAgentRegistry on Quartz Threads — Before and After](images/quartz-jpa-fix.svg)
+![JpaAgentRegistry on Scheduler Threads — Before and After](images/quartz-jpa-fix.svg)
 
-The fix was a dependency, not a code change. `casehub-eidos-memory` provides `InMemoryAgentRegistry`, annotated `@Alternative @Priority(1)`. Drop it on the classpath and CDI selects the in-memory variant — no EntityManager, no request context requirement, no Quartz problem. The JPA registry stays on the classpath but is never selected.
+The fix was a dependency, not a code change. `casehub-eidos-memory` provides `InMemoryAgentRegistry`, annotated `@Alternative @Priority(1)`. Drop it on the classpath and CDI selects the in-memory variant — no EntityManager, no request context requirement, no scheduler-thread problem. The JPA registry stays on the classpath but is never selected.
 
 This is the CDI priority chain working as designed, but it's the kind of problem that burns an hour if you start from the error message instead of the stack trace. The orchestrator only logged `cause=` with `e.getMessage()` — no stack trace. We had to temporarily add the exception object to the log call, rebuild common-core, run the test, and read the full chain to find `JpaAgentRegistry.find()` twelve frames down.
 
