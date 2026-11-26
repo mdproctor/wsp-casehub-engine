@@ -1,22 +1,28 @@
 # Handoff — issue-212-yaml-helpdesk-apps
 
-## What was finished
+## Session summary
 
-**casehubio/eidos#280 — AgentTaskBindingResolver** (done, landing with work end)
-- `AgentTaskBindingResolver` in `engine/runtime/bootstrap/` — startup observer at priority 2700 validates agent-task bindings against AgentRegistry at definition time
-- Advisory only (warnings, not hard failures) — agents may register dynamically
-- Originally scoped to eidos-runtime per issue, but dependency analysis showed eidos can't depend on engine without creating a cycle; placed in engine-runtime instead (where both CaseDefinitionRegistry and AgentRegistry are available)
-- On separate branch `issue-280-agent-task-binding-resolver` in engine repo
-- 5 unit tests, review clean
+This session closed two items and wrapped at a topic change boundary.
 
-**Previously landed (prior work-end):** engine#1365 (YamlCaseHubDiscovery), engine#1366 (persistence-json), eidos#279 (agent worker function provider)
+**casehubio/eidos#279** — landed via work-end (review, squash 5→2 commits, promotion)
+**casehubio/eidos#280** — designed, implemented, reviewed, and landed AgentTaskBindingResolver in engine-runtime (not eidos-runtime — dependency cycle prevented placement there)
 
-## What is next in queue
+## Active item
 
-- casehubio/casehub-pages#751 — Push topic REST publish endpoint [pages]
-- casehubio/examples#220 — YAML helpdesk case lifecycle data + end-to-end validation [examples]
+**casehubio/casehub-pages#751 — Push topic REST publish endpoint [pages]** — not started
+
+Scale S, Complexity Low. REST endpoint in `pages-push-runtime` to publish events to push topics. Enables YAML case workers to send notifications without Java.
+
+## Queue note
+
+The queue's `branch: issue-212-yaml-helpdesk-apps` is stale — that branch was closed by work-end. `work end` fails with `land_failed` because the branch is already stamped. The next session should use `work start` to create a fresh branch for pages#751, or the queue branch state needs updating.
+
+## What is next
+
+1. casehubio/casehub-pages#751 — Push topic REST publish endpoint [pages]
+2. casehubio/examples#220 — YAML helpdesk case lifecycle data + end-to-end validation [examples]
 
 ## Notes for next session
 
-- Pre-existing test failure in runtime module: `SignalDedupExtendedTest` class resolution fails, blocks all runtime tests when run via surefire (not caused by this work)
-- The queue's active item was eidos#280 but code landed in engine — the GitHub issue should be closed against the engine commit
+- Pre-existing: `SignalDedupExtendedTest` class resolution failure in engine-runtime blocks surefire test discovery for the full runtime module
+- `UNPUBLISHED` from last work-end: engine has 4 unpublished commits — may need manual push
