@@ -2,23 +2,14 @@
 
 ## What was finished
 
-**casehubio/engine#1365 — YamlCaseHubDiscovery** (done, landing with work end)
-- `YamlCaseHubDiscovery` in `runtime/bootstrap/` — startup observer at priority 2600 auto-creates CaseHub for YAML definitions without Java classes
-- Extracted from `DefaultCaseDefinitionRegistry.registerCaseDefinition()`
+**casehubio/eidos#280 — AgentTaskBindingResolver** (done, landing with work end)
+- `AgentTaskBindingResolver` in `engine/runtime/bootstrap/` — startup observer at priority 2700 validates agent-task bindings against AgentRegistry at definition time
+- Advisory only (warnings, not hard failures) — agents may register dynamically
+- Originally scoped to eidos-runtime per issue, but dependency analysis showed eidos can't depend on engine without creating a cycle; placed in engine-runtime instead (where both CaseDefinitionRegistry and AgentRegistry are available)
+- On separate branch `issue-280-agent-task-binding-resolver` in engine repo
+- 5 unit tests, review clean
 
-**casehubio/engine#1366 — persistence-json module** (done, landing with work end)
-- `casehub-engine-persistence-json` module: `CaseInstanceCache` backed by `JsonCollectionStore` (SQLite)
-- `CaseInstanceDocument` for flat serialization; `PersistenceJsonBeans` CDI producer `@Alternative @Priority(200)`
-- Scoped to single-user/low-concurrency (documented in Javadoc)
-- Review fixes applied: null filter on `getAll()`, SPI return type, dead `CaseHubRuntime` injection removed
-
-**casehubio/eidos#279 — call: agent worker function provider** (done, landing with work end)
-
-**Squash review complete** — engine branch compacted from 5 to 2 commits. Artifacts promoted (2 specs, 1 blog).
-
-## Active item
-
-**casehubio/eidos#280 — Agent-task binding resolver [eidos]** — not started
+**Previously landed (prior work-end):** engine#1365 (YamlCaseHubDiscovery), engine#1366 (persistence-json), eidos#279 (agent worker function provider)
 
 ## What is next in queue
 
@@ -27,7 +18,5 @@
 
 ## Notes for next session
 
-- Three done items landing: engine#1365, engine#1366, eidos#279
-- `persistence-json` depends on `casehub-pages-data-json` — first cross-project dependency from engine to pages
-- `SqliteConnectionFactory` test helper uses reflection — fragile if field names change
-- Pre-existing test failure in runtime module: `SignalDedupExtendedTest` class resolution fails, blocks all runtime tests when run via surefire
+- Pre-existing test failure in runtime module: `SignalDedupExtendedTest` class resolution fails, blocks all runtime tests when run via surefire (not caused by this work)
+- The queue's active item was eidos#280 but code landed in engine — the GitHub issue should be closed against the engine commit
