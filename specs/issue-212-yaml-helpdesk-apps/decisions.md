@@ -38,3 +38,43 @@
 
 **Exploration:** quick
 **Status:** captured
+
+## D3: AgentTaskBindingResolver — primary role
+
+**Choice:** Validation at definition time — validates during case definition registration that an agent with the required capability/domain exists in the AgentRegistry. Catches misconfigurations before the case runs. Lightweight query only, no state.
+
+**Alternatives:**
+- Pre-resolution with caching — eagerly resolves to a specific AgentDescriptor at startup. Adds stale-cache concerns and complicates agent hot-reload.
+- Binding enrichment — augments AgentTaskTarget with eidos metadata. No validation benefit; the handler already resolves everything it needs at execution time.
+
+**Rationale:** The execution chain (AgentWorkerFunctionHandler.executeByCapability) already handles full runtime resolution. The gap is early detection of misconfigured bindings — a capability no agent provides should be caught at startup, not when the case reaches that worker step.
+
+**Trade-offs:** Validation is advisory (warnings, not hard failures) since agents may be registered dynamically after case definitions. A hard failure would break legitimate late-binding scenarios.
+
+**Sources:**
+- `engine/runtime/.../AgentWorkerFunctionHandler.java:203-254` — existing execution-time resolution
+- `eidos/api/.../AgentRegistry.java` — query API
+- `engine/runtime/.../YamlCaseHubDiscovery.java` — precedent for startup observer pattern
+
+**Exploration:** quick
+**Status:** captured
+
+## D4: AgentTaskBindingResolver — integration approach
+
+**Choice:** CDI startup observer in eidos-runtime (`resolver/` package). Observes startup after all registrations complete (high priority), iterates CaseDefinition bindings with AgentTaskTarget, queries AgentRegistry for each binding's capability/domain. Logs warnings for unresolvable bindings. No new engine SPI needed.
+
+**Alternatives:**
+- Engine SPI with eidos implementation — new BindingValidator SPI in engine common-core. Cleaner separation but adds engine-side coupling for a single implementation, and the engine would need to know about binding validation at registration time.
+
+**Rationale:** Follows the established pattern of startup observers (YamlCaseHubDiscovery at priority 2600). The resolver observes at a later priority (after YamlCaseHubDiscovery creates CaseHubs). No engine changes required — eidos depends on engine API, not the other way around.
+
+**Trade-offs:** No engine-side enforcement — validation is purely eidos-side. If eidos isn't on the classpath, no validation occurs. This is acceptable because agent-task bindings are meaningless without eidos.
+
+**Depends on:** D3 (resolver role determines integration approach)
+
+**Sources:**
+- `engine/runtime/.../YamlCaseHubDiscovery.java` — startup observer precedent at priority 2600
+- `eidos/runtime/resolver/EidosAgentResolver.java` — existing resolver pattern in eidos
+
+**Exploration:** quick
+**Status:** captured
