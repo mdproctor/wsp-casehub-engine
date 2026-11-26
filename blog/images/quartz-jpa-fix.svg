@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 280" font-family="system-ui, -apple-system, sans-serif" font-size="13">
+  <rect width="700" height="280" fill="#fafafa" rx="8"/>
+  <text x="350" y="24" text-anchor="middle" font-size="14" font-weight="600" fill="#1e293b">JpaAgentRegistry on Quartz Threads — Before and After</text>
+
+  <!-- BEFORE -->
+  <text x="175" y="52" text-anchor="middle" font-weight="600" fill="#dc2626">Before</text>
+
+  <rect x="30" y="65" width="130" height="35" rx="4" fill="#fce7f3" stroke="#db2777" stroke-width="1"/>
+  <text x="95" y="87" text-anchor="middle" font-size="11" fill="#9d174d">Quartz Thread</text>
+
+  <rect x="180" y="65" width="150" height="35" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+  <text x="255" y="87" text-anchor="middle" font-size="11" fill="#991b1b">JpaAgentRegistry</text>
+
+  <line x1="160" y1="82" x2="175" y2="82" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="180" y="115" width="150" height="35" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <text x="255" y="137" text-anchor="middle" font-size="11" fill="#dc2626">EntityManager</text>
+
+  <line x1="255" y1="100" x2="255" y2="110" stroke="#dc2626" stroke-width="1.5"/>
+
+  <text x="175" y="170" font-size="11" fill="#dc2626" font-weight="600">ContextNotActiveException</text>
+  <text x="175" y="185" font-size="10" fill="#6b7280">No CDI request context on scheduler threads</text>
+
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arr-g" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#16a34a"/>
+    </marker>
+  </defs>
+
+  <!-- AFTER -->
+  <text x="525" y="52" text-anchor="middle" font-weight="600" fill="#16a34a">After</text>
+
+  <rect x="380" y="65" width="130" height="35" rx="4" fill="#fce7f3" stroke="#db2777" stroke-width="1"/>
+  <text x="445" y="87" text-anchor="middle" font-size="11" fill="#9d174d">Quartz Thread</text>
+
+  <rect x="530" y="65" width="150" height="35" rx="4" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="605" y="82" text-anchor="middle" font-size="11" fill="#166534">InMemoryAgent</text>
+  <text x="605" y="95" text-anchor="middle" font-size="11" fill="#166534">Registry</text>
+
+  <line x1="510" y1="82" x2="525" y2="82" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+  <rect x="530" y="115" width="150" height="35" rx="4" fill="#f0fdf4" stroke="#16a34a" stroke-width="1"/>
+  <text x="605" y="137" text-anchor="middle" font-size="11" fill="#166534">ConcurrentHashMap</text>
+
+  <line x1="605" y1="100" x2="605" y2="110" stroke="#16a34a" stroke-width="1.5"/>
+
+  <text x="525" y="170" font-size="11" fill="#16a34a" font-weight="600">No EntityManager needed</text>
+  <text x="525" y="185" font-size="10" fill="#6b7280">@Alternative @Priority(1) overrides JPA</text>
+
+  <!-- Bottom context -->
+  <rect x="30" y="210" width="640" height="55" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="350" y="232" text-anchor="middle" font-size="12" font-weight="500" fill="#334155">Fix: add casehub-eidos-memory dependency → InMemoryAgentRegistry activates via CDI @Alternative</text>
+  <text x="350" y="250" text-anchor="middle" font-size="11" fill="#64748b">JpaAgentRegistry is still on the classpath but no longer selected — no code changes needed in eidos or engine</text>
+</svg>
